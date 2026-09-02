@@ -109,6 +109,8 @@ export function App(): JSX.Element {
   const [analystTurns, setAnalystTurns] = useState(0);
   // the in-place editor: a side drawer (never a modal) so a change is seen happening on the charts
   const [editing, setEditing] = useState<string | null>(null);
+  const [asideTab, setAsideTab] = useState<'analyst' | 'edit'>('edit');
+  const [asideOpen, setAsideOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -293,11 +295,29 @@ export function App(): JSX.Element {
     <VizCockpit
       readOnly={readOnly}
       aside={{
-        open: editing !== null,
-        title: `Edit ${editing !== null ? (viewLabels[editing] ?? editing) : ''}`,
-        onClose: () => setEditing(null),
+        open: asideOpen,
+        title: asideTab === 'analyst' ? 'Analyst' : `Edit ${editing !== null ? (viewLabels[editing] ?? editing) : ''}`,
+        onClose: () => setAsideOpen(false),
         children: (
           <>
+            <div role="tablist" aria-label="side panel" style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+              {(['analyst', 'edit'] as const).map((t) => (
+                <button key={t} type="button" role="tab" aria-selected={asideTab === t} onClick={() => setAsideTab(t)} style={{ font: 'inherit', fontSize: 12.5, padding: '4px 10px', borderRadius: 6, border: '1px solid #d8dee4', background: asideTab === t ? '#dcefec' : '#fff', cursor: 'pointer' }}>
+                  {t === 'analyst' ? '🧭 Analyst' : '✎ Edit'}
+                </button>
+              ))}
+            </div>
+            {asideTab === 'analyst' ? (
+              <AnalystPanel
+                readOnly={readOnly}
+                onTurn={(turns) => {
+                  setAnalystTurns(turns);
+                  void view.refresh();
+                }}
+              />
+            ) : null}
+            {asideTab === 'edit' ? (
+              <>
       <label style={{ display: 'block', fontSize: 12.5, marginBottom: 10 }}>
         Chart{' '}
         <select value={editing ?? ''} onChange={(e) => setEditing(e.target.value)} style={{ font: 'inherit', fontSize: 13 }}>
@@ -320,6 +340,8 @@ export function App(): JSX.Element {
           onLink={(edge) => void view.link(edge, `${viewLabels[edge.source] ?? edge.source} ${edge.kind} → ${viewLabels[edge.target] ?? edge.target}: ${edge.response ?? 'back'}`)}
         />
       ) : null}
+              </>
+            ) : null}
           </>
         ),
       }}
@@ -451,21 +473,6 @@ export function App(): JSX.Element {
       ]}
       reports={[
         {
-          id: 'analyst',
-          title: 'Analyst',
-          icon: '🧭',
-          badge: analystTurns,
-          content: (
-            <AnalystPanel
-              readOnly={readOnly}
-              onTurn={(turns) => {
-                setAnalystTurns(turns);
-                void view.refresh();
-              }}
-            />
-          ),
-        },
-        {
           id: 'grammar',
           title: 'Grammar',
           icon: '✍',
@@ -554,14 +561,28 @@ export function App(): JSX.Element {
         },
       ]}
     />
-    <button
-      type="button"
-      onClick={() => setEditing((e) => (e === null ? (state.views.find((v) => v.viewId === 'weeks')?.viewId ?? state.views[0]?.viewId ?? null) : null))}
-      style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 31, font: 'inherit', fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }}
-      aria-label={editing === null ? 'Edit a chart' : 'Close the editor'}
-    >
-      {editing === null ? '✎ Edit a chart' : '✕ Close the editor'}
-    </button>
+    <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 31, display: 'flex', gap: 6 }}>
+      <button
+        type="button"
+        onClick={() => { setAsideTab('analyst'); setAsideOpen((o) => !(o && asideTab === 'analyst')); }}
+        style={{ font: 'inherit', fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }}
+        aria-label="Analyst"
+      >
+        🧭 Analyst{analystTurns > 0 ? ` ${analystTurns}` : ''}
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setAsideTab('edit');
+          if (editing === null) setEditing(state.views.find((v) => v.viewId === 'weeks')?.viewId ?? state.views[0]?.viewId ?? null);
+          setAsideOpen((o) => !(o && asideTab === 'edit'));
+        }}
+        style={{ font: 'inherit', fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }}
+        aria-label="Edit a chart"
+      >
+        ✎ Edit a chart
+      </button>
+    </div>
 
     </>
   );
