@@ -40,6 +40,8 @@ export interface NndssAnalyst {
   trace(): unknown;
   /** The tool names the agent was given — the fixed surface, for the panel. */
   readonly tools: readonly string[];
+  /** Forget the conversation so far (the session's commits stay — a chat is not the record). */
+  reset(): void;
 }
 
 export const SYSTEM = `You are the analyst on a LIVE dashboard of CDC's weekly notifiable-disease table (NNDSS), shared with a person who clicks and brushes beside you. Every act — yours and theirs — lands in ONE commit log with a cause; yours are badged 'agent'.
@@ -98,6 +100,11 @@ export function createNndssAnalyst(port: VizToolsPort, options: AnalystOptions =
   return {
     tools: tools.map((t) => t.schema.name),
     trace: () => think.getTrace({ task: lastTask }),
+    reset: () => {
+      transcript.length = 0;
+      lastTask = '';
+      think.clear();
+    },
     async send(userMessage: string): Promise<TurnResult> {
       const correlationId = `turn-${String(++turn)}`;
       const message = (transcript.length > 0 ? `Recent conversation:\n${transcript.slice(-6).join('\n')}\n\n` : '') + `User: ${userMessage}`;

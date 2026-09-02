@@ -13,6 +13,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ProseText,
   CommitLog,
   SelectionChips,
   TimeTravelBar,
@@ -150,7 +151,8 @@ export function App(): JSX.Element {
             style={{ color: p.status === 'stale' ? '#a8661a' : undefined, opacity: p.status === 'derived' ? 0.7 : 0.9 }}
             title={p.status === 'stale' ? `stale — moved: ${p.changed.join(', ')}` : `${p.author.kind}${p.author.by ? ' · ' + p.author.by : ''}${p.author.model ? ' · ' + p.author.model : ''}`}
           >
-            <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>{p.slot}</span> {p.text}
+            <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>{p.slot}</span>{' '}
+            <ProseText text={p.text} refs={p.refs} describeCommit={(id) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; }} onSeek={(id) => void view.seek(id)} onBeat={(label) => { const b = state.checkpoints.find((x) => x.label === label); if (b?.commitId) void view.seek(b.commitId); }} />
             {p.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {p.changed.join(', ')} moved</span> : null}
             {p.status === 'derived' ? <span style={{ fontSize: 11, opacity: 0.7 }}> derived</span> : null}
             {p.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}

@@ -169,6 +169,30 @@ export function AnalystPanel(props: { readonly readOnly: boolean; readonly onTur
           ⚠ {problem}
         </div>
       )}
+      {(wire?.transcript.length ?? 0) > 0 ? (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '4px 0' }}>
+          <button
+            type="button"
+            disabled={busy || props.readOnly}
+            title="the analyst forgets this conversation; every commit it landed stays in the log"
+            onClick={() => {
+              void (async () => {
+                try {
+                  const w = await fetchJson<AnalystWire>('/api/analyst', { method: 'DELETE' });
+                  setWire(w);
+                  setProblem(null);
+                  props.onTurn(0);
+                } catch (e) {
+                  setProblem(e instanceof Error ? e.message : String(e));
+                }
+              })();
+            }}
+            style={{ font: 'inherit', fontSize: 12, padding: '2px 8px', cursor: 'pointer' }}
+          >
+            clear chat
+          </button>
+        </div>
+      ) : null}
       <form
         onSubmit={(e) => {
           e.preventDefault();

@@ -13,6 +13,7 @@
  *   POST /api/reset        a fresh surface (a session is cheap)
  *   GET  /api/geo          US state boundaries (Census-derived, pre-projected) for the map view
  *   GET  /api/analyst      the analyst's transcript, its acts, its mode (mock | live)
+ *   DELETE /api/analyst    clear the chat (the analyst forgets; its commits stay)
  *   POST /api/chat         one analyst turn — acts land as agent-badged commits meanwhile
  *
  * One surface per server, single-user — the honest scope of a demo.
@@ -289,6 +290,14 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
     }
     if (req.method === 'GET' && door === 'proposals') return sendJson(res, 200, { proposals: desk.proposals, ledger: (await session.overview()).fdr }), true;
     if (req.method === 'GET' && door === 'analyst') return sendJson(res, 200, analystState(desk)), true;
+    // clear the chat window: the analyst forgets the conversation; every commit it landed stays in the log
+    if (req.method === 'DELETE' && door === 'analyst') {
+      if (desk.turnActive) return sendJson(res, 409, { error: 'a turn is in flight — wait for it to land' }), true;
+      desk.transcript.length = 0;
+      desk.activity.length = 0;
+      desk.analyst.reset();
+      return sendJson(res, 200, analystState(desk)), true;
+    }
     if (req.method === 'GET' && door === 'geo') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(geoJson());
