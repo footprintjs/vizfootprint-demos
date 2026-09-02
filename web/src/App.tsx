@@ -344,6 +344,7 @@ export function App(): JSX.Element {
     <>
     <VizCockpit
       readOnly={readOnly}
+      status={<WindowReadout />}
       aside={{
         open: asideOpen,
         title: asideTab === 'analyst' ? 'Analyst' : `Edit ${editing !== null ? (viewLabels[editing] ?? editing) : ''}`,
@@ -711,4 +712,16 @@ function StoryReport({ post }: { readonly post: StoryPost }): ReactNode {
       </button>
     </div>
   );
+}
+
+/** What the browser says about itself — so a screenshot carries the window size and zoom it was taken at (a layout question answers itself). */
+function WindowReadout(): ReactNode {
+  const read = () => `window ${window.innerWidth}×${window.innerHeight} · pixel ratio ${window.devicePixelRatio}`;
+  const [text, setText] = useState(read);
+  useEffect(() => {
+    const onResize = () => setText(read());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return <span style={{ fontSize: 11, opacity: 0.55, fontFamily: 'ui-monospace, Menlo, monospace' }}>{text}</span>;
 }
