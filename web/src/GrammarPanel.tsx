@@ -10,7 +10,7 @@
  *
  * The same data the agent reads through `whats_here` — one grammar, two readers.
  */
-import type { ColumnView, LinkEdit, LinkGraphView, ViewView } from 'vizfootprint-ui';
+import type { ColumnView, LinkEdit, LinkGraphView, RuleLineView, ViewView } from 'vizfootprint-ui';
 import { LinkMatrix } from 'vizfootprint-ui/links';
 
 export interface GrammarWire {
@@ -51,8 +51,11 @@ export function GrammarPanel(props: {
   readonly readOnly?: boolean;
   /** Layer 4: an edit in the matrix — the host lands it as a `link` commit. */
   readonly onLink?: (edge: LinkEdit) => void;
+  /** The encoding plane: the house rules as sentences (built-in first) and the policy — absent on an older server. */
+  readonly rules?: readonly RuleLineView[];
+  readonly policy?: { readonly onInvalid: string; readonly ruleScope: 'view' | 'dashboard' };
 }): JSX.Element {
-  const { grammar, views, encodings, columns, links, labels, readOnly, onLink } = props;
+  const { grammar, views, encodings, columns, links, labels, readOnly, onLink, rules, policy } = props;
   if (grammar === null) return <div style={{ opacity: 0.7 }}>the grammar has not arrived yet</div>;
   const declared = new Map(grammar.encodings.map((e) => [e.viewId, e]));
   const absence = columns.find((c) => c.absence !== undefined);
@@ -105,6 +108,11 @@ export function GrammarPanel(props: {
                           <span key={ch} style={{ marginRight: 8 }}>
                             <code>{ch}</code>
                             {now[ch] !== undefined ? <span style={{ opacity: 0.7 }}> → {now[ch]}</span> : <span style={{ opacity: 0.4 }}> → (unbound)</span>}
+                            {v.fits?.[ch] !== undefined ? (
+                              <span style={{ opacity: 0.5 }} title={v.fits[ch]!.filter((f) => !f.ok).map((f) => `${f.field}: ${f.because}`).join('\n')}>
+                                {' '}({v.fits[ch]!.filter((f) => f.ok).length} of {v.fits[ch]!.length} columns fit)
+                              </span>
+                            ) : null}
                           </span>
                         ))
                       : <span style={{ opacity: 0.5 }}>no encoding surface — cannot be re-encoded (by declaration)</span>}
@@ -125,6 +133,25 @@ export function GrammarPanel(props: {
             <b>The links, as declared — and editable</b> — rows are a source view and what it emits, columns are targets, a cell is what the target does with it. The default rule is written out; a declared edge is what someone chose; an edit made here is a commit like any act (undo it from the log); <i>none</i> is off on purpose; a blank cell would be silence.
           </p>
           <LinkMatrix graph={links} labels={labels} readOnly={readOnly} onChange={onLink} />
+        </div>
+      ) : null}
+      {rules !== undefined ? (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ margin: '0 0 4px' }}>
+            <b>House rules (the encoding plane)</b> — which column may sit on which channel, stated as data. The same sentence refuses a bad initial binding at build, a bad rebind at dispatch (yours or the analyst's), and greys the picker.
+            {policy ? (
+              <span style={{ opacity: 0.7 }}>
+                {' '}A misfit is <code>{policy.onInvalid === 'refuse' ? 'refused' : `coerced by ${policy.onInvalid}`}</code>; a two-column rule reaches the <code>{policy.ruleScope}</code>.
+              </span>
+            ) : null}
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {rules.map((r) => (
+              <li key={r.id}>
+                {r.sentence} <span style={{ opacity: 0.5, fontSize: 11 }}>{r.builtIn ? 'built in' : r.id}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
       {absence ? (

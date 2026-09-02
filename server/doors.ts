@@ -141,8 +141,17 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
       return { verb: 'analyze', analysisId, cause };
     }
     case 'reencode': {
+      // the encoding plane: one channel, or a binding SET (several channels in one act — a swap is one commit)
+      const bindings = body['bindings'];
+      if (bindings !== undefined) {
+        if (viewId === undefined) return { error: 'reencode needs viewId' };
+        if (typeof bindings !== 'object' || bindings === null || Array.isArray(bindings) || Object.values(bindings).some((f) => typeof f !== 'string')) {
+          return { error: 'reencode bindings must map channel -> column name' };
+        }
+        return { verb: 'reencode', viewId, bindings: bindings as Record<string, string>, cause };
+      }
       const channel = str('channel');
-      if (viewId === undefined || channel === undefined || field === undefined) return { error: 'reencode needs viewId, channel, and field' };
+      if (viewId === undefined || channel === undefined || field === undefined) return { error: 'reencode needs viewId, channel, and field — or bindings' };
       return { verb: 'reencode', viewId, channel, field, cause };
     }
     case 'link': {
@@ -195,6 +204,9 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     charts: session.charts(),
     layouts: overview.layouts,
     links: overview.links,
+    // the encoding plane: the house rules as sentences + the policy (the cockpit's Grammar panel)
+    rules: overview.rules,
+    encodingPolicy: overview.encodingPolicy,
   };
 }
 

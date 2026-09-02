@@ -135,3 +135,13 @@ Map shapes: U.S. Census Bureau cartographic boundary files (1:10M) via the
 [`us-atlas`](https://github.com/topojson/us-atlas) package — the boundary
 data is a work of the U.S. Government, public domain; see
 `data/geo/PROVENANCE.json`.
+
+## The encoding plane (which column on which channel)
+
+The second plane of the interaction grammar. The def states what each column **is** to a chart (`columns`: a role such as identifier, dimension, measure; the absence column's role is derived) and the **house rules** (`encodingRules`): a week's count and a year-to-date total never share a chart; a year-to-date total is never a hue; a series value is only meaningful per entity. The library adds one law every def inherits: the absence column never carries a magnitude.
+
+One validator serves three doors with the same sentence: a def that starts against a rule **throws at build**; a rebind that breaks one — from the picker or from the analyst's tool — **is refused as a gap**; the picker greys the column and shows why. The Grammar panel lists the rules, and each channel says how many columns fit right now.
+
+A swap of two axes is one act: `reencode` with `bindings` lands **one commit**, judged as a whole, so a chart never passes through an illegal middle state, and undo restores both channels.
+
+What the demo does not show yet: coercion (the def says `refuse`), and a rule that follows a rebind across charts (an encoding link) — see the library's `src/encoding/README.md`.

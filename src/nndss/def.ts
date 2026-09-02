@@ -45,10 +45,29 @@ export function nndssDef(tables: NndssTables): DashboardDef {
   return {
     meta: { title: 'NNDSS weekly — vizfootprint on CDC data' },
     data: {
-      cells: { rows: tables.cells, absence },
-      jurisdictions: { rows: tables.jurisdictions },
+      // The encoding plane's FACETS, stated: what each column IS to a chart. The absence
+      // column's role is derived from `absence`; every other role is declared here or absent.
+      cells: {
+        rows: tables.cells,
+        absence,
+        columns: {
+          jurisdiction: { role: 'identifier', label: 'jurisdiction' },
+          disease: { role: 'dimension' },
+          kind: { role: 'dimension', label: 'area kind' },
+          cases: { role: 'measure', label: 'cases this week' },
+          ytd: { role: 'measure', label: 'year to date' },
+          prev52_max: { role: 'measure', label: 'previous 52-week maximum' },
+          week_index: { role: 'dimension', scale: 'continuous', label: 'week of the year' },
+          t: { role: 'dimension', type: 'date', label: 'week' }, // an ISO string in the rows; a date to a chart
+        },
+      },
+      jurisdictions: { rows: tables.jurisdictions, columns: { jurisdiction: { role: 'identifier' }, kind: { role: 'dimension' } } },
       // no absence on `series`: a row that exists is present by construction
-      series: { rows: tables.series.map((p) => ({ ...p })), grain: tables.grain },
+      series: {
+        rows: tables.series.map((p) => ({ ...p })),
+        grain: tables.grain,
+        columns: { t: { role: 'dimension', type: 'date' }, entity: { role: 'dimension' }, metric: { role: 'dimension' }, value: { role: 'measure' }, entity_kind: { role: 'dimension' } },
+      },
     },
     actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, analyst: ANALYST },
     encodings: [
@@ -71,6 +90,17 @@ export function nndssDef(tables: NndssTables): DashboardDef {
       { source: 'map', kind: 'point', target: 'table', response: 'mirror', label: 'the same state, outlined' },
       { source: 'table', kind: 'point', target: 'diseases', response: 'none', label: 'a row never narrows the bar' },
     ],
+    // The encoding plane's HOUSE RULES, as data — the same sentences refuse a bad initial binding
+    // at build, a bad rebind at dispatch (human picker or analyst tool), and grey the picker.
+    encodingRules: {
+      onInvalid: 'refuse',
+      ruleScope: 'view',
+      rules: [
+        { rule: 'never-together', columns: ['cases', 'ytd'], sentence: 'a week\'s count and a year-to-date total never share a chart ({column} with {other})' },
+        { rule: 'never-on', column: 'ytd', channels: ['color'], sentence: 'a year-to-date total is never a hue' },
+        { rule: 'only-with', column: 'value', companion: 'entity', sentence: 'a series value is only meaningful per entity — keep "entity" on the chart' },
+      ],
+    },
     fdr: { procedure: 'LORD++', alpha: ALPHA },
     defaultTable: 'cells',
   };
