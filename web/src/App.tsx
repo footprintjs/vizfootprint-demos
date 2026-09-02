@@ -23,6 +23,8 @@ import {
   createSessionView,
   type GeoFeatureCollection,
   keepPredicate,
+  brightPredicate,
+  navigateDomain,
   pollingSource,
   selectionForView,
   useSessionView,
@@ -125,7 +127,8 @@ export function App(): JSX.Element {
   const absenceField = rows?.absence.field ?? 'report_state';
   const absenceStates = rows?.absence.states ?? [];
   const columns = state.columns[state.defaultTable] ?? [];
-  const selFor = (self: string | null) => selectionForView(state.selections, self);
+  // Layer 4: the link graph decides what each clause does at each view — filter, highlight, navigate, mirror, or nothing
+  const selFor = (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links);
   // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
   const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== undefined).map((s) => s.viewId)), [state.selections]); // null is a live IS-NULL point
   const viewLabels = useMemo(() => Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId])), [state.views]);
@@ -159,7 +162,21 @@ export function App(): JSX.Element {
     }
     // a disease with no present cell in view gets NO bar — a missing bar is a silence, a zero would be a lie
     return (rows?.diseases ?? []).flatMap((category) => (sums.has(category) ? [{ category, count: sums.get(category)! }] : []));
-  }, [cells, rows?.diseases, sumKind, state.selections]);
+  }, [cells, rows?.diseases, sumKind, state.selections, state.links]);
+
+  // the HIGHLIGHT share of each disease bar: the same sums over the rows a highlight edge keeps bright
+  // (the map lighting the bar) — only when such an edge is live, so the overlay never repeats the base
+  const diseaseHighlight = useMemo(() => {
+    const sel = selFor('diseases');
+    if (![...sel.clauses.values()].some((c) => c.response === 'highlight')) return undefined;
+    const bright = brightPredicate(sel);
+    const sums = new Map<string, number>();
+    for (const c of cells) {
+      if (c.kind !== sumKind || c.cases === null || !bright(c)) continue;
+      sums.set(c.disease, (sums.get(c.disease) ?? 0) + c.cases);
+    }
+    return [...sums.entries()].map(([category, count]) => ({ category, count }));
+  }, [cells, sumKind, state.selections, state.links]);
 
   const kindData = useMemo(() => {
     const keep = keepPredicate(selFor('kinds'));
@@ -180,7 +197,7 @@ export function App(): JSX.Element {
   // the trend for the picked disease — present cells only (a silence is a missing point).
   // Fifty-eight state lines are spaghetti, so until a kind or an area is chosen the
   // line shows the regions; the other views' clauses narrow it like any other view.
-  const areaChosen = state.selections.some((s) => (s.viewId === 'kinds' || s.viewId === 'table') && typeof s.value === 'string');
+  const areaChosen = state.selections.some((s) => (s.viewId === 'kinds' || s.viewId === 'table' || s.viewId === 'map') && s.value != null); // a map pick is an area chosen too
   const trendData = useMemo(() => {
     const keep = keepPredicate(selFor('trend'));
     return series
@@ -292,7 +309,7 @@ export function App(): JSX.Element {
           ...clearable('diseases'),
           caption: `Reported cases by disease, summed over kept ${sumKind}s (a disease with no present cell has no bar) — click one to drive the trend, the week line and the table (now: ${pickedDisease})`,
           render: ({ width, height }) => (
-            <VizBar viewId="diseases" data={diseaseData} field="disease" selection={selFor('diseases')} columns={columns} encoding={state.encodings['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, 'pick disease')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizBar viewId="diseases" data={diseaseData} highlight={diseaseHighlight} field="disease" selection={selFor('diseases')} columns={columns} encoding={state.encodings['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, 'pick disease')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -323,14 +340,31 @@ export function App(): JSX.Element {
           weight: 3,
           ...clearable('weeks'),
           caption: `Reported cases per ${grain?.bucket ?? 'week'}, summed over kept ${sumKind}s · ${grain?.note ?? ''}`,
-          render: ({ width, height }) => <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" columns={columns} encoding={state.encodings['weeks'] ?? {}} width={width} height={height} />,
+          render: ({ width, height }) => (
+            <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" columns={columns} encoding={state.encodings['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, 'brush weeks')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+          ),
         },
         {
           id: 'trend',
           weight: 3,
           ...clearable('trend'),
           caption: `${pickedDisease} per ${areaChosen ? 'kept area' : 'region (the default until you pick a kind or an area)'}, ${grain?.bucket ?? 'week'} — a missing point is a silence, never a zero`,
-          render: ({ width, height }) => <VizLine viewId="trend" data={trendData} dateField="t" valueField="value" colorOf={colorOfArea} columns={columns} encoding={state.encodings['trend'] ?? {}} width={width} height={height} />,
+          render: ({ width, height }) => (
+            <VizLine
+              viewId="trend"
+              data={trendData}
+              dateField="t"
+              valueField="value"
+              colorOf={colorOfArea}
+              columns={columns}
+              encoding={state.encodings['trend'] ?? {}}
+              xDomain={navigateDomain(selFor('trend'))?.range as readonly [string | null, string | null] | undefined}
+              width={width}
+              height={height}
+              onEmit={(e) => void view.emit('trend', e, 'brush the trend')}
+              onReencode={(v, c, f) => void view.reencode(v, c, f)}
+            />
+          ),
         },
         {
           id: 'table',
@@ -363,7 +397,7 @@ export function App(): JSX.Element {
           title: 'Grammar',
           icon: '✍',
           badge: rows?.grammar.verbs.length ?? 0,
-          content: <GrammarPanel grammar={rows?.grammar ?? null} views={state.views} encodings={state.encodings} columns={columns} />,
+          content: <GrammarPanel grammar={rows?.grammar ?? null} views={state.views} encodings={state.encodings} columns={columns} links={state.links} labels={viewLabels} />,
         },
         {
           id: 'silences',

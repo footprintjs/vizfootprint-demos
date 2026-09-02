@@ -10,7 +10,8 @@
  *
  * The same data the agent reads through `whats_here` — one grammar, two readers.
  */
-import type { ColumnView, ViewView } from 'vizfootprint-ui';
+import type { ColumnView, LinkGraphView, ViewView } from 'vizfootprint-ui';
+import { LinkMatrix } from 'vizfootprint-ui/links';
 
 export interface GrammarWire {
   readonly verbs: readonly string[];
@@ -42,8 +43,11 @@ export function GrammarPanel(props: {
   readonly views: readonly ViewView[];
   readonly encodings: Readonly<Record<string, Readonly<Record<string, string>>>>;
   readonly columns: readonly ColumnView[];
+  /** Layer 4: the link graph at the cursor — rendered as the matrix; absent on an older server. */
+  readonly links?: LinkGraphView;
+  readonly labels?: Readonly<Record<string, string>>;
 }): JSX.Element {
-  const { grammar, views, encodings, columns } = props;
+  const { grammar, views, encodings, columns, links, labels } = props;
   if (grammar === null) return <div style={{ opacity: 0.7 }}>the grammar has not arrived yet</div>;
   const declared = new Map(grammar.encodings.map((e) => [e.viewId, e]));
   const absence = columns.find((c) => c.absence !== undefined);
@@ -100,7 +104,7 @@ export function GrammarPanel(props: {
                         ))
                       : <span style={{ opacity: 0.5 }}>no encoding surface — cannot be re-encoded (by declaration)</span>}
                   </td>
-                  <td style={{ padding: 4 }}>{drivesOf(grammar.links, v.actor)}</td>
+                  <td style={{ padding: 4 }}>{links ? links.edges.filter((e) => e.source === v.viewId && e.response !== 'none').map((e) => `${e.target} (${e.response})`).filter((x, i, a) => a.indexOf(x) === i).join(', ') || '—' : drivesOf(grammar.links, v.actor)}</td>
                 </tr>
               );
             })}
@@ -110,6 +114,14 @@ export function GrammarPanel(props: {
       <p style={{ margin: '10px 0 0' }}>
         <b>Wiring:</b> <code>{grammar.links}</code> — {grammar.linksMeaning}.
       </p>
+      {links ? (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ margin: '0 0 6px' }}>
+            <b>The links, as declared</b> — rows are a source view and what it emits, columns are targets, a cell is what the target does with it. The default rule is written out; a declared edge is what someone chose; <i>none</i> is off on purpose; a blank cell would be silence.
+          </p>
+          <LinkMatrix graph={links} labels={labels} readOnly />
+        </div>
+      ) : null}
       {absence ? (
         <p style={{ margin: '6px 0 0' }}>
           <b>Absence:</b> column <code>{absence.field}</code> speaks {absence.absence!.map((w) => <code key={w} style={{ marginRight: 4 }}>{w}</code>)} — a kind of silence, refused on every magnitude channel.

@@ -182,6 +182,7 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     paths: { ...overview.paths, archivedList: session.paths({ includeArchived: true }) },
     charts: session.charts(),
     layouts: overview.layouts,
+    links: overview.links,
   };
 }
 
