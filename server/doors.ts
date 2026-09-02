@@ -341,6 +341,7 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     clearedSelections: overview.clearedSelections,
     views: overview.views,
     dashboard: overview.dashboard, // the cockpit's own words (its caption = the summary), with the proposals on the table
+    notes: overview.notes, // the Text tool: every note with words at the cursor
     tables: overview.tables, // the Sources tab's rows: every declared table as the def states it
     journal: overview.journal, // the data journal's latest records, oldest first
     journalTotal: overview.journalTotal, // how many the journal holds in all
@@ -506,6 +507,7 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         }
       }
       case 'reset': {
+        if (desk.turnActive) return sendJson(res, 409, { error: 'a turn is in flight — wait for it to land before starting fresh' }), true; // a reset mid-turn would leave the turn writing into a desk that no longer exists
         desk.activity.length = 0;
         const fresh = await createDesk(desk.surface.tables, desk.activity, desk.provenance); // the carrier's facts about the snapshot survive a reset
         desk.surface = fresh.surface;

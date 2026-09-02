@@ -97,6 +97,8 @@ export function AnalystPanel(props: {
   readonly describeCommit?: (commitId: string) => string | undefined;
   /** Go to the commit a ref points at. */
   readonly onSeek?: (commitId: string) => void;
+  /** Put a reply on the dashboard as a note — its words and its refs travel; absent = the door is closed (present mode). */
+  readonly onAddToDashboard?: (line: { readonly text: string; readonly refs?: readonly TranscriptRef[] }, model?: string) => void;
 }): JSX.Element {
   const [wire, setWire] = useState<AnalystWire | null>(null);
   const [text, setText] = useState('');
@@ -164,6 +166,11 @@ export function AnalystPanel(props: {
             >
               <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', opacity: 0.6 }}>{line.role === 'user' ? 'you' : line.role === 'error' ? 'the turn failed' : 'analyst'}</span>
               <div>{line.role === 'analyst' && line.refs !== undefined && line.refs.length > 0 ? <ProseText text={line.text} refs={line.refs} describeCommit={props.describeCommit} onSeek={props.onSeek} /> : line.text}</div>
+              {line.role === 'analyst' && props.onAddToDashboard !== undefined ? (
+                <button type="button" onClick={() => props.onAddToDashboard?.(line, wire?.model)} style={{ marginTop: 6, font: 'inherit', fontSize: 11.5, padding: '2px 8px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }} title="Keep this reply on the dashboard as a note — its links travel with it">
+                  + Add to dashboard
+                </button>
+              ) : null}
               {line.role === 'user' && line.context ? (
                 <div style={{ marginTop: 4, fontSize: 11, opacity: 0.6, whiteSpace: 'pre-wrap' }} title="what rode with this message, from the record">
                   {line.context.split('\n').slice(1).join('\n')}

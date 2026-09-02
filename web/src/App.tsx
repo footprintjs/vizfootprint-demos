@@ -34,6 +34,7 @@ import {
   useSessionView,
   Sources,
   orderedCheckpoints, currentBeatIndex, beatTarget,
+  NoteCell, linkablesOf, mentionWorldOf,
 } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
 import { AnalystPanel } from './AnalystPanel.js';
@@ -403,16 +404,75 @@ export function App(): JSX.Element {
     onNext: () => stepBeat(1),
     onExit: () => setShowing(false),
   } : undefined;
+  // THE TEXT TOOL: notes are prose subjects (`note:<id>`); every save is a describe the session answers; links are mentions resolved against the session
+  // (the world and the picker list are keyed on the slices they read, so an idle poll does not rebuild them)
+  const noteWorld = useMemo(() => mentionWorldOf(state), [state.commits, state.checkpoints, state.saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  const noteLinks = useMemo(() => linkablesOf(state), [state.commits, state.checkpoints, state.saved, state.selections]); // eslint-disable-line react-hooks/exhaustive-deps
+  const describeNote = (id: string, slot: 'title' | 'caption', record: Readonly<Record<string, unknown>> | null) =>
+    view.describe(`note:${id}`, slot, record, record === null ? `clear the ${slot} of note ${id}` : `write note ${id}`);
+  // a new note is opened, not committed: nothing lands until its first Save, so the log never holds words nobody wrote
+  const [freshNotes, setFreshNotes] = useState<readonly string[]>([]);
+  // a note id only has to be unique on this desk; `crypto.randomUUID` is secure-context only, so a plain-http demo falls back
+  const freshNoteId = (): string => `n${typeof crypto.randomUUID === 'function' ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10)}`;
+  const newNote = (): void => setFreshNotes((f) => [...f, freshNoteId()]);
+  // an analyst reply becomes a note: its words and its refs, the analyst (and its model) as author, the cursor and the live selections as its basis — so it goes stale honestly; no claim level is invented for it
+  const addReplyToDashboard = (line: { readonly text: string; readonly refs?: readonly { readonly span: readonly [number, number]; readonly commit: string; readonly label?: string }[] }, model?: string): void => {
+    const refs = (line.refs ?? []).map((r) => ({ span: r.span, commit: r.commit, ...(r.label !== undefined ? { label: r.label } : {}) }));
+    const basis = { ...(typeof state.cursor === 'string' ? { atCommit: state.cursor } : {}), ...(state.filters !== undefined ? { filters: state.filters } : {}) };
+    void view
+      .describe(`note:${freshNoteId()}`, 'caption', { text: line.text, author: { kind: 'agent', ...(model !== undefined ? { model } : {}) }, ...(Object.keys(basis).length > 0 ? { basis } : {}), ...(refs.length > 0 ? { refs } : {}) }, 'add the analyst reply to the dashboard')
+      .then((r) => { if (!r.ok) setProblem(r.sentence); }) // a refused note (a ref to a commit off this path, say) is said out loud, never dropped
+      .catch((e: unknown) => setProblem(`the note did not land: ${e instanceof Error ? e.message : String(e)}`));
+  };
+  const noteProps = { world: noteWorld, linkables: noteLinks, by: 'you', readOnly, onDescribe: describeNote, onSeek: (id: string) => void view.seek(id), onBeat: (label: string) => { const b = state.checkpoints.find((x) => x.label === label); if (b?.commitId) void view.seek(b.commitId); }, describeCommit: (id: string) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; } };
+  const savedNoteIds = new Set((state.notes ?? []).map((n) => n.id));
+  const noteCells = [
+    ...(state.notes ?? []).map((n) => ({ id: `note:${n.id}`, render: () => <NoteCell note={n} {...noteProps} /> })),
+    ...freshNotes.filter((id) => !savedNoteIds.has(id)).map((id) => ({
+      id: `note:${id}`,
+      render: () => (
+        <NoteCell
+          note={{ id, prose: [], proposals: [] }}
+          fresh
+          onDiscard={() => setFreshNotes((f) => f.filter((x) => x !== id))}
+          {...noteProps}
+          // once it has been saved it is the SESSION's note, not a fresh id: dropping it here keeps a seek back
+          // before its first commit from re-opening a blank editor beside the words that are simply not there yet
+          onDescribe={async (noteId, slot, record) => {
+            const r = await describeNote(noteId, slot, record);
+            if (r.ok) setFreshNotes((f) => f.filter((x) => x !== id));
+            return r;
+          }}
+        />
+      ),
+    })),
+  ];
   // the cockpit menu: the host's acts, in the host's words — the two floating buttons that overlapped the report chips live here now
   // the selection to save: the one the cursor stands on, else the last live one (the wire promises no recency order)
   const liveSelection = state.selections.find((sel) => sel.commitId === state.cursor) ?? state.selections[state.selections.length - 1];
+  // START FRESH: the reset door builds a new desk over the SAME tables — the
+  // data stays exactly where it was, the commit log is emptied. Asked first,
+  // because a cleared log cannot be walked back to.
+  const startFresh = (): void => {
+    if (!window.confirm('Clear every commit and start fresh? The data stays; the log is emptied.')) return;
+    void fetchJson('/api/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then(() => {
+        setProposals([]); // the server threw its own away with the desk
+        setAnalystTurns(0); // a fresh analyst has said nothing yet
+        setAsideOpen(false); // the drawer's transcript belonged to the session that just ended
+        setFreshNotes([]); // the unsaved notes were opened against a log that no longer exists
+        return view.refresh(); // show the empty log now, not at the next poll
+      })
+      .catch((e: unknown) => setProblem(`the reset did not run: ${e instanceof Error ? e.message : String(e)}`));
+  };
   const menuItems = [
     { id: 'analyst', label: `Analyst${analystTurns > 0 ? ` (${analystTurns})` : ''}`, icon: '🧭', onSelect: () => { setAsideTab('analyst'); setAsideOpen(true); } },
     { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? state.views[0]?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
     { id: 'save', label: 'Save selection', icon: '💾', disabled: liveSelection?.commitId === undefined || readOnly, hint: liveSelection === undefined ? 'nothing is selected' : `keep the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection by name`, onSelect: () => { const id = liveSelection?.commitId; if (liveSelection === undefined || id === undefined) return; const name = window.prompt(`Save the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection as…`); if (name) void view.saveSelection(id, name); } },
     { id: 'present', label: mode === 'present' ? 'Back to Explore' : 'Present the beats', icon: '▶', disabled: mode !== 'present' && beats.length === 0, hint: mode !== 'present' && beats.length === 0 ? 'name a checkpoint first — the beats are the slides' : undefined, onSelect: () => { if (mode === 'present') { setShowing(false); setMode('explore'); } else startShow(); } },
     { id: 'add-chart', label: 'Add a chart', icon: '＋', disabled: true, hint: 'next packet: an accepted proposal joins the cockpit', onSelect: () => undefined },
-    { id: 'text', label: 'Text tool', icon: '¶', disabled: true, hint: 'next packet: notes with links to selections and beats', onSelect: () => undefined },
+    { id: 'text', label: 'Text tool', icon: '¶', disabled: readOnly, hint: 'a note on the dashboard — its words link to selections, checkpoints and commits', onSelect: newNote },
+    { id: 'reset', label: 'Start fresh', icon: '↺', disabled: readOnly, hint: 'clear every commit and begin again — the data stays, the log is emptied', onSelect: startFresh },
   ];
   return (
     <>
@@ -444,6 +504,7 @@ export function App(): JSX.Element {
                 onScreen={{ selections: state.selections.map((sel) => `${viewLabels[sel.viewId] ?? sel.viewId}: ${chipWords(sel)}`), cursor: state.cursor }}
                 describeCommit={(id) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; }}
                 onSeek={(id) => void view.seek(id)}
+                onAddToDashboard={readOnly ? undefined : addReplyToDashboard}
               />
             ) : null}
             {asideTab === 'edit' ? (
@@ -618,6 +679,8 @@ export function App(): JSX.Element {
             <VizTable viewId="table" data={tableRows} columns={['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max']} idField="jurisdiction" selection={selFor('table')} width={width} height={height} onEmit={(e) => void view.emit('table', e, 'select area')} />
           ),
         },
+        // notes join after the charts — the same place a saved arrangement puts anything it has not seen (orderCharts puts unknown ids last), so a new note lands in one place either way
+        ...noteCells,
       ]}
       reports={[
         {
