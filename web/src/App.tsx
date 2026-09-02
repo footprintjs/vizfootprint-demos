@@ -11,7 +11,7 @@
  * crossfilter, named as such in the Grammar panel.
  */
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import {
   chipWords,
   ProseText,
@@ -33,6 +33,7 @@ import {
   selectionForView,
   useSessionView,
   Sources,
+  orderedCheckpoints, currentBeatIndex, beatTarget,
 } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
 import { AnalystPanel } from './AnalystPanel.js';
@@ -133,6 +134,8 @@ export function App(): JSX.Element {
   const [geo, setGeo] = useState<GeoFeatureCollection | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [mode, setMode] = useState<'explore' | 'present'>('explore');
+  // Present mode as a slideshow: the dashboard is the slide, prev/next seek the named checkpoints, interactions stay off
+  const [showing, setShowing] = useState(false);
   const [analystTurns, setAnalystTurns] = useState(0);
   // the in-place editor: a side drawer (never a modal) so a change is seen happening on the charts
   const [editing, setEditing] = useState<string | null>(null);
@@ -361,11 +364,63 @@ export function App(): JSX.Element {
   const story = useMemo(() => toStory(state, { declared: declaredWords ?? {}, author: 'the desk', date: new Date().toISOString().slice(0, 10) }), [state, declaredWords]);
   const grain = rows?.grain;
 
+  // open the editor for one chart (from its ✎ or the menu)
+  const editChart = (viewId: string): void => {
+    setEditing(viewId);
+    setAsideTab('edit');
+    setAsideOpen(true);
+  };
+  // the slideshow's beats: the named checkpoints along the head's lineage, the dashboard's caption as the slide's words
+  const beats = orderedCheckpoints(state.checkpoints, state.commits, state.head);
+  const rawBeatIndex = currentBeatIndex(state.checkpoints, state.commits, state.cursor, state.head); // -1 = the cursor is off the story
+  const beatIndex = Math.max(0, rawBeatIndex);
+  // a seek is asynchronous: two fast presses target from the beat already asked for, never the one still on screen
+  const pendingBeat = useRef<number | null>(null);
+  useEffect(() => {
+    if (pendingBeat.current === rawBeatIndex) pendingBeat.current = null;
+  }, [rawBeatIndex]);
+  const goBeat = (i: number): Promise<void> => {
+    const b = beats[i];
+    if (b === undefined) return Promise.resolve();
+    pendingBeat.current = i;
+    // a seek that fails must not leave a target the presenter never reached
+    return view.seek(beatTarget(b) as string).then(() => undefined, () => { pendingBeat.current = null; });
+  };
+  const stepBeat = (by: number): void => void goBeat((pendingBeat.current ?? beatIndex) + by);
+  // entering the show from a cursor that reaches no beat begins at the first beat — never a slide the dashboard is not showing
+  const startShow = (): void => {
+    setMode('present');
+    if (rawBeatIndex < 0) void goBeat(0).then(() => setShowing(true)); // the slide bar names a beat only once the charts show it
+    else setShowing(true);
+  };
+  const slideshow = showing && mode === 'present' && beats.length > 0 ? {
+    active: true,
+    title: beats[beatIndex]?.label ?? '',
+    ...(dashCaption !== undefined ? { words: dashCaption.text } : {}),
+    index: beatIndex,
+    count: beats.length,
+    onPrev: () => stepBeat(-1),
+    onNext: () => stepBeat(1),
+    onExit: () => setShowing(false),
+  } : undefined;
+  // the cockpit menu: the host's acts, in the host's words — the two floating buttons that overlapped the report chips live here now
+  // the selection to save: the one the cursor stands on, else the last live one (the wire promises no recency order)
+  const liveSelection = state.selections.find((sel) => sel.commitId === state.cursor) ?? state.selections[state.selections.length - 1];
+  const menuItems = [
+    { id: 'analyst', label: `Analyst${analystTurns > 0 ? ` (${analystTurns})` : ''}`, icon: '🧭', onSelect: () => { setAsideTab('analyst'); setAsideOpen(true); } },
+    { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? state.views[0]?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
+    { id: 'save', label: 'Save selection', icon: '💾', disabled: liveSelection?.commitId === undefined || readOnly, hint: liveSelection === undefined ? 'nothing is selected' : `keep the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection by name`, onSelect: () => { const id = liveSelection?.commitId; if (liveSelection === undefined || id === undefined) return; const name = window.prompt(`Save the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection as…`); if (name) void view.saveSelection(id, name); } },
+    { id: 'present', label: mode === 'present' ? 'Back to Explore' : 'Present the beats', icon: '▶', disabled: mode !== 'present' && beats.length === 0, hint: mode !== 'present' && beats.length === 0 ? 'name a checkpoint first — the beats are the slides' : undefined, onSelect: () => { if (mode === 'present') { setShowing(false); setMode('explore'); } else startShow(); } },
+    { id: 'add-chart', label: 'Add a chart', icon: '＋', disabled: true, hint: 'next packet: an accepted proposal joins the cockpit', onSelect: () => undefined },
+    { id: 'text', label: 'Text tool', icon: '¶', disabled: true, hint: 'next packet: notes with links to selections and beats', onSelect: () => undefined },
+  ];
   return (
     <>
     <VizCockpit
       readOnly={readOnly}
       status={<WindowReadout />}
+      menu={menuItems}
+      slideshow={slideshow}
       aside={{
         open: asideOpen,
         title: asideTab === 'analyst' ? 'Analyst' : `Edit ${editing !== null ? (viewLabels[editing] ?? editing) : ''}`,
@@ -440,6 +495,7 @@ export function App(): JSX.Element {
             onStepBack={() => void view.stepBack()}
             onStepForward={() => void view.stepForward()}
             onCheckpoint={(label) => void view.checkpoint(label)}
+            onPlay={startShow}
             onReturnToNow={() => void view.returnToNow()}
           />
           <JumpBox commitIds={state.commits.map((c) => c.id)} onSeek={(id) => void view.seek(id)} />
@@ -459,22 +515,13 @@ export function App(): JSX.Element {
             }}
           />
           <SavedSelections saved={state.saved ?? []} selections={state.selections} labels={viewLabels} readOnly={readOnly} onApply={(c) => void view.bringOver(c)} />
-          {state.sources && Object.keys(state.sources).length > 0 ? (
-            <div style={{ fontSize: 11.5, opacity: 0.65, marginTop: 4 }} data-vzf="provenance">
-              {Object.entries(state.sources).map(([table, src]) => (
-                <span key={table} style={{ marginRight: 12 }}>
-                  data <b>{table}</b>: {src.rows.toLocaleString()} rows via {src.via}
-                  {src.at ? ` (${src.at.split('/').pop() ?? src.at})` : ''} · {src.version} · read {new Date(src.retrievedAt).toLocaleString()}
-                </span>
-              ))}
-            </div>
-          ) : null}
         </div>
       }
       toast={problem === null ? null : <div role="alert" style={{ padding: 10, fontSize: 13 }}>⚠ {problem}</div>}
       charts={[
         {
           id: 'coverage',
+          onEdit: () => editChart('coverage'),
           weight: 2,
           ...clearable('coverage'),
           caption: `Coverage — ${String(keptCount)} of ${String(cells.length)} cells in view · which silence is which (click to select)`,
@@ -484,6 +531,7 @@ export function App(): JSX.Element {
         },
         {
           id: 'diseases',
+          onEdit: () => editChart('diseases'),
           weight: 4,
           ...clearable('diseases'),
           caption: `Reported cases by disease, summed over kept ${sumKind}s (a disease with no present cell has no bar) — click one to drive the trend, the week line and the table (now: ${pickedDisease})`,
@@ -493,6 +541,7 @@ export function App(): JSX.Element {
         },
         {
           id: 'kinds',
+          onEdit: () => editChart('kinds'),
           weight: 1.5,
           ...clearable('kinds'),
           caption: 'Cells by area kind — states, regions, roll-ups (click to select)',
@@ -502,6 +551,7 @@ export function App(): JSX.Element {
         },
         {
           id: 'map',
+          onEdit: () => editChart('map'),
           weight: 4,
           ...clearable('map'),
           caption: (
@@ -521,6 +571,7 @@ export function App(): JSX.Element {
         },
         {
           id: 'weeks',
+          onEdit: () => editChart('weeks'),
           weight: 3,
           ...clearable('weeks'),
           caption: (
@@ -535,6 +586,7 @@ export function App(): JSX.Element {
         },
         {
           id: 'trend',
+          onEdit: () => editChart('trend'),
           weight: 3,
           ...clearable('trend'),
           caption: `${pickedDisease} per ${areaChosen ? 'kept area' : 'region (the default until you pick a kind or an area)'}, ${grain?.bucket ?? 'week'} — a missing point is a silence, never a zero`,
@@ -558,6 +610,7 @@ export function App(): JSX.Element {
         },
         {
           id: 'table',
+          onEdit: () => editChart('table'),
           weight: 3,
           ...clearable('table'),
           caption: `${pickedDisease}, week ending ${latestWeek} — the cells as CDC printed them, with their flag (click a row to select)`,
@@ -670,28 +723,6 @@ export function App(): JSX.Element {
         },
       ]}
     />
-    <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 31, display: 'flex', gap: 6 }}>
-      <button
-        type="button"
-        onClick={() => { setAsideTab('analyst'); setAsideOpen((o) => !(o && asideTab === 'analyst')); }}
-        style={{ font: 'inherit', fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }}
-        aria-label="Analyst"
-      >
-        🧭 Analyst{analystTurns > 0 ? ` ${analystTurns}` : ''}
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setAsideTab('edit');
-          if (editing === null) setEditing(state.views.find((v) => v.viewId === 'weeks')?.viewId ?? state.views[0]?.viewId ?? null);
-          setAsideOpen((o) => !(o && asideTab === 'edit'));
-        }}
-        style={{ font: 'inherit', fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }}
-        aria-label="Edit a chart"
-      >
-        ✎ Edit a chart
-      </button>
-    </div>
 
     </>
   );
