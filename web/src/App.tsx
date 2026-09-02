@@ -127,7 +127,7 @@ export function App(): JSX.Element {
   const columns = state.columns[state.defaultTable] ?? [];
   const selFor = (self: string | null) => selectionForView(state.selections, self);
   // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
-  const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== null && s.value !== undefined).map((s) => s.viewId)), [state.selections]);
+  const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== undefined).map((s) => s.viewId)), [state.selections]); // null is a live IS-NULL point
   const viewLabels = useMemo(() => Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId])), [state.views]);
   const clearable = (id: string) => ({ active: liveViews.has(id), onClear: () => void view.clear(id, `clear ${viewLabels[id] ?? id}`) });
 
