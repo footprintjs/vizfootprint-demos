@@ -22,7 +22,7 @@ const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.j
 loadEnv(); // the repo's own .env, if any — names only ever reach the log, never values
 // the CDC snapshot through the library's source layer: a declared file source, with the provenance the file system vouches for
 const snapshot = await loadSnapshotAsync();
-const desk = createDesk(snapshot.tables, [], { 'snapshot.csv': snapshot.source }); // what the carrier vouched for, beside the library's own per-table provenance
+const desk = await createDesk(snapshot.tables, [], { 'snapshot.csv': snapshot.source }); // what the carrier vouched for, beside the library's own per-table provenance
 console.log(`  source: snapshot.csv via file — ${String(snapshot.source.rows)} rows, ${snapshot.source.version}, read ${snapshot.source.retrievedAt}`);
 
 function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {

@@ -32,6 +32,7 @@ import {
   pollingSource,
   selectionForView,
   useSessionView,
+  Sources,
 } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
 import { AnalystPanel } from './AnalystPanel.js';
@@ -110,6 +111,25 @@ export function App(): JSX.Element {
   const state = useSessionView(view);
   const [rows, setRows] = useState<RowsPayload | null>(null);
   const [proposals, setProposals] = useState<readonly Proposal[]>([]);
+  // the Sources tab's doors: the data checks (lintData sentences) and a refresh in flight
+  const [checks, setChecks] = useState<readonly string[] | undefined>(undefined);
+  const [checksError, setChecksError] = useState<string | undefined>(undefined);
+  const [refreshing, setRefreshing] = useState(false);
+  // a refused checks door is said in words, never shown as "not asked yet"
+  const fetchChecks = () =>
+    fetchJson<{ checks?: string[] }>('/api/lint')
+      .then((r) => {
+        setChecks(r.checks ?? []);
+        setChecksError(undefined);
+      })
+      .catch((e: unknown) => setChecksError(e instanceof Error ? e.message : String(e)));
+  const refreshSources = (tables?: readonly string[]) => {
+    setRefreshing(true);
+    fetchJson('/api/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(tables !== undefined ? { tables } : {}) })
+      .catch((e: unknown) => setProblem(`the refresh did not run: ${e instanceof Error ? e.message : String(e)}`))
+      .then(() => fetchChecks())
+      .finally(() => setRefreshing(false));
+  };
   const [geo, setGeo] = useState<GeoFeatureCollection | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [mode, setMode] = useState<'explore' | 'present'>('explore');
@@ -127,6 +147,7 @@ export function App(): JSX.Element {
     void fetchJson<GeoFeatureCollection>('/api/geo')
       .then((g) => live && setGeo(g))
       .catch((e: unknown) => live && setProblem(`the map shapes did not arrive: ${e instanceof Error ? e.message : String(e)}`));
+    void fetchChecks();
     void fetchJson<{ proposals?: Proposal[] }>('/api/proposals')
       .then((p) => live && setProposals(p.proposals ?? []))
       .catch((e: unknown) => live && setProblem(`the proposals did not arrive: ${e instanceof Error ? e.message : String(e)}`));
@@ -632,6 +653,13 @@ export function App(): JSX.Element {
           icon: '🧾',
           badge: state.commits.length,
           content: <CommitLog commits={state.commits} onSeek={(id) => void view.seek(id)} />,
+        },
+        {
+          id: 'sources',
+          title: 'Sources',
+          icon: '🗂',
+          badge: state.tables?.length ?? 0,
+          content: <Sources tables={state.tables ?? []} sources={state.sources} columns={state.columns} journal={state.journal} journalTotal={state.journalTotal} checks={checks} checksError={checksError} onRefresh={refreshSources} refreshing={refreshing} readOnly={readOnly} />,
         },
         {
           id: 'story',

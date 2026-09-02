@@ -11,6 +11,8 @@
  * Nothing here knows about HTTP; `server/` puts it on the wire.
  */
 import { buildDashboard, vizAsTools } from '../../../vizfootprint/src/agent/index.js';
+import { buildDashboardAsync } from '../../../vizfootprint/src/def/index.js';
+import type { Dashboard } from '../../../vizfootprint/src/def/index.js';
 import type { InteractionSession, VizToolsPort } from '../../../vizfootprint/src/agent/index.js';
 import { nndssDef } from './def.js';
 import { loadSnapshot, type NndssTables } from './etl.js';
@@ -19,11 +21,21 @@ export interface NndssSurface {
   readonly session: InteractionSession;
   readonly port: VizToolsPort;
   readonly tables: NndssTables;
+  /** The dashboard behind the session — its refresh door, data checks and journal. */
+  readonly dashboard: Dashboard;
 }
 
 export function buildNndssSurface(tables: NndssTables = loadSnapshot()): NndssSurface {
   const dashboard = buildDashboard(nndssDef(tables));
   const session = dashboard.createSession({ as: 'agent' });
   const port = vizAsTools(session, { as: 'agent' });
-  return { session, port, tables };
+  return { session, port, tables, dashboard };
+}
+
+/** The same surface through the async builder — the one with a refresh door and a data journal (the server's way in). */
+export async function buildNndssSurfaceAsync(tables: NndssTables = loadSnapshot()): Promise<NndssSurface> {
+  const dashboard = await buildDashboardAsync(nndssDef(tables));
+  const session = dashboard.createSession({ as: 'agent' });
+  const port = vizAsTools(session, { as: 'agent' });
+  return { session, port, tables, dashboard };
 }

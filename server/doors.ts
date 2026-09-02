@@ -22,7 +22,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { DispatchAction, FilterRange } from '../../vizfootprint/src/agent/index.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
-import { buildNndssSurface, type NndssSurface } from '../src/nndss/surface.js';
+import { buildNndssSurfaceAsync, type NndssSurface } from '../src/nndss/surface.js';
 import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
 import { DASHBOARD_WORDS, nndssDef } from '../src/nndss/def.js';
 import type { InteractionSession } from '../../vizfootprint/src/session/index.js';
@@ -166,8 +166,8 @@ export const SUGGESTIONS = [
 
 const hasKey = (): boolean => (process.env['ANTHROPIC_API_KEY'] ?? '') !== '';
 
-export function createDesk(tables?: NndssTables, activity: ActivityStep[] = [], provenance: Desk['provenance'] = {}): Desk {
-  const surface = buildNndssSurface(tables);
+export async function createDesk(tables?: NndssTables, activity: ActivityStep[] = [], provenance: Desk['provenance'] = {}): Promise<Desk> {
+  const surface = await buildNndssSurfaceAsync(tables);
   const analyst = createNndssAnalyst(surface.port, {
     provider: hasKey() ? liveProvider(process.env['ANTHROPIC_API_KEY']!) : scriptedNndssMock(),
     onActivity: (step) => activity.push(step),
@@ -341,6 +341,9 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     clearedSelections: overview.clearedSelections,
     views: overview.views,
     dashboard: overview.dashboard, // the cockpit's own words (its caption = the summary), with the proposals on the table
+    tables: overview.tables, // the Sources tab's rows: every declared table as the def states it
+    journal: overview.journal, // the data journal's latest records, oldest first
+    journalTotal: overview.journalTotal, // how many the journal holds in all
     filters: overview.filters, // the live selections in the shape a prose basis states them
     gaps: session.gaps(),
     selectedCount: overview.selectedRowCount, // null when the engine could not answer — never a fake 0
@@ -431,6 +434,8 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
     }
     if (req.method === 'GET' && door === 'proposals') return sendJson(res, 200, { proposals: desk.proposals, ledger: (await session.overview()).fdr }), true;
     if (req.method === 'GET' && door === 'analyst') return sendJson(res, 200, analystState(desk)), true;
+    // the data checks: the declarations judged against the real data — sentences, never thrown
+    if (req.method === 'GET' && door === 'lint') return sendJson(res, 200, { checks: await desk.surface.dashboard.lintData() }), true;
     // clear the chat window: the analyst forgets the conversation; every commit it landed stays in the log
     if (req.method === 'DELETE' && door === 'analyst') {
       if (desk.turnActive) return sendJson(res, 409, { error: 'a turn is in flight — wait for it to land' }), true;
@@ -450,6 +455,15 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
     if (req.method !== 'POST') return sendJson(res, 405, { error: `${door} is POST` }), true;
     const body = await readJson(req);
     switch (door) {
+      case 'refresh': {
+        // a dashboard-level act: re-read the named sources (every source when none is named) with the version held; journaled by the library
+        const tables = Array.isArray(body['tables']) ? (body['tables'] as unknown[]).map(String) : undefined;
+        // a dashboard-level act on an open door: only declared tables may be named, so no invented name reaches the shared journal
+        const declared = new Set(Object.keys(desk.surface.dashboard.def.data));
+        const unknown = (tables ?? []).filter((t) => !declared.has(t));
+        if (unknown.length > 0) return sendJson(res, 400, { error: `no table ${unknown.map((t) => `"${t}"`).join(', ')} is declared — the tables are ${[...declared].join(', ')}` }), true;
+        return sendJson(res, 200, await desk.surface.dashboard.refresh(tables)), true;
+      }
       case 'dispatch': {
         const action = userAction(body);
         if ('error' in action) return sendJson(res, 400, { ok: false, error: action.error }), true;
@@ -493,7 +507,7 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
       }
       case 'reset': {
         desk.activity.length = 0;
-        const fresh = createDesk(desk.surface.tables, desk.activity);
+        const fresh = await createDesk(desk.surface.tables, desk.activity, desk.provenance); // the carrier's facts about the snapshot survive a reset
         desk.surface = fresh.surface;
         desk.proposals = [];
         desk.analyst = fresh.analyst;
