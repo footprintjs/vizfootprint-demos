@@ -49,6 +49,7 @@ const geoJson = (): Promise<{ text: string; version: string }> => {
     );
     try {
       const snap = await handle.snapshot();
+      if ('unchanged' in snap) throw new Error('geo: a first read never answers unchanged');
       const collection = snap.rows[0]; // a FeatureCollection is one row — the def says so
       if (collection === undefined) throw new Error('geo: us-states.geo.json decoded to zero rows');
       return { text: JSON.stringify(collection), version: snap.version };
@@ -332,8 +333,9 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     views: overview.views,
     gaps: session.gaps(),
     selectedCount: overview.selectedRowCount, // null when the engine could not answer — never a fake 0
-    // the def declares its ETL'd tables inline, so the library's own provenance is empty here; the snapshot's is what the desk was built from
-    sources: Object.keys(overview.sources).length > 0 ? overview.sources : desk.provenance,
+    // two truths side by side: the snapshot file the desk was ETL'd from (the carrier's provenance) and the library's
+    // own per-table provenance (the version every commit is stamped with)
+    sources: { ...desk.provenance, ...overview.sources },
     totalRows: tables.cells.length,
     defaultTable: overview.defaultTable,
     columns: overview.columns,

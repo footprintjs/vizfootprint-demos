@@ -179,6 +179,7 @@ export function loadSnapshot(path = new URL('../../data/nndss/snapshot.csv', imp
 export async function loadSnapshotAsync(path = new URL('../../data/nndss/snapshot.csv', import.meta.url)): Promise<{ readonly tables: NndssTables; readonly source: { readonly format: 'csv'; readonly via: 'file'; readonly at: string; readonly version: string; readonly retrievedAt: string; readonly rows: number } }> {
   const handle = await openSource({ format: 'csv', via: 'file', at: path.href }, 'cells', [fileSource]);
   const snap = await handle.snapshot();
+  if ('unchanged' in snap) throw new Error('snapshot: a first read never answers unchanged');
   await handle.close();
   return { tables: nndssTablesFromRows(snap.rows), source: { format: 'csv', via: 'file', at: path.href, version: snap.version, retrievedAt: snap.retrievedAt, rows: snap.rows.length } };
 }

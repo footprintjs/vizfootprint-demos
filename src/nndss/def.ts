@@ -48,7 +48,8 @@ export function nndssDef(tables: NndssTables): DashboardDef {
       // The encoding plane's FACETS, stated: what each column IS to a chart. The absence
       // column's role is derived from `absence`; every other role is declared here or absent.
       cells: {
-        rows: tables.cells,
+        // declared as an (inline) SOURCE so every commit carries the version it was true of — the same rows `rows:` would carry
+        source: { format: 'rows', via: 'inline', at: tables.cells },
         absence,
         columns: {
           jurisdiction: { role: 'identifier', label: 'jurisdiction' },
