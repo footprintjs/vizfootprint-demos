@@ -1,0 +1,53 @@
+{
+  "source": "NNDSS Weekly Data — data.cdc.gov",
+  "dataset": "x9gk-5huc",
+  "url": "https://data.cdc.gov/NNDSS/NNDSS-Weekly-Data/x9gk-5huc",
+  "api": "https://data.cdc.gov/resource/x9gk-5huc.json",
+  "attribution": "Office of Public Health Data, Surveillance, and Technology, Centers for Disease Control and Prevention",
+  "license": "Work of the United States Government — public domain (17 U.S.C. § 105)",
+  "query": {
+    "where": "year in ('2025','2026') AND label in ('Pertussis','Measles, Indigenous','Measles, Imported','Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection)','Hepatitis A, Confirmed','Giardiasis','Cryptosporidiosis','Gonorrhea','Arboviral diseases, West Nile virus disease','Legionellosis','Mumps','Hepatitis B, chronic, Confirmed','Hepatitis C, acute, Confirmed','Carbapenemase-Producing Organisms (CPO), Total','Candida auris, clinical')",
+    "fields": [
+      "states",
+      "year",
+      "week",
+      "label",
+      "m1",
+      "m1_flag",
+      "m2",
+      "m2_flag",
+      "m3",
+      "m3_flag",
+      "m4",
+      "m4_flag",
+      "location1",
+      "location2",
+      "geocode"
+    ],
+    "order": "sort_order"
+  },
+  "years": [
+    "2025",
+    "2026"
+  ],
+  "labels": [
+    "Pertussis",
+    "Measles, Indigenous",
+    "Measles, Imported",
+    "Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection)",
+    "Hepatitis A, Confirmed",
+    "Giardiasis",
+    "Cryptosporidiosis",
+    "Gonorrhea",
+    "Arboviral diseases, West Nile virus disease",
+    "Legionellosis",
+    "Mumps",
+    "Hepatitis B, chronic, Confirmed",
+    "Hepatitis C, acute, Confirmed",
+    "Carbapenemase-Producing Organisms (CPO), Total",
+    "Candida auris, clinical"
+  ],
+  "retrievedAt": "2026-09-02T00:18:16.479Z",
+  "rows": 90300,
+  "note": "Provisional weekly counts; CDC revises them. The snapshot is a slice, never edited by hand; re-run data:fetch to refresh."
+}
