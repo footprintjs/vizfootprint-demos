@@ -38,6 +38,8 @@ import { AnalystPanel } from './AnalystPanel.js';
 import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
 import { JumpBox } from './JumpBox.js';
 import { ChartEditor } from 'vizfootprint-ui/editor';
+import { toStory } from 'vizfootprint-ui/story';
+import type { StoryPost } from 'vizfootprint-ui/story';
 
 interface CellRow {
   readonly jurisdiction: string;
@@ -69,6 +71,8 @@ interface RowsPayload {
   readonly counts: Readonly<Record<string, number>>;
   readonly absence: { readonly field: string; readonly states: readonly string[] };
   readonly grammar: GrammarWire;
+  /** The def's declared dashboard words — the story's fallback for beats no describe reached. */
+  readonly declared?: { readonly dashboard?: { readonly title?: string; readonly caption?: string } };
 }
 interface Proposal {
   readonly id: string;
@@ -296,6 +300,44 @@ export function App(): JSX.Element {
   };
 
   const readOnly = mode === 'present';
+  // The DASHBOARD's own words: its caption is the one-line summary of the whole desk, kept by the analyst (who proposes;
+  // a person accepts). Shown under the time strip with its status; a stale summary says what moved.
+  const dashCaption = state.dashboard?.prose.find((p) => p.slot === 'caption');
+  const dashDrafts = (state.dashboard?.proposals ?? []).filter((p) => p.slot === 'caption' && p.status === 'open');
+  const summary: ReactNode =
+    dashCaption === undefined && dashDrafts.length === 0 ? null : (
+      <div role="note" style={{ flexBasis: '100%', fontSize: 12.5, lineHeight: 1.45, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline' }} aria-label="dashboard summary">
+        {dashCaption !== undefined ? (
+          <span style={{ color: dashCaption.status === 'stale' ? '#a8661a' : undefined, opacity: 0.9 }} title={`${dashCaption.author.kind}${dashCaption.author.by ? ' · ' + dashCaption.author.by : ''}${dashCaption.author.model ? ' · ' + dashCaption.author.model : ''}`}>
+            <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>summary</span>{' '}
+            <ProseText text={dashCaption.text} refs={dashCaption.refs} describeCommit={(id) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; }} onSeek={(id) => void view.seek(id)} onBeat={(label) => { const b = state.checkpoints.find((x) => x.label === label); if (b?.commitId) void view.seek(b.commitId); }} />
+            {dashCaption.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {dashCaption.changed.join(', ')} moved</span> : null}
+            {dashCaption.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
+          </span>
+        ) : null}
+        {dashDrafts.map((p) => (
+          <span key={p.proposal} style={{ fontSize: 12, background: '#fff7e6', border: '1px solid #f0d9a8', borderRadius: 6, padding: '2px 8px' }}>
+            <span style={{ opacity: 0.7, marginRight: 4 }}>proposed:</span>
+            {p.text}
+            {!readOnly ? (
+              <>
+                {' '}
+                <button type="button" onClick={() => void view.acceptProposal('dashboard', 'caption', p.proposal)} style={{ font: 'inherit', fontSize: 11.5, marginLeft: 6, cursor: 'pointer' }}>
+                  accept
+                </button>
+                <button type="button" onClick={() => { const reason = window.prompt('Decline because…'); if (reason) void view.declineProposal('dashboard', 'caption', p.proposal, reason); }} style={{ font: 'inherit', fontSize: 11.5, marginLeft: 4, cursor: 'pointer' }}>
+                  decline
+                </button>
+              </>
+            ) : null}
+          </span>
+        ))}
+      </div>
+    );
+  // The STORY layer: the named beats along the head's lineage as a storydeck post (figures are the host's — none here yet).
+  // The fallback words are the def's DECLARED ones, never the live caption — the live words would misdate every earlier beat.
+  const declaredWords = rows?.declared?.dashboard;
+  const story = useMemo(() => toStory(state, { declared: declaredWords ?? {}, author: 'the desk', date: new Date().toISOString().slice(0, 10) }), [state, declaredWords]);
   const grain = rows?.grain;
 
   return (
@@ -379,6 +421,7 @@ export function App(): JSX.Element {
             onReturnToNow={() => void view.returnToNow()}
           />
           <JumpBox commitIds={state.commits.map((c) => c.id)} onSeek={(id) => void view.seek(id)} />
+          {summary}
           <SelectionChips
             selections={state.selections}
             cleared={state.cleared}
@@ -589,6 +632,13 @@ export function App(): JSX.Element {
           badge: state.commits.length,
           content: <CommitLog commits={state.commits} onSeek={(id) => void view.seek(id)} />,
         },
+        {
+          id: 'story',
+          title: 'Story',
+          icon: '📖',
+          badge: story.meta.beatCount,
+          content: <StoryReport post={story} />,
+        },
       ]}
     />
     <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 31, display: 'flex', gap: 6 }}>
@@ -615,5 +665,50 @@ export function App(): JSX.Element {
     </div>
 
     </>
+  );
+}
+
+/** The Story report: one section per named beat along the lineage, its words and the steps since the previous beat, plus the post as JSON for storydeck. */
+function StoryReport({ post }: { readonly post: StoryPost }): ReactNode {
+  const [copied, setCopied] = useState(false);
+  if (post.sections.length === 0) {
+    return <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>No beats named on this lineage yet — name a checkpoint in the time strip and it becomes a section here.</p>;
+  }
+  return (
+    <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+      <p style={{ margin: '0 0 8px', opacity: 0.8 }}>
+        <b>{post.meta.title}</b> · {post.meta.beatCount} beat{post.meta.beatCount === 1 ? '' : 's'} on {post.meta.path ?? "the head's lineage"}. Every beat is a section: its words as they stood, and the acts since the previous beat. Copy the JSON into storydeck's <code>assemblePost</code> for Read, Scroll and Watch.
+      </p>
+      {post.beats.map((b) => (
+        <div key={b.key} style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 600 }}>
+            {b.index + 1}. {b.label} <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6 }}>at #{b.at}</span>
+          </div>
+          {b.words.caption !== undefined ? <div style={{ opacity: 0.85 }}>{b.words.caption}</div> : null}
+          {b.steps.length > 0 ? (
+            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+              {b.steps.map((s) => (
+                <li key={s.commitId}>
+                  {s.sentence}
+                  {s.actor !== 'user' ? <span style={{ opacity: 0.6 }}> ({s.actor})</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          navigator.clipboard
+            .writeText(JSON.stringify(post, null, 2))
+            .then(() => setCopied(true))
+            .catch(() => setCopied(false)); // a denied clipboard stays honest: the button never claims a copy
+        }}
+        style={{ font: 'inherit', fontSize: 12.5, cursor: 'pointer' }}
+      >
+        {copied ? 'Copied the post JSON' : 'Copy the post JSON for storydeck'}
+      </button>
+    </div>
   );
 }

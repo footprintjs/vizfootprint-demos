@@ -40,6 +40,12 @@ const ANALYST: ActorMeta = { actor: 'agent', label: 'Analyst' };
 
 export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'analyst'] as const;
 
+/** The dashboard's DECLARED words (title + summary) — the def's prose entry and the story's fallback read the same constant. */
+export const DASHBOARD_WORDS = {
+  title: 'NNDSS weekly desk',
+  caption: "Reported cases by disease, area and week from the CDC's NNDSS tables, with every silence kept as a silence.",
+} as const;
+
 export function nndssDef(tables: NndssTables): DashboardDef {
   const absence = { field: ABSENCE_FIELD, states: [...ABSENCE_STATES] };
   return {
@@ -136,6 +142,15 @@ export function nndssDef(tables: NndssTables): DashboardDef {
     // CDC's own wording; the weekly line's `howToRead` is derived — the library writes the construction line itself, every
     // read (the map declares no encoding surface, so it has nothing to derive from).
     prose: [
+      // The DASHBOARD's own words: the cockpit's title and its one-line summary (the caption). The summary is the
+      // analyst's to keep fresh — when a selection moves it stale, the analyst proposes a new one for a person to accept.
+      {
+        viewId: 'dashboard',
+        slots: {
+          title: { text: DASHBOARD_WORDS.title, author: { kind: 'human', by: 'the dashboard author' } },
+          caption: { text: DASHBOARD_WORDS.caption, author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        },
+      },
       {
         viewId: 'map',
         slots: {

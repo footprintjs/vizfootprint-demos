@@ -24,7 +24,7 @@ import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurface, type NndssSurface } from '../src/nndss/surface.js';
 import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
-import { nndssDef } from '../src/nndss/def.js';
+import { DASHBOARD_WORDS, nndssDef } from '../src/nndss/def.js';
 import type { InteractionSession } from '../../vizfootprint/src/session/index.js';
 import { openSource } from '../../vizfootprint/src/source/index.js';
 import { fileSource } from '../../vizfootprint/src/source/file.js';
@@ -89,6 +89,10 @@ async function onScreenNow(session: InteractionSession): Promise<string> {
   lines.push(`- charts show: ${shown.join('; ')}`);
   const beats = session.checkpoints().map((b) => b.label);
   if (beats.length > 0) lines.push(`- beats: ${beats.join('; ')}`);
+  const summary = o.dashboard.prose.find((p) => p.slot === 'caption');
+  if (summary !== undefined) lines.push(`- the dashboard's summary (${summary.status}${summary.status === 'stale' ? ', moved: ' + summary.changed.join(', ') : ''}): ${summary.text}`);
+  const drafts = o.dashboard.proposals.filter((p) => p.status === 'open').map((p) => p.slot);
+  if (drafts.length > 0) lines.push(`- summary proposals awaiting a person: ${drafts.join(', ')}`);
   return lines.join('\n').slice(0, 2000);
 }
 
@@ -211,6 +215,11 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 
 const userCause = (intent: string) => ({ requestedBy: 'user', computedBy: 'user', intent }) as const;
 
+/** The def's declared dashboard words (title, caption) as plain text — what a story falls back to before any describe. */
+function declaredDashboardWords(): { readonly title: string; readonly caption: string } {
+  return { ...DASHBOARD_WORDS };
+}
+
 /** A human gesture from the cockpit → a validated dispatch action, or a plain refusal. */
 function userAction(body: Record<string, unknown>): DispatchAction | { readonly error: string } {
   const verb = body['verb'];
@@ -331,6 +340,8 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     activeSelections: overview.activeSelections,
     clearedSelections: overview.clearedSelections,
     views: overview.views,
+    dashboard: overview.dashboard, // the cockpit's own words (its caption = the summary), with the proposals on the table
+    filters: overview.filters, // the live selections in the shape a prose basis states them
     gaps: session.gaps(),
     selectedCount: overview.selectedRowCount, // null when the engine could not answer — never a fake 0
     // two truths side by side: the snapshot file the desk was ETL'd from (the carrier's provenance) and the library's
@@ -408,6 +419,8 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         // THE GRAMMAR, as declared — the Grammar panel renders this and nothing else:
         // the verbs the library dispatches, each view's channel vocabulary and its
         // starting bindings, and the one wiring rule in force today.
+        // the def's DECLARED dashboard words — the story's fallback for beats no describe reached (never the live words)
+        declared: { dashboard: declaredDashboardWords() },
         grammar: {
           verbs: DISPATCH_VERBS,
           encodings: nndssDef(tables).encodings ?? [],
