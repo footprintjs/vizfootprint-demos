@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
+import { MODEL } from '../src/nndss/analyst.js';
 import { loadSnapshotAsync } from '../src/nndss/etl.js';
 import { loadEnv } from './env.js';
 
@@ -48,5 +49,5 @@ server.listen(PORT, () => {
   console.log(`\n  vizfootprint-demo · NNDSS → http://localhost:${String(PORT)}`);
   console.log(`  cells ${String(tables.cells.length)} · series ${String(tables.series.length)} · diseases ${String(tables.diseases.length)} · weeks ${String(tables.weeks.length)}`);
   console.log(`  states: ${Object.entries(tables.counts).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}`);
-  console.log(`  analyst: ${desk.mode === 'live' ? 'live (ANTHROPIC_API_KEY present)' : 'mock — scripted turn (put ANTHROPIC_API_KEY in .env for live)'}\n`);
+  console.log(`  analyst: ${desk.mode === 'live' ? `live (ANTHROPIC_API_KEY present) · model ${MODEL}` : 'mock — scripted turn (put ANTHROPIC_API_KEY in .env for live)'}\n`);
 });

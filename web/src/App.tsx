@@ -17,6 +17,7 @@ import {
   ProseText,
   CommitLog,
   SelectionChips,
+  SavedSelections,
   TimeTravelBar,
   VizBar,
   VizCockpit,
@@ -387,7 +388,12 @@ export function App(): JSX.Element {
             onClear={(id) => void view.clear(id, `clear ${viewLabels[id] ?? id}`)}
             onClearAll={() => void view.clearAll()}
             onSetPolarity={(id, exclude) => void view.setPolarity(id, exclude, `${exclude ? 'exclude' : 'keep'} the ${viewLabels[id] ?? id} selection`)}
+            onSave={(id) => {
+              const name = window.prompt(`Save the ${viewLabels[id] ?? id} selection as…`);
+              if (name && name.trim()) void view.saveSelection(id, name.trim());
+            }}
           />
+          <SavedSelections saved={state.saved ?? []} selections={state.selections} labels={viewLabels} readOnly={readOnly} onApply={(c) => void view.bringOver(c)} />
         </div>
       }
       toast={problem === null ? null : <div role="alert" style={{ padding: 10, fontSize: 13 }}>⚠ {problem}</div>}

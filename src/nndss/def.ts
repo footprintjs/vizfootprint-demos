@@ -29,13 +29,13 @@ import type { NndssTables } from './etl.js';
 
 const ALPHA = 0.05;
 
-const COVERAGE: ActorMeta = { actor: 'user', label: 'Coverage — which silence is which' };
-const DISEASES: ActorMeta = { actor: 'user', label: 'Reported cases by disease' };
-const KINDS: ActorMeta = { actor: 'user', label: 'Cells by area kind' };
-const WEEKS: ActorMeta = { actor: 'user', label: 'Reported cases by week' };
-const TREND: ActorMeta = { actor: 'user', label: 'Trend per area' };
-const MAP: ActorMeta = { actor: 'user', label: 'Reported cases by state, on the map' };
-const TABLE: ActorMeta = { actor: 'user', label: 'The cells, as CDC printed them' };
+const COVERAGE: ActorMeta = { actor: 'user', label: 'Coverage — which silence is which', does: 'pick a report state: which cells are present, not configured, unavailable or withheld' };
+const DISEASES: ActorMeta = { actor: 'user', label: 'Reported cases by disease', does: 'pick a disease to focus the dashboard on it' };
+const KINDS: ActorMeta = { actor: 'user', label: 'Cells by area kind', does: 'pick an area kind: states, regions, territories or the nation' };
+const WEEKS: ActorMeta = { actor: 'user', label: 'Reported cases by week', does: 'brush a range of weeks to narrow the time window' };
+const TREND: ActorMeta = { actor: 'user', label: 'Trend per area', does: 'follow one area\'s weekly trend' };
+const MAP: ActorMeta = { actor: 'user', label: 'Reported cases by state, on the map', does: 'click a state on the map to select it, shift-click for several' };
+const TABLE: ActorMeta = { actor: 'user', label: 'The cells, as CDC printed them', does: 'pick one row of the table: a jurisdiction and its cells' };
 const ANALYST: ActorMeta = { actor: 'agent', label: 'Analyst' };
 
 export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'analyst'] as const;

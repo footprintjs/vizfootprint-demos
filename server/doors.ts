@@ -280,6 +280,13 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
         cause,
       };
     }
+    case 'annotate': {
+      // an inert note on a target (a commit id, a view, a column); a note on a selection commit is a SAVED selection
+      const target = str('target');
+      const note = str('note');
+      if (target === undefined || note === undefined || note.length === 0) return { error: 'annotate needs target and note' };
+      return { verb: 'annotate', target, note, cause };
+    }
     case 'describe': {
       // the prose plane: one of a view's words as a record (the session judges it), or null = back to the declaration
       const slot = str('slot');

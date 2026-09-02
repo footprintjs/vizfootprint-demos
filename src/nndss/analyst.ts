@@ -15,7 +15,9 @@ import { browserAnthropic, mock, type LLMProvider, type LLMRequest, type LLMResp
 import type { VizToolResult, VizToolsPort } from '../../../vizfootprint/src/agent/index.js';
 import { NNDSS_ANALYSIS_IDS } from './analyses.js';
 
-export const MODEL = process.env['ANTHROPIC_MODEL'] ?? 'claude-opus-4-8';
+// The grammar carries the intelligence — offers, sentences, refusals — so the analyst
+// runs on Sonnet by default; set ANTHROPIC_MODEL to try another (e.g. claude-opus-4-8).
+export const MODEL = process.env['ANTHROPIC_MODEL'] ?? 'claude-sonnet-5';
 const MAX_TOKENS = 2048;
 
 /** One completed tool call — what the panel frames with the grammar. */
