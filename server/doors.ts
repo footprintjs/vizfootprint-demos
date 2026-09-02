@@ -26,6 +26,7 @@ import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposa
 import { buildNndssSurface, type NndssSurface } from '../src/nndss/surface.js';
 import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
 import { nndssDef } from '../src/nndss/def.js';
+import type { InteractionSession } from '../../vizfootprint/src/session/index.js';
 import { MODEL, createNndssAnalyst, liveProvider, scriptedNndssMock, type ActivityStep, type NndssAnalyst } from '../src/nndss/analyst.js';
 import type { NndssTables } from '../src/nndss/etl.js';
 
@@ -40,6 +41,74 @@ export interface TranscriptLine {
   readonly role: 'user' | 'analyst' | 'error';
   readonly text: string;
   readonly activity?: readonly ActivityStep[];
+  /** A user line: the "on screen now" block that rode with the message (from the record). */
+  readonly context?: string;
+  /** An analyst line: spans of the text tied to a commit — resolved against the log, never invented. */
+  readonly refs?: readonly { readonly span: readonly [number, number]; readonly commit: string; readonly label?: string }[];
+}
+
+/** What is on screen now, FROM THE RECORD (never the browser): a bounded block the analyst reads as context. */
+async function onScreenNow(session: InteractionSession): Promise<string> {
+  const o = await session.overview();
+  const lines: string[] = ['On screen now (from the record):'];
+  const selections = o.activeSelections.map((sel) => `${sel.viewId}: ${sel.field} ${sel.kind} ${JSON.stringify(sel.value)}`);
+  lines.push(`- selections: ${selections.length > 0 ? selections.join('; ') : 'none'}`);
+  const recent = session.log.records.slice(-6).map((r) => `#${r.id} ${r.viewId}${r.field ? '.' + r.field : ''}${r.cause.intent ? ' — ' + r.cause.intent : ''}`);
+  lines.push(`- last acts: ${recent.length > 0 ? recent.join('; ') : 'none yet'}`);
+  const shown = Object.entries(o.effectiveEncodings)
+    .filter(([, enc]) => Object.keys(enc).length > 0)
+    .map(([viewId, enc]) => `${viewId}(${Object.entries(enc).map(([ch, f]) => `${ch}=${f}`).join(', ')})`);
+  lines.push(`- charts show: ${shown.join('; ')}`);
+  const beats = session.checkpoints().map((b) => b.label);
+  if (beats.length > 0) lines.push(`- beats: ${beats.join('; ')}`);
+  return lines.join('\n').slice(0, 2000);
+}
+
+/** The analyst's reply parsed: JSON {text, refs} when it managed one, plain text otherwise; refs resolved against the log and this turn's acts, else dropped. */
+function parseReply(raw: string, session: InteractionSession, activity: readonly ActivityStep[]): { readonly text: string; readonly refs: TranscriptLine['refs'] } {
+  let parsed: { text?: unknown; refs?: unknown } | null = null;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      parsed = JSON.parse(trimmed) as { text?: unknown; refs?: unknown };
+    } catch {
+      parsed = null;
+    }
+  }
+  if (parsed === null || typeof parsed.text !== 'string') return { text: raw, refs: [] };
+  const text = parsed.text;
+  const known = new Set(session.log.records.map((r) => r.id));
+  const refs: { span: readonly [number, number]; commit: string; label?: string }[] = [];
+  for (const r of Array.isArray(parsed.refs) ? parsed.refs : []) {
+    const x = r as { quote?: unknown; commit?: unknown; act?: unknown } | null;
+    if (x === null || typeof x !== 'object' || typeof x.quote !== 'string' || x.quote.length === 0) continue;
+    const quote: string = x.quote;
+    const start = text.indexOf(quote);
+    if (start < 0) continue;
+    let commit: string | undefined;
+    if (typeof x.commit === 'string' && known.has(x.commit)) commit = x.commit;
+    else if (typeof x.act === 'number' && Number.isInteger(x.act)) {
+      const step = activity[x.act - 1];
+      const result = step?.result as { ok?: boolean; commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } } } | undefined;
+      const id = result?.ok === true ? (typeof result.commit?.id === 'string' ? result.commit.id : typeof result.analysis?.commit?.id === 'string' ? result.analysis.commit.id : undefined) : undefined;
+      if (id !== undefined && known.has(id)) commit = id;
+    }
+    if (commit === undefined) continue;
+    if (refs.some((have) => start < have.span[1] && start + quote.length > have.span[0])) continue; // overlaps a ref already kept
+    refs.push({ span: [start, start + quote.length], commit, ...(step_label(activity, commit) !== undefined ? { label: step_label(activity, commit) } : {}) });
+  }
+  return { text, refs };
+}
+
+/** Words for a ref's anchor: the act's framing when the commit came from this turn. */
+function step_label(activity: readonly ActivityStep[], commit: string): string | undefined {
+  const step = activity.find((st) => {
+    const r = st.result as { commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } } };
+    return r.commit?.id === commit || r.analysis?.commit?.id === commit;
+  });
+  if (step === undefined) return undefined;
+  const args = step.args as { verb?: unknown; intent?: unknown; label?: unknown; analysisId?: unknown };
+  return [step.tool, typeof args.verb === 'string' ? args.verb : undefined, typeof args.intent === 'string' ? args.intent : typeof args.label === 'string' ? args.label : typeof args.analysisId === 'string' ? args.analysisId : undefined].filter((w) => w !== undefined).join(' · ');
 }
 
 export interface Desk {
@@ -185,7 +254,21 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
       if (viewId === undefined || slot === undefined) return { error: 'describe needs viewId and slot' };
       const record = body['record'];
       if (record !== undefined && record !== null && (typeof record !== 'object' || Array.isArray(record))) return { error: 'describe.record must be an object, or null' };
-      return { verb: 'describe', viewId, slot: slot as 'title', record: (record ?? null) as null, cause };
+      // the author port: propose (an agent's draft for a person), accept (by the proposing commit's id), decline (with a reason)
+      const accept = str('accept');
+      const decline = body['decline'];
+      const declineOk = typeof decline === 'object' && decline !== null && typeof (decline as { proposal?: unknown }).proposal === 'string' && typeof (decline as { reason?: unknown }).reason === 'string';
+      if (decline !== undefined && !declineOk) return { error: 'describe.decline must be { proposal, reason }' };
+      return {
+        verb: 'describe',
+        viewId,
+        slot: slot as 'title',
+        record: (record ?? null) as null,
+        ...(body['proposal'] === true ? { proposal: true } : {}),
+        ...(accept !== undefined ? { accept } : {}),
+        ...(declineOk ? { decline: decline as { proposal: string; reason: string } } : {}),
+        cause,
+      };
     }
     case 'navigate':
       if (viewId === undefined) return { error: 'navigate needs a viewId' };
@@ -332,11 +415,13 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         if (desk.turnActive) return sendJson(res, 409, { error: 'the analyst is mid-turn — wait for it' }), true;
         desk.activity.length = 0;
         desk.turnActive = true;
-        desk.transcript.push({ role: 'user', text: message });
+        const context = await onScreenNow(session);
+        desk.transcript.push({ role: 'user', text: message, context });
         try {
-          const turn = await desk.analyst.send(message);
-          desk.transcript.push({ role: 'analyst', text: turn.text, activity: [...desk.activity] });
-          return sendJson(res, 200, { ...turn, activity: desk.activity }), true;
+          const turn = await desk.analyst.send(message, context);
+          const reply = parseReply(turn.text, session, desk.activity);
+          desk.transcript.push({ role: 'analyst', text: reply.text, refs: reply.refs, activity: [...desk.activity] });
+          return sendJson(res, 200, { ...turn, text: reply.text, refs: reply.refs, activity: desk.activity }), true;
         } catch (error) {
           const text = error instanceof Error ? error.message : String(error);
           desk.transcript.push({ role: 'error', text, activity: [...desk.activity] });

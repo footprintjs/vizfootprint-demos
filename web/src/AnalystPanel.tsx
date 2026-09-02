@@ -8,6 +8,7 @@
  * the tool call itself, never from the model's prose, so a reply that claims
  * an act it did not take is visible as such.
  */
+import { ProseText } from 'vizfootprint-ui';
 import { useEffect, useState } from 'react';
 
 export interface ActivityStep {
@@ -19,6 +20,8 @@ export interface TranscriptLine {
   readonly role: 'user' | 'analyst' | 'error';
   readonly text: string;
   readonly activity?: readonly ActivityStep[];
+  readonly context?: string;
+  readonly refs?: readonly TranscriptRef[];
 }
 export interface AnalystWire {
   readonly mode: 'mock' | 'live';
@@ -27,6 +30,12 @@ export interface AnalystWire {
   readonly transcript: readonly TranscriptLine[];
   readonly suggestions: readonly string[];
   readonly tools: readonly string[];
+}
+
+export interface TranscriptRef {
+  readonly span: readonly [number, number];
+  readonly commit: string;
+  readonly label?: string;
 }
 
 export interface FramedAct {
@@ -79,7 +88,16 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-export function AnalystPanel(props: { readonly readOnly: boolean; readonly onTurn: (turns: number) => void }): JSX.Element {
+export function AnalystPanel(props: {
+  readonly readOnly: boolean;
+  readonly onTurn: (turns: number) => void;
+  /** What the person sees on screen — shown in the composer as what rides with the next message (the server attaches the record's own view). */
+  readonly onScreen?: { readonly selections: readonly string[]; readonly cursor: string | null };
+  /** Words for a ref's anchor, by commit id. */
+  readonly describeCommit?: (commitId: string) => string | undefined;
+  /** Go to the commit a ref points at. */
+  readonly onSeek?: (commitId: string) => void;
+}): JSX.Element {
   const [wire, setWire] = useState<AnalystWire | null>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -145,7 +163,12 @@ export function AnalystPanel(props: { readonly readOnly: boolean; readonly onTur
               }}
             >
               <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', opacity: 0.6 }}>{line.role === 'user' ? 'you' : line.role === 'error' ? 'the turn failed' : 'analyst'}</span>
-              <div>{line.text}</div>
+              <div>{line.role === 'analyst' && line.refs !== undefined && line.refs.length > 0 ? <ProseText text={line.text} refs={line.refs} describeCommit={props.describeCommit} onSeek={props.onSeek} /> : line.text}</div>
+              {line.role === 'user' && line.context ? (
+                <div style={{ marginTop: 4, fontSize: 11, opacity: 0.6, whiteSpace: 'pre-wrap' }} title="what rode with this message, from the record">
+                  {line.context.split('\n').slice(1).join('\n')}
+                </div>
+              ) : null}
             </div>
             {line.activity && line.activity.length > 0 ? (
               <ol style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12 }} aria-label="acts this turn, framed by the grammar">
@@ -191,6 +214,12 @@ export function AnalystPanel(props: { readonly readOnly: boolean; readonly onTur
           >
             clear chat
           </button>
+        </div>
+      ) : null}
+      {props.onScreen !== undefined ? (
+        <div style={{ fontSize: 11.5, opacity: 0.75, margin: '6px 0 2px' }} aria-label="on screen now" title="the record's own view of the screen rides with your next message">
+          On screen now: {props.onScreen.selections.length > 0 ? props.onScreen.selections.join(' · ') : 'no selection'}
+          {props.onScreen.cursor !== null ? ` · at #${props.onScreen.cursor}` : ''}
         </div>
       ) : null}
       <form

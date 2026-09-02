@@ -13,6 +13,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  chipWords,
   ProseText,
   CommitLog,
   SelectionChips,
@@ -316,6 +317,9 @@ export function App(): JSX.Element {
                   setAnalystTurns(turns);
                   void view.refresh();
                 }}
+                onScreen={{ selections: state.selections.map((sel) => `${viewLabels[sel.viewId] ?? sel.viewId}: ${chipWords(sel)}`), cursor: state.cursor }}
+                describeCommit={(id) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; }}
+                onSeek={(id) => void view.seek(id)}
               />
             ) : null}
             {asideTab === 'edit' ? (
@@ -340,6 +344,8 @@ export function App(): JSX.Element {
           onDescribe={(id, slot, record) => void view.describe(id, slot, record)}
           onReencode={(id, ch, field) => void view.reencode(id, ch, field)}
           onLink={(edge) => void view.link(edge, `${viewLabels[edge.source] ?? edge.source} ${edge.kind} → ${viewLabels[edge.target] ?? edge.target}: ${edge.response ?? 'back'}`)}
+          onAccept={(id, slot, proposal) => void view.acceptProposal(id, slot, proposal)}
+          onDecline={(id, slot, proposal, reason) => void view.declineProposal(id, slot, proposal, reason)}
         />
       ) : null}
               </>
