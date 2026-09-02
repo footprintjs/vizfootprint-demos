@@ -22,6 +22,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { parseCSVTyped } from '../../../vizfootprint/src/data/csv.js';
+import { openSource } from '../../../vizfootprint/src/source/index.js';
+import { fileSource } from '../../../vizfootprint/src/source/file.js';
 import type { SeriesPoint } from '../../../vizfootprint/src/def/series.js';
 import type { SeriesGrain } from '../../../vizfootprint/src/def/types.js';
 import { cellOf, type Absence } from './absence.js';
@@ -112,7 +114,12 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 
 /** Parse the committed snapshot (or any CSV in its shape) into the three tables. */
 export function nndssTables(csvText: string): NndssTables {
-  const parsed = parseCSVTyped(csvText);
+  return nndssTablesFromRows(parseCSVTyped(csvText).rows);
+}
+
+/** The same ETL over rows a source adapter already decoded (the data-source layer's `format: 'csv'`). */
+export function nndssTablesFromRows(rows: readonly Record<string, unknown>[]): NndssTables {
+  const parsed = { rows };
   const cells: CellRow[] = [];
   const jurisdictionsByName = new Map<string, JurisdictionRow>();
   const counts: Record<Absence, number> = { present: 0, 'not-configured': 0, unavailable: 0, withheld: 0, unknown: 0 };
@@ -166,4 +173,12 @@ export function nndssTables(csvText: string): NndssTables {
 /** The committed snapshot, parsed. */
 export function loadSnapshot(path = new URL('../../data/nndss/snapshot.csv', import.meta.url)): NndssTables {
   return nndssTables(readFileSync(path, 'utf8'));
+}
+
+/** The snapshot through the library's source layer: a declared `{ format: 'csv', via: 'file', at }`, read by the file carrier, with the provenance it vouches for. */
+export async function loadSnapshotAsync(path = new URL('../../data/nndss/snapshot.csv', import.meta.url)): Promise<{ readonly tables: NndssTables; readonly source: { readonly version: string; readonly retrievedAt: string; readonly rows: number } }> {
+  const handle = await openSource({ format: 'csv', via: 'file', at: path.href }, 'cells', [fileSource]);
+  const snap = await handle.snapshot();
+  await handle.close();
+  return { tables: nndssTablesFromRows(snap.rows), source: { version: snap.version, retrievedAt: snap.retrievedAt, rows: snap.rows.length } };
 }

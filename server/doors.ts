@@ -19,7 +19,6 @@
  * One surface per server, single-user — the honest scope of a demo.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync } from 'node:fs';
 import type { DispatchAction, FilterRange } from '../../vizfootprint/src/agent/index.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
@@ -27,13 +26,41 @@ import { buildNndssSurface, type NndssSurface } from '../src/nndss/surface.js';
 import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
 import { nndssDef } from '../src/nndss/def.js';
 import type { InteractionSession } from '../../vizfootprint/src/session/index.js';
+import { openSource } from '../../vizfootprint/src/source/index.js';
+import { fileSource } from '../../vizfootprint/src/source/file.js';
 import { MODEL, createNndssAnalyst, liveProvider, scriptedNndssMock, type ActivityStep, type NndssAnalyst } from '../src/nndss/analyst.js';
 import type { NndssTables } from '../src/nndss/etl.js';
 
 export const API_ROOT = '/api';
-/** The committed US state boundaries (data/geo, with their provenance) — read once, served as-is. */
-let geoText: string | null = null;
-const geoJson = (): string => (geoText ??= readFileSync(new URL('../data/geo/us-states.geo.json', import.meta.url), 'utf8'));
+/**
+ * The committed US state boundaries (data/geo, with their provenance) — read
+ * once through the source layer, served with the version the file system
+ * vouched for as the ETag. JSON over the same file carrier the CSV uses: the
+ * format is separable from the transport. One in-flight read, however many
+ * requests arrive before it lands.
+ */
+let geoRead: Promise<{ text: string; version: string }> | null = null;
+const geoJson = (): Promise<{ text: string; version: string }> => {
+  geoRead ??= (async () => {
+    const handle = await openSource(
+      { format: 'json', via: 'file', at: new URL('../data/geo/us-states.geo.json', import.meta.url).href, options: { as: 'one-row' } },
+      'geo',
+      [fileSource],
+    );
+    try {
+      const snap = await handle.snapshot();
+      const collection = snap.rows[0]; // a FeatureCollection is one row — the def says so
+      if (collection === undefined) throw new Error('geo: us-states.geo.json decoded to zero rows');
+      return { text: JSON.stringify(collection), version: snap.version };
+    } finally {
+      await handle.close();
+    }
+  })().catch((e: unknown) => {
+    geoRead = null; // a failed read is not cached — the next request tries again
+    throw e;
+  });
+  return geoRead;
+};
 const MAX_BODY_BYTES = 64 * 1024;
 
 /** One line of the analyst conversation; an analyst line carries the acts it took. */
@@ -382,8 +409,11 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
       return sendJson(res, 200, analystState(desk)), true;
     }
     if (req.method === 'GET' && door === 'geo') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(geoJson());
+      const geo = await geoJson();
+      const etag = `"${geo.version}"`;
+      if (req.headers['if-none-match'] === etag) return res.writeHead(304, { etag }), res.end(), true;
+      res.writeHead(200, { 'content-type': 'application/json', etag });
+      res.end(geo.text);
       return true;
     }
     if (req.method !== 'POST') return sendJson(res, 405, { error: `${door} is POST` }), true;

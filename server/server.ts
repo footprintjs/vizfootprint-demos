@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
+import { loadSnapshotAsync } from '../src/nndss/etl.js';
 import { loadEnv } from './env.js';
 
 const PORT = Number(process.env['PORT'] ?? 5290);
@@ -18,7 +19,10 @@ const WEB_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
 loadEnv(); // the repo's own .env, if any — names only ever reach the log, never values
-const desk = createDesk();
+// the CDC snapshot through the library's source layer: a declared file source, with the provenance the file system vouches for
+const snapshot = await loadSnapshotAsync();
+const desk = createDesk(snapshot.tables);
+console.log(`  source: snapshot.csv via file — ${String(snapshot.source.rows)} rows, ${snapshot.source.version}, read ${snapshot.source.retrievedAt}`);
 
 function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
   const url = (req.url ?? '/').split('?')[0] ?? '/';
