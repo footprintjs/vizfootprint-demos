@@ -78,15 +78,28 @@ export function nndssDef(tables: NndssTables): DashboardDef {
       { viewId: 'trend', chartKind: 'line', channels: ['x', 'y', 'color', 'facet'], initial: { x: 't', y: 'value', color: 'entity' } },
     ],
     analyses: NNDSS_ANALYSES,
+    // Layer 4 — each view's GRAIN: the group keys its marks stand for ([] = one mark per row). An edge whose
+    // source emits over one grain and whose target shows another CROSSES grains and must state its fold,
+    // or the def door refuses it with the sentence; the default rule's crossing edges carry `crossfilter`.
+    grains: [
+      { viewId: 'coverage', keys: ['report_state'] },
+      { viewId: 'diseases', keys: ['disease'] },
+      { viewId: 'kinds', keys: ['kind'] },
+      { viewId: 'map', keys: ['jurisdiction'] },
+      { viewId: 'weeks', keys: ['t'] },
+      { viewId: 'trend', keys: ['t', 'entity'] },
+      { viewId: 'table', keys: ['jurisdiction'] },
+    ],
     // Layer 4 — the LINKS between views, declared. Everything not listed here is the default
     // rule (every view filters every other, self excluded), written out by the library so the
     // matrix shows it. These four are the demo's story: the map LIGHTS the disease bar instead of
     // dropping diseases, a week brush MOVES the trend's window instead of filtering it, the map
     // MIRRORS its state into the table, and a table row deliberately does NOT reach the bar.
     links: [
-      { source: 'map', kind: 'point', target: 'diseases', response: 'highlight', label: 'the map lights the bar' },
-      { source: 'map', kind: 'match', target: 'diseases', response: 'highlight' },
-      { source: 'weeks', kind: 'interval', target: 'trend', response: 'navigate', label: 'a week brush is the trend\'s window' },
+      { source: 'map', kind: 'point', target: 'diseases', response: 'highlight', fold: 'cases of the lit states, summed per disease', label: 'the map lights the bar' },
+      { source: 'map', kind: 'match', target: 'diseases', response: 'highlight', fold: 'cases of the lit states, summed per disease' },
+      // `onClear: 'leave'` — when the week brush is cleared, the trend KEEPS the last window instead of snapping back
+      { source: 'weeks', kind: 'interval', target: 'trend', response: 'navigate', onClear: 'leave', label: 'a week brush is the trend\'s window' },
       { source: 'map', kind: 'point', target: 'table', response: 'mirror', label: 'the same state, outlined' },
       { source: 'table', kind: 'point', target: 'diseases', response: 'none', label: 'a row never narrows the bar' },
       // an ENCODING edge: when the weekly line takes a color, the trend follows it (one hop, read through, never

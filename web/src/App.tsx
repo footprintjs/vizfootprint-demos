@@ -142,7 +142,8 @@ export function App(): JSX.Element {
   // the prose plane: a view's words at the cursor, each with its author and whether it went stale — shown, never hidden
   const proseOf = (viewId: string) => state.views.find((v) => v.viewId === viewId)?.prose ?? [];
   const words = (viewId: string): ReactNode => {
-    const lines = proseOf(viewId);
+    // alt text is the chart's accessible name (ariaLabel) — shown once, to assistive tech; the visible words are the rest
+    const lines = proseOf(viewId).filter((p) => p.slot !== 'altShort' && p.slot !== 'altLong');
     if (lines.length === 0) return null;
     return (
       <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.45, whiteSpace: 'normal' }}>
@@ -163,7 +164,10 @@ export function App(): JSX.Element {
     );
   };
   // Layer 4: the link graph decides what each clause does at each view — filter, highlight, navigate, mirror, or nothing
-  const selFor = (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links);
+  const selFor = (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links, state.cleared);
+  // the prose plane's altShort is the chart's accessible name; absent = the chart names itself
+  // an empty altShort is a choice (a decorative chart) and stays empty; no slot at all = the chart names itself
+  const altShortOf = (viewId: string): string | undefined => proseOf(viewId).find((p) => p.slot === 'altShort')?.text;
   // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
   const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== undefined).map((s) => s.viewId)), [state.selections]); // null is a live IS-NULL point
   const viewLabels = useMemo(() => Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId])), [state.views]);
@@ -376,6 +380,8 @@ export function App(): JSX.Element {
           <JumpBox commitIds={state.commits.map((c) => c.id)} onSeek={(id) => void view.seek(id)} />
           <SelectionChips
             selections={state.selections}
+            cleared={state.cleared}
+            links={state.links}
             labels={viewLabels}
             readOnly={readOnly}
             onClear={(id) => void view.clear(id, `clear ${viewLabels[id] ?? id}`)}
@@ -429,7 +435,7 @@ export function App(): JSX.Element {
                 the map shapes have not arrived yet
               </div>
             ) : (
-              <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" selection={selFor('map')} width={width} height={height} onEmit={(e) => void view.emit('map', e, 'select state on the map')} />
+              <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" ariaLabel={altShortOf('map')} selection={selFor('map')} width={width} height={height} onEmit={(e) => void view.emit('map', e, 'select state on the map')} />
             ),
         },
         {
@@ -443,7 +449,7 @@ export function App(): JSX.Element {
             </>
           ),
           render: ({ width, height }) => (
-            <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, 'brush weeks')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" ariaLabel={altShortOf('weeks')} columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, 'brush weeks')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {

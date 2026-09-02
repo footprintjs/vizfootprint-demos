@@ -264,6 +264,9 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
       if (response !== null && !allowed.includes(String(response))) return { error: `link.response must be ${allowed.join(' | ')}, or null` };
       const mapping = Array.isArray(body['mapping']) ? (body['mapping'] as readonly { from: string; to: string }[]) : undefined;
       const channels = Array.isArray(body['channels']) ? (body['channels'] as readonly { from: string; to: string }[]) : undefined;
+      const onClear = str('onClear');
+      if (onClear !== undefined && !['leave', 'showAll', 'excludeAll'].includes(onClear)) return { error: 'link.onClear must be leave | showAll | excludeAll' };
+      const fold = str('fold');
       return {
         verb: 'link',
         source,
@@ -272,6 +275,8 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
         response: response as 'filter' | 'highlight' | 'navigate' | 'mirror' | 'none' | 'follow' | null,
         ...(mapping !== undefined ? { mapping } : {}),
         ...(channels !== undefined ? { channels } : {}),
+        ...(onClear !== undefined ? { onClear: onClear as 'leave' | 'showAll' | 'excludeAll' } : {}),
+        ...(fold !== undefined ? { fold } : {}),
         cause,
       };
     }
@@ -315,6 +320,7 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     fdr: overview.fdr,
     analyses: overview.analyses,
     activeSelections: overview.activeSelections,
+    clearedSelections: overview.clearedSelections,
     views: overview.views,
     gaps: session.gaps(),
     selectedCount: selected.length,
