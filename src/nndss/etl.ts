@@ -59,10 +59,15 @@ export interface JurisdictionRow {
   readonly [k: string]: string | number | null;
 }
 
+/** A series point that also names its area's kind (state, region, total). */
+export interface NndssSeriesPoint extends SeriesPoint {
+  readonly entity_kind: JurisdictionKind;
+}
+
 export interface NndssTables {
   readonly cells: readonly CellRow[];
   readonly jurisdictions: readonly JurisdictionRow[];
-  readonly series: readonly SeriesPoint[];
+  readonly series: readonly NndssSeriesPoint[];
   readonly grain: SeriesGrain;
   readonly diseases: readonly string[];
   readonly weeks: readonly string[];
@@ -80,12 +85,17 @@ export function mmwrWeekEnd(year: number, week: number): string {
 }
 
 /** Which kind of reporting area a row is — from CDC's own columns, never from the name's spelling. */
-export function kindOf(row: { readonly states: unknown; readonly lon: unknown; readonly location2: unknown }): JurisdictionKind {
+export function kindOf(row: { readonly states: unknown; readonly location1: unknown; readonly location2: unknown }): JurisdictionKind {
   const name = String(row.states);
   if (TOTALS.has(name)) return 'total';
-  if (typeof row.lon === 'number') return 'state';
-  return row.location2 !== null && row.location2 !== undefined && row.location2 !== '' ? 'region' : 'state';
+  // CDC files a place under `location1` and a census division under `location2`.
+  // The coordinate columns are NOT the classifier: South Atlantic carries one
+  // (a point in South Dakota) while Middle Atlantic does not.
+  if (filled(row.location2) && !filled(row.location1)) return 'region';
+  return 'state';
 }
+
+const filled = (v: unknown): boolean => v !== null && v !== undefined && v !== '';
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
@@ -97,7 +107,7 @@ export function nndssTables(csvText: string): NndssTables {
   const counts: Record<Absence, number> = { present: 0, 'not-configured': 0, unavailable: 0, withheld: 0, unknown: 0 };
   for (const r of parsed.rows) {
     const jurisdiction = String(r['states']);
-    const kind = kindOf({ states: r['states'], lon: r['lon'], location2: r['location2'] });
+    const kind = kindOf({ states: r['states'], location1: r['location1'], location2: r['location2'] });
     const year = Number(r['year']);
     const week = Number(r['week']);
     const current = cellOf(r['m1'], r['m1_flag']);
@@ -121,10 +131,12 @@ export function nndssTables(csvText: string): NndssTables {
       jurisdictionsByName.set(jurisdiction, { jurisdiction, kind, lon: num(r['lon']), lat: num(r['lat']) });
     }
   }
-  // present cells of PLACES become series points; roll-ups are not entities on a map
-  const series: SeriesPoint[] = cells
-    .filter((c) => c.cases !== null && c.kind === 'state')
-    .map((c) => ({ t: c.t, entity: c.jurisdiction, metric: c.disease, value: c.cases as number }));
+  // every PRESENT cell becomes a series point — states, regions and roll-ups alike,
+  // each carrying its kind so a trend can show one kind at a time (a region's
+  // count is CDC's own row, not a sum the host made). A silence is a missing row.
+  const series: NndssSeriesPoint[] = cells
+    .filter((c) => c.cases !== null)
+    .map((c) => ({ t: c.t, entity: c.jurisdiction, entity_kind: c.kind, metric: c.disease, value: c.cases as number }));
   const diseases = [...new Set(cells.map((c) => c.disease))].sort();
   const weeks = [...new Set(cells.map((c) => c.t))].sort();
   return {

@@ -19,6 +19,8 @@ import type { DispatchAction, FilterRange } from '../../vizfootprint/src/agent/i
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurface, type NndssSurface } from '../src/nndss/surface.js';
+import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
+import { nndssDef } from '../src/nndss/def.js';
 
 export const API_ROOT = '/api';
 const MAX_BODY_BYTES = 64 * 1024;
@@ -177,6 +179,15 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         weeks: tables.weeks,
         counts: tables.counts,
         absence: { field: ABSENCE_FIELD, states: ABSENCE_STATES },
+        // THE GRAMMAR, as declared — the Grammar panel renders this and nothing else:
+        // the verbs the library dispatches, each view's channel vocabulary and its
+        // starting bindings, and the one wiring rule in force today.
+        grammar: {
+          verbs: DISPATCH_VERBS,
+          encodings: nndssDef(tables).encodings ?? [],
+          links: 'implicit-crossfilter',
+          linksMeaning: 'every view\'s selection filters every other view; a view never filters itself',
+        },
       }), true;
     }
     if (req.method === 'GET' && door === 'proposals') return sendJson(res, 200, { proposals: desk.proposals, ledger: (await session.overview()).fdr }), true;

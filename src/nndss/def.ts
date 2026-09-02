@@ -10,9 +10,9 @@
  * ── Why `cells` is the default table ────────────────────────────────────────
  * The session's crossfilter, analyses and ledger read ONE table. The one
  * whose rows are the thing being counted is CDC's own cell — an area, a
- * disease, a week. `series` rides beside it for the trend line (present
- * cells of places only) and `jurisdictions` for the map, narrowed on the
- * host by the same words a click on the cells views produces.
+ * disease, a week. `series` rides beside it for the trend line (every
+ * present cell, with its area's kind) and `jurisdictions` for the map,
+ * narrowed on the host by the same words a click on the cells views produces.
  *
  * ── The interconnection this demo is about ─────────────────────────────────
  * The disease bar DRIVES the trend line and the heat grid: pick a disease

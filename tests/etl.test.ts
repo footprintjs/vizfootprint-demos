@@ -4,7 +4,8 @@ import { kindOf, loadSnapshot, mmwrWeekEnd, nndssTables } from '../src/nndss/etl
 
 /**
  * The ETL over CDC's own bytes: MMWR weeks become real dates, every cell
- * keeps its state, silences never become series points, and the snapshot
+ * keeps its state, silences never become series points (present cells of
+ * every kind do, each naming its kind), and the snapshot
  * parses to the same tables every time.
  */
 describe('mmwrWeekEnd — week 1 contains January 4th and weeks end on Saturday', () => {
@@ -17,10 +18,13 @@ describe('mmwrWeekEnd — week 1 contains January 4th and weeks end on Saturday'
 });
 
 describe('kindOf — from CDC columns, never the name', () => {
-  it('a coordinate makes a state; a roll-up name makes a total; a location2-only row is a region', () => {
-    expect(kindOf({ states: 'Texas', lon: -99.1, location2: '' })).toBe('state');
-    expect(kindOf({ states: 'Total', lon: null, location2: 'Total' })).toBe('total');
-    expect(kindOf({ states: 'New England', lon: null, location2: 'New England' })).toBe('region');
+  it('location1 names a state; location2 alone names a region; a roll-up name makes a total', () => {
+    expect(kindOf({ states: 'Texas', location1: 'Texas', location2: '' })).toBe('state');
+    expect(kindOf({ states: 'Total', location1: '', location2: 'Total' })).toBe('total');
+    expect(kindOf({ states: 'New England', location1: '', location2: 'New England' })).toBe('region');
+  });
+  it('the coordinate is not the classifier — South Atlantic carries one in CDC\'s file and is still a region', () => {
+    expect(kindOf({ states: 'South Atlantic', location1: '', location2: 'South Atlantic' })).toBe('region');
   });
 });
 
@@ -45,10 +49,11 @@ describe('nndssTables on a tiny CSV in the snapshot shape', () => {
     expect(t.counts).toEqual({ present: 3, 'not-configured': 1, unavailable: 1, withheld: 0, unknown: 0 });
   });
 
-  it('series points exist only for PRESENT cells of PLACES — a silence is a missing row, a region is not an entity', () => {
+  it('series points exist for every PRESENT cell, each naming its kind — a silence is a missing row', () => {
     expect(t.series).toEqual([
-      { t: '2026-03-14', entity: 'Texas', metric: 'Pertussis', value: 12 },
-      { t: '2026-03-21', entity: 'Texas', metric: 'Pertussis', value: 0 },
+      { t: '2026-03-14', entity: 'Texas', entity_kind: 'state', metric: 'Pertussis', value: 12 },
+      { t: '2026-03-21', entity: 'Texas', entity_kind: 'state', metric: 'Pertussis', value: 0 },
+      { t: '2026-03-14', entity: 'New England', entity_kind: 'region', metric: 'Pertussis', value: 30 },
     ]);
     expect(t.grain).toEqual({ bucket: 'MMWR week', reducer: 'reported count', note: 'provisional; CDC revises weekly counts' });
     expect(t.jurisdictions.map((j) => [j.jurisdiction, j.kind])).toEqual([['Texas', 'state'], ['Guam', 'state'], ['Vermont', 'state'], ['New England', 'region']]);
