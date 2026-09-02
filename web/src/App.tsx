@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CommitLog,
+  SelectionChips,
   TimeTravelBar,
   VizBar,
   VizCockpit,
@@ -125,6 +126,10 @@ export function App(): JSX.Element {
   const absenceStates = rows?.absence.states ?? [];
   const columns = state.columns[state.defaultTable] ?? [];
   const selFor = (self: string | null) => selectionForView(state.selections, self);
+  // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
+  const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== null && s.value !== undefined).map((s) => s.viewId)), [state.selections]);
+  const viewLabels = useMemo(() => Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId])), [state.views]);
+  const clearable = (id: string) => ({ active: liveViews.has(id), onClear: () => void view.clear(id, `clear ${viewLabels[id] ?? id}`) });
 
   // the disease the person picked (the diseases view's point clause), else the default
   const pickedDisease = useMemo(() => {
@@ -260,6 +265,14 @@ export function App(): JSX.Element {
             onReturnToNow={() => void view.returnToNow()}
           />
           <JumpBox commitIds={state.commits.map((c) => c.id)} onSeek={(id) => void view.seek(id)} />
+          <SelectionChips
+            selections={state.selections}
+            labels={viewLabels}
+            readOnly={readOnly}
+            onClear={(id) => void view.clear(id, `clear ${viewLabels[id] ?? id}`)}
+            onClearAll={() => void view.clearAll()}
+            onSetPolarity={(id, exclude) => void view.setPolarity(id, exclude, `${exclude ? 'exclude' : 'keep'} the ${viewLabels[id] ?? id} selection`)}
+          />
         </div>
       }
       toast={problem === null ? null : <div role="alert" style={{ padding: 10, fontSize: 13 }}>⚠ {problem}</div>}
@@ -267,6 +280,7 @@ export function App(): JSX.Element {
         {
           id: 'coverage',
           weight: 2,
+          ...clearable('coverage'),
           caption: `Coverage — ${String(keptCount)} of ${String(cells.length)} cells in view · which silence is which (click to select)`,
           render: ({ width, height }) => (
             <VizBar viewId="coverage" data={coverageData} field={absenceField} colorOf={colorOfState} selection={selFor('coverage')} columns={columns} encoding={state.encodings['coverage'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('coverage', e, 'select report state')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
@@ -275,6 +289,7 @@ export function App(): JSX.Element {
         {
           id: 'diseases',
           weight: 4,
+          ...clearable('diseases'),
           caption: `Reported cases by disease, summed over kept ${sumKind}s (a disease with no present cell has no bar) — click one to drive the trend, the week line and the table (now: ${pickedDisease})`,
           render: ({ width, height }) => (
             <VizBar viewId="diseases" data={diseaseData} field="disease" selection={selFor('diseases')} columns={columns} encoding={state.encodings['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, 'pick disease')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
@@ -283,6 +298,7 @@ export function App(): JSX.Element {
         {
           id: 'kinds',
           weight: 1.5,
+          ...clearable('kinds'),
           caption: 'Cells by area kind — states, regions, roll-ups (click to select)',
           render: ({ width, height }) => (
             <VizBar viewId="kinds" data={kindData} field="kind" selection={selFor('kinds')} columns={columns} encoding={state.encodings['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, 'select area kind')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
@@ -291,6 +307,7 @@ export function App(): JSX.Element {
         {
           id: 'map',
           weight: 4,
+          ...clearable('map'),
           caption: `${pickedDisease} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`,
           render: ({ width, height }) =>
             geo === null ? (
@@ -304,18 +321,21 @@ export function App(): JSX.Element {
         {
           id: 'weeks',
           weight: 3,
+          ...clearable('weeks'),
           caption: `Reported cases per ${grain?.bucket ?? 'week'}, summed over kept ${sumKind}s · ${grain?.note ?? ''}`,
           render: ({ width, height }) => <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" columns={columns} encoding={state.encodings['weeks'] ?? {}} width={width} height={height} />,
         },
         {
           id: 'trend',
           weight: 3,
+          ...clearable('trend'),
           caption: `${pickedDisease} per ${areaChosen ? 'kept area' : 'region (the default until you pick a kind or an area)'}, ${grain?.bucket ?? 'week'} — a missing point is a silence, never a zero`,
           render: ({ width, height }) => <VizLine viewId="trend" data={trendData} dateField="t" valueField="value" colorOf={colorOfArea} columns={columns} encoding={state.encodings['trend'] ?? {}} width={width} height={height} />,
         },
         {
           id: 'table',
           weight: 3,
+          ...clearable('table'),
           caption: `${pickedDisease}, week ending ${latestWeek} — the cells as CDC printed them, with their flag (click a row to select)`,
           render: ({ width, height }) => (
             <VizTable viewId="table" data={tableRows} columns={['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max']} idField="jurisdiction" selection={selFor('table')} width={width} height={height} onEmit={(e) => void view.emit('table', e, 'select area')} />

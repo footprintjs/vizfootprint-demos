@@ -21,7 +21,7 @@ export interface GrammarWire {
 
 /** How a person produces each verb in THIS cockpit — the gesture side of the grammar. */
 const GESTURE: Record<string, string> = {
-  select: 'click a bar, a row, or a state on the map',
+  select: 'click a mark (again to clear); shift-click adds a mark to the set; drag across bars for a run; a chip flips keep ⇄ exclude, its ✕ clears',
   filter: 'drag across an axis',
   reencode: 'click an axis label and pick a column',
   checkpoint: 'press ⚑ and name the position',

@@ -68,6 +68,14 @@ clauses (the host sums, the chart draws), and four report chips:
 Every act lands as a commit; ⚑ names the position as a story beat; acting
 while viewing the past forks a branch.
 
+Selection gestures (the library's SET-1 grammar): click a mark to select
+it, click it again to clear; shift-click adds a mark to the view's set;
+drag across bars selects the run between them; the chips under the time
+bar name every live selection in words — ✕ clears one, "exclude" flips it
+to everything-but-these (a dashed outline), "clear all" clears them all.
+Each of those is a commit with a cause, like any act, so undo, time travel
+and the analyst see them.
+
 ## Run it
 
 ```

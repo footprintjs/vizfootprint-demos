@@ -124,9 +124,17 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
       const range = body['range'];
       return { verb: 'filter', viewId, field, range: (Array.isArray(range) ? (range as unknown as FilterRange) : null) as FilterRange, cause };
     }
-    case 'select':
+    case 'select': {
       if (viewId === undefined || field === undefined) return { error: 'select needs viewId and field' };
+      // SET-1: the many-values form — `values` (an array, or null to clear) + optional `exclude`
+      if ('values' in body) {
+        const values = body['values'];
+        if (values !== null && !Array.isArray(values)) return { error: 'select.values must be an array of values, or null to clear' };
+        const exclude = body['exclude'] === true;
+        return { verb: 'select', viewId, field, values: values as readonly unknown[] | null, ...(exclude ? { exclude: true } : {}), cause };
+      }
       return { verb: 'select', viewId, field, value: body['value'] as string | number | null, cause };
+    }
     case 'analyze': {
       const analysisId = str('analysisId');
       if (analysisId === undefined) return { error: 'analyze needs analysisId' };
