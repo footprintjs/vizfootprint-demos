@@ -161,10 +161,22 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
       const kind = str('kind');
       const response = body['response'];
       if (source === undefined || target === undefined || kind === undefined) return { error: 'link needs source, kind, and target' };
-      if (!['point', 'interval', 'cell', 'match'].includes(kind)) return { error: 'link.kind must be point | interval | cell | match' };
-      if (response !== null && !['filter', 'highlight', 'navigate', 'mirror', 'none'].includes(String(response))) return { error: 'link.response must be filter | highlight | navigate | mirror | none, or null' };
+      if (!['point', 'interval', 'cell', 'match', 'encoding'].includes(kind)) return { error: 'link.kind must be point | interval | cell | match | encoding' };
+      // an encoding edge answers with follow | none; a selection edge with the rest — the session refuses the rest with its own sentence
+      const allowed = kind === 'encoding' ? ['follow', 'none'] : ['filter', 'highlight', 'navigate', 'mirror', 'none'];
+      if (response !== null && !allowed.includes(String(response))) return { error: `link.response must be ${allowed.join(' | ')}, or null` };
       const mapping = Array.isArray(body['mapping']) ? (body['mapping'] as readonly { from: string; to: string }[]) : undefined;
-      return { verb: 'link', source, kind: kind as 'point' | 'interval' | 'cell' | 'match', target, response: response as 'filter' | 'highlight' | 'navigate' | 'mirror' | 'none' | null, ...(mapping !== undefined ? { mapping } : {}), cause };
+      const channels = Array.isArray(body['channels']) ? (body['channels'] as readonly { from: string; to: string }[]) : undefined;
+      return {
+        verb: 'link',
+        source,
+        kind: kind as 'point' | 'interval' | 'cell' | 'match' | 'encoding',
+        target,
+        response: response as 'filter' | 'highlight' | 'navigate' | 'mirror' | 'none' | 'follow' | null,
+        ...(mapping !== undefined ? { mapping } : {}),
+        ...(channels !== undefined ? { channels } : {}),
+        cause,
+      };
     }
     case 'navigate':
       if (viewId === undefined) return { error: 'navigate needs a viewId' };
@@ -207,6 +219,8 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     // the encoding plane: the house rules as sentences + the policy (the cockpit's Grammar panel)
     rules: overview.rules,
     encodingPolicy: overview.encodingPolicy,
+    // encoding links: what each view shows under the graph (views[] carry the per-view `effective` block)
+    effectiveEncodings: overview.effectiveEncodings,
   };
 }
 

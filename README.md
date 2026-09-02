@@ -144,4 +144,6 @@ One validator serves three doors with the same sentence: a def that starts again
 
 A swap of two axes is one act: `reencode` with `bindings` lands **one commit**, judged as a whole, so a chart never passes through an illegal middle state, and undo restores both channels.
 
-What the demo does not show yet: coercion (the def says `refuse`), and a rule that follows a rebind across charts (an encoding link) — see the library's `src/encoding/README.md`.
+**Encoding links.** One edge of kind `encoding` is declared: when the weekly line takes a color, the trend follows it — into its facet, where it is lawful, and into its color, where the trend's own rule refuses it ("a series value is only meaningful per entity") and the trend keeps `entity`. Nothing lands for the trend: its effective bindings are read through the edge, so undo and time travel on the weekly line carry it. Bind the weekly line's color to `kind` (the picker or the analyst) and the Grammar panel shows "⇠ follows weeks" on the facet and "⇠ refused to follow" on the color; the matrix shows the pairs beside the `follow` cell, and setting it to `none` un-follows as a commit.
+
+What the demo does not show yet: coercion (the def says `refuse`).

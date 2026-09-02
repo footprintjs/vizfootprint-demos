@@ -129,6 +129,8 @@ export function App(): JSX.Element {
   const columns = state.columns[state.defaultTable] ?? [];
   // the encoding plane's verdicts per view — the picker greys with the session's own sentences
   const fitsOf = (viewId: string) => state.views.find((v) => v.viewId === viewId)?.fits;
+  // encoding links: render what each view SHOWS (followed channels laid over its own); edits still go to `encodings`
+  const shown = state.effectiveEncodings ?? state.encodings;
   // Layer 4: the link graph decides what each clause does at each view — filter, highlight, navigate, mirror, or nothing
   const selFor = (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links);
   // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
@@ -302,7 +304,7 @@ export function App(): JSX.Element {
           ...clearable('coverage'),
           caption: `Coverage — ${String(keptCount)} of ${String(cells.length)} cells in view · which silence is which (click to select)`,
           render: ({ width, height }) => (
-            <VizBar viewId="coverage" data={coverageData} field={absenceField} colorOf={colorOfState} selection={selFor('coverage')} columns={columns} fits={fitsOf('coverage')} encoding={state.encodings['coverage'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('coverage', e, 'select report state')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizBar viewId="coverage" data={coverageData} field={absenceField} colorOf={colorOfState} selection={selFor('coverage')} columns={columns} fits={fitsOf('coverage')} encoding={shown['coverage'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('coverage', e, 'select report state')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -311,7 +313,7 @@ export function App(): JSX.Element {
           ...clearable('diseases'),
           caption: `Reported cases by disease, summed over kept ${sumKind}s (a disease with no present cell has no bar) — click one to drive the trend, the week line and the table (now: ${pickedDisease})`,
           render: ({ width, height }) => (
-            <VizBar viewId="diseases" data={diseaseData} highlight={diseaseHighlight} field="disease" selection={selFor('diseases')} columns={columns} fits={fitsOf('diseases')} encoding={state.encodings['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, 'pick disease')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizBar viewId="diseases" data={diseaseData} highlight={diseaseHighlight} field="disease" selection={selFor('diseases')} columns={columns} fits={fitsOf('diseases')} encoding={shown['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, 'pick disease')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -320,7 +322,7 @@ export function App(): JSX.Element {
           ...clearable('kinds'),
           caption: 'Cells by area kind — states, regions, roll-ups (click to select)',
           render: ({ width, height }) => (
-            <VizBar viewId="kinds" data={kindData} field="kind" selection={selFor('kinds')} columns={columns} fits={fitsOf('kinds')} encoding={state.encodings['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, 'select area kind')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizBar viewId="kinds" data={kindData} field="kind" selection={selFor('kinds')} columns={columns} fits={fitsOf('kinds')} encoding={shown['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, 'select area kind')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -343,7 +345,7 @@ export function App(): JSX.Element {
           ...clearable('weeks'),
           caption: `Reported cases per ${grain?.bucket ?? 'week'}, summed over kept ${sumKind}s · ${grain?.note ?? ''}`,
           render: ({ width, height }) => (
-            <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" columns={columns} fits={fitsOf('weeks')} encoding={state.encodings['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, 'brush weeks')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, 'brush weeks')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -360,7 +362,7 @@ export function App(): JSX.Element {
               colorOf={colorOfArea}
               columns={columns}
               fits={fitsOf('trend')}
-              encoding={state.encodings['trend'] ?? {}}
+              encoding={shown['trend'] ?? {}}
               xDomain={navigateDomain(selFor('trend'))?.range as readonly [string | null, string | null] | undefined}
               width={width}
               height={height}

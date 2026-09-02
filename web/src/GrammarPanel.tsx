@@ -93,7 +93,9 @@ export function GrammarPanel(props: {
           <tbody>
             {views.map((v) => {
               const d = declared.get(v.viewId);
-              const now = encodings[v.viewId] ?? {};
+              const own = encodings[v.viewId] ?? {};
+              const eff = v.effective; // encoding links: what the view shows, which channels follow, which follows were refused
+              const now = eff?.bindings ?? own;
               return (
                 <tr key={v.viewId} style={{ borderTop: '1px solid rgba(0,0,0,.08)' }}>
                   <td style={{ padding: '4px 8px 4px 0' }}>
@@ -108,6 +110,17 @@ export function GrammarPanel(props: {
                           <span key={ch} style={{ marginRight: 8 }}>
                             <code>{ch}</code>
                             {now[ch] !== undefined ? <span style={{ opacity: 0.7 }}> → {now[ch]}</span> : <span style={{ opacity: 0.4 }}> → (unbound)</span>}
+                            {eff?.followed[ch] !== undefined && own[ch] !== undefined && own[ch] !== now[ch] ? <span style={{ opacity: 0.5 }} title="the view's own binding, shadowed by the follow"> (own: {own[ch]})</span> : null}
+                            {eff?.followed[ch] !== undefined ? (
+                              <span style={{ color: '#0e6f69' }} title={`follows ${eff.followed[ch]!.from}.${eff.followed[ch]!.sourceChannel} through edge ${eff.followed[ch]!.edge}`}>
+                                {' '}⇠ follows {eff.followed[ch]!.from}
+                              </span>
+                            ) : null}
+                            {eff?.refused[ch] !== undefined ? (
+                              <span style={{ color: '#a8661a' }} title={eff.refused[ch]!.sentence}>
+                                {' '}⇠ refused to follow "{eff.refused[ch]!.field}"
+                              </span>
+                            ) : null}
                             {v.fits?.[ch] !== undefined ? (
                               <span style={{ opacity: 0.5 }} title={v.fits[ch]!.filter((f) => !f.ok).map((f) => `${f.field}: ${f.because}`).join('\n')}>
                                 {' '}({v.fits[ch]!.filter((f) => f.ok).length} of {v.fits[ch]!.length} columns fit)

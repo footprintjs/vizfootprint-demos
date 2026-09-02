@@ -89,6 +89,22 @@ export function nndssDef(tables: NndssTables): DashboardDef {
       { source: 'weeks', kind: 'interval', target: 'trend', response: 'navigate', label: 'a week brush is the trend\'s window' },
       { source: 'map', kind: 'point', target: 'table', response: 'mirror', label: 'the same state, outlined' },
       { source: 'table', kind: 'point', target: 'diseases', response: 'none', label: 'a row never narrows the bar' },
+      // an ENCODING edge: when the weekly line takes a color, the trend follows it (one hop, read through, never
+      // landed for the trend) — into its FACET, where it is lawful, and into its COLOR, where the trend's own rule
+      // ("a series value is only meaningful per entity") refuses it with that sentence and the trend keeps `entity`.
+      // The weekly line starts with no color, so nothing follows until someone binds one: bind weeks.color to `kind`
+      // (the picker or the analyst) and the Grammar panel shows both the follow and the refusal on the trend.
+      {
+        source: 'weeks',
+        kind: 'encoding',
+        target: 'trend',
+        response: 'follow',
+        channels: [
+          { from: 'color', to: 'facet' },
+          { from: 'color', to: 'color' },
+        ],
+        label: 'the trend follows the weekly line\'s hue — as a facet, and (refused) as its color',
+      },
     ],
     // The encoding plane's HOUSE RULES, as data — the same sentences refuse a bad initial binding
     // at build, a bad rebind at dispatch (human picker or analyst tool), and grey the picker.
