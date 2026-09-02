@@ -12,14 +12,15 @@ export function JumpBox(props: { readonly commitIds: readonly string[]; readonly
   const [text, setText] = useState('');
   const [note, setNote] = useState<string | null>(null);
   const go = (): void => {
-    const n = text.trim().replace(/^#?s?/, '');
-    const id = `s${n}`;
+    const n = text.trim().replace(/^#/, '').replace(/^\D+/, '');
     if (n === '' || !/^\d+$/.test(n)) {
       setNote('type a commit number, e.g. 34');
       return;
     }
-    if (!props.commitIds.includes(id)) {
-      setNote(`#${id} is not on this lineage — it may be on another path`);
+    // ids are `<prefix><n>` on this surface; match by the number so the prefix is not this box's business
+    const id = props.commitIds.find((c) => c.replace(/^\D+/, '') === n);
+    if (id === undefined) {
+      setNote(`#${n} is not on this lineage — it may be on another path`);
       return;
     }
     setNote(null);

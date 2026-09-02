@@ -35,6 +35,8 @@ export interface CellRow {
   readonly jurisdiction: string;
   readonly kind: JurisdictionKind;
   readonly disease: string;
+  /** Whole weeks since the first MMWR week of 2025 — the numeric time axis an analysis may regress over. */
+  readonly week_index: number;
   readonly year: number;
   readonly week: number;
   /** The MMWR week-ending Saturday, ISO date. */
@@ -76,6 +78,15 @@ export interface NndssTables {
 }
 
 /** The Saturday ending MMWR week `week` of `year` (week 1 contains January 4th). */
+/** The column an analysis regresses over when it wants time as a number. */
+export const WEEK_INDEX_FIELD = 'week_index';
+/** Week 0 — the Saturday ending MMWR week 1 of 2025, the first week in the slice. */
+export const WEEK_ZERO = '2025-01-04';
+/** Whole weeks from {@link WEEK_ZERO} to the Saturday `t`. */
+export function weekIndex(t: string): number {
+  return Math.round((Date.parse(t) - Date.parse(WEEK_ZERO)) / (7 * 86_400_000));
+}
+
 export function mmwrWeekEnd(year: number, week: number): string {
   const jan4 = new Date(Date.UTC(year, 0, 4));
   const dow = jan4.getUTCDay(); // Sunday = 0
@@ -113,13 +124,15 @@ export function nndssTables(csvText: string): NndssTables {
     const current = cellOf(r['m1'], r['m1_flag']);
     const ytd = cellOf(r['m3'], r['m3_flag']);
     counts[current.state] += 1;
+    const t = mmwrWeekEnd(year, week);
     cells.push({
       jurisdiction,
       kind,
       disease: String(r['label']),
       year,
       week,
-      t: mmwrWeekEnd(year, week),
+      t,
+      week_index: weekIndex(t),
       cases: current.value,
       report_state: current.state, // the declared absence column (ABSENCE_FIELD)
       flag: current.flag,

@@ -1,11 +1,12 @@
 /**
  * THE GRAMMAR PANEL — the interaction grammar, rendered from the declaration.
  *
- * Nothing here is authored prose about how the dashboard "works": the verbs
- * come off the wire from the library's own list, each view's channel
- * vocabulary from the def, the current bindings from the session's fold, and
- * the wiring rule from the one word the server sends. When declared links
- * land, the last column becomes a matrix; until then it says the honest word.
+ * The verbs come off the wire from the library's own list, each view's
+ * channel vocabulary from the def, the current bindings from the session's
+ * fold, and the wiring rule from the one word the server sends — the
+ * `drives` column is derived from that word. The ONE authored thing here is
+ * the gesture column: how THIS cockpit produces each verb (and which verbs
+ * it does not). When declared links land, `drives` becomes a matrix.
  *
  * The same data the agent reads through `whats_here` — one grammar, two readers.
  */
@@ -20,15 +21,21 @@ export interface GrammarWire {
 
 /** How a person produces each verb in THIS cockpit — the gesture side of the grammar. */
 const GESTURE: Record<string, string> = {
-  select: 'click a bar or a row',
+  select: 'click a bar, a row, or a state on the map',
   filter: 'drag across an axis',
   reencode: 'click an axis label and pick a column',
   checkpoint: 'press ⚑ and name the position',
   fork: 'act while viewing the past',
-  analyze: 'the agent runs a declared analysis',
-  annotate: 'the agent leaves a note',
-  navigate: 'change the layout, or pan',
+  analyze: 'ask the analyst — it runs a declared analysis',
+  annotate: 'no gesture in this build (a declared verb, unwired here)',
+  navigate: 'switch the layout (Flow / Grid / Focus)',
 };
+
+/** What a view's selection drives — read off the wiring word, never hand-written per view. */
+function drivesOf(links: string, actor: string): string {
+  if (actor === 'agent') return '— (acts through verbs, not a selection)';
+  return links === 'implicit-crossfilter' ? 'every other view (self excluded)' : `per the "${links}" wiring`;
+}
 
 export function GrammarPanel(props: {
   readonly grammar: GrammarWire | null;
@@ -93,7 +100,7 @@ export function GrammarPanel(props: {
                         ))
                       : <span style={{ opacity: 0.5 }}>no encoding surface — cannot be re-encoded (by declaration)</span>}
                   </td>
-                  <td style={{ padding: 4 }}>{v.actor === 'agent' ? '—' : 'every other view'}</td>
+                  <td style={{ padding: 4 }}>{drivesOf(grammar.links, v.actor)}</td>
                 </tr>
               );
             })}

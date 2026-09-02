@@ -17,14 +17,17 @@ import {
   VizBar,
   VizCockpit,
   VizLine,
+  VizMap,
   VizTable,
   createSessionView,
+  type GeoFeatureCollection,
   keepPredicate,
   pollingSource,
   selectionForView,
   useSessionView,
 } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
+import { AnalystPanel } from './AnalystPanel.js';
 import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
 import { JumpBox } from './JumpBox.js';
 
@@ -95,17 +98,22 @@ export function App(): JSX.Element {
   const state = useSessionView(view);
   const [rows, setRows] = useState<RowsPayload | null>(null);
   const [proposals, setProposals] = useState<readonly Proposal[]>([]);
+  const [geo, setGeo] = useState<GeoFeatureCollection | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [mode, setMode] = useState<'explore' | 'present'>('explore');
+  const [analystTurns, setAnalystTurns] = useState(0);
 
   useEffect(() => {
     let live = true;
     void fetchJson<RowsPayload>('/api/rows')
       .then((p) => live && setRows(p))
       .catch((e: unknown) => live && setProblem(`the rows did not arrive: ${e instanceof Error ? e.message : String(e)}`));
+    void fetchJson<GeoFeatureCollection>('/api/geo')
+      .then((g) => live && setGeo(g))
+      .catch((e: unknown) => live && setProblem(`the map shapes did not arrive: ${e instanceof Error ? e.message : String(e)}`));
     void fetchJson<{ proposals?: Proposal[] }>('/api/proposals')
       .then((p) => live && setProposals(p.proposals ?? []))
-      .catch(() => undefined);
+      .catch((e: unknown) => live && setProblem(`the proposals did not arrive: ${e instanceof Error ? e.message : String(e)}`));
     return () => {
       live = false;
     };
@@ -144,7 +152,8 @@ export function App(): JSX.Element {
       if (c.kind !== sumKind || c.cases === null || !keep(c)) continue;
       sums.set(c.disease, (sums.get(c.disease) ?? 0) + c.cases);
     }
-    return (rows?.diseases ?? []).map((category) => ({ category, count: sums.get(category) ?? 0 }));
+    // a disease with no present cell in view gets NO bar — a missing bar is a silence, a zero would be a lie
+    return (rows?.diseases ?? []).flatMap((category) => (sums.has(category) ? [{ category, count: sums.get(category)! }] : []));
   }, [cells, rows?.diseases, sumKind, state.selections]);
 
   const kindData = useMemo(() => {
@@ -166,7 +175,7 @@ export function App(): JSX.Element {
   // the trend for the picked disease — present cells only (a silence is a missing point).
   // Fifty-eight state lines are spaghetti, so until a kind or an area is chosen the
   // line shows the regions; the other views' clauses narrow it like any other view.
-  const areaChosen = state.selections.some((s) => s.viewId === 'kinds' || s.viewId === 'table');
+  const areaChosen = state.selections.some((s) => (s.viewId === 'kinds' || s.viewId === 'table') && typeof s.value === 'string');
   const trendData = useMemo(() => {
     const keep = keepPredicate(selFor('trend'));
     return series
@@ -175,6 +184,25 @@ export function App(): JSX.Element {
       .filter((r) => keep(r) && (areaChosen || r.kind === 'region'))
       .map((r) => ({ date: r.t, value: r.value, series: r.jurisdiction }));
   }, [series, pickedDisease, absenceField, areaChosen, state.selections]);
+
+  // the picked disease per STATE, summed over the kept weeks — a state with no present cell gets no datum (the map hatches it)
+  const mapData = useMemo(() => {
+    const keep = keepPredicate(selFor('map'));
+    const sums = new Map<string, number>();
+    for (const c of cells) {
+      if (c.kind !== 'state' || c.disease !== pickedDisease || c.cases === null || !keep(c)) continue;
+      sums.set(c.jurisdiction, (sums.get(c.jurisdiction) ?? 0) + c.cases);
+    }
+    return [...sums.entries()].map(([region, value]) => ({ region, value }));
+  }, [cells, pickedDisease, state.selections]);
+
+  // places that report to NNDSS but have no shape on this map — read off the data, never hand-listed
+  const noShape = useMemo(() => {
+    if (geo === null) return [];
+    const shapes = new Set(geo.features.map((f) => String(f.properties?.['name'] ?? '')));
+    const places = new Set(cells.filter((c) => c.kind === 'state').map((c) => c.jurisdiction));
+    return [...places].filter((p) => !shapes.has(p)).sort();
+  }, [geo, cells]);
 
   const latestWeek = rows?.weeks[rows.weeks.length - 1] ?? '';
   const tableRows = useMemo(() => cells.filter((c) => c.disease === pickedDisease && c.t === latestWeek), [cells, pickedDisease, latestWeek]);
@@ -247,7 +275,7 @@ export function App(): JSX.Element {
         {
           id: 'diseases',
           weight: 4,
-          caption: `Reported cases by disease, summed over kept ${sumKind}s — click one to drive the trend, the week line and the table (now: ${pickedDisease})`,
+          caption: `Reported cases by disease, summed over kept ${sumKind}s (a disease with no present cell has no bar) — click one to drive the trend, the week line and the table (now: ${pickedDisease})`,
           render: ({ width, height }) => (
             <VizBar viewId="diseases" data={diseaseData} field="disease" selection={selFor('diseases')} columns={columns} encoding={state.encodings['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, 'pick disease')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
@@ -259,6 +287,19 @@ export function App(): JSX.Element {
           render: ({ width, height }) => (
             <VizBar viewId="kinds" data={kindData} field="kind" selection={selFor('kinds')} columns={columns} encoding={state.encodings['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, 'select area kind')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
+        },
+        {
+          id: 'map',
+          weight: 4,
+          caption: `${pickedDisease} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`,
+          render: ({ width, height }) =>
+            geo === null ? (
+              <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+                the map shapes have not arrived yet
+              </div>
+            ) : (
+              <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" selection={selFor('map')} width={width} height={height} onEmit={(e) => void view.emit('map', e, 'select state on the map')} />
+            ),
         },
         {
           id: 'weeks',
@@ -283,6 +324,21 @@ export function App(): JSX.Element {
       ]}
       reports={[
         {
+          id: 'analyst',
+          title: 'Analyst',
+          icon: '🧭',
+          badge: analystTurns,
+          content: (
+            <AnalystPanel
+              readOnly={readOnly}
+              onTurn={(turns) => {
+                setAnalystTurns(turns);
+                void view.refresh();
+              }}
+            />
+          ),
+        },
+        {
           id: 'grammar',
           title: 'Grammar',
           icon: '✍',
@@ -297,7 +353,7 @@ export function App(): JSX.Element {
           content: (
             <div style={{ fontSize: 13, lineHeight: 1.5 }}>
               <p style={{ margin: '0 0 8px' }}>
-                Week ending {latestWeek}. CDC's flags, in our words: <b>not-configured</b> — not reportable there (stop looking); <b>unavailable</b> — the jurisdiction could not send it (go ask);{' '}
+                Week ending {latestWeek}, every area regardless of the selection. CDC's flags, in our words: <b>not-configured</b> — not reportable there (stop looking); <b>unavailable</b> — the jurisdiction could not send it (go ask);{' '}
                 <b>withheld</b> — CDC has it and did not print it; <b>unknown</b> — nothing said.
               </p>
               {silences.map((s) => (

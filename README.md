@@ -22,9 +22,10 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | folder | layer | one job |
 |---|---|---|
 | `data/nndss/` | 1 · data | the fetch script, the committed snapshot, and its provenance (source, date, rows, license) |
-| `src/nndss/` | 1–5 | flags → absence, CSV → tables, the declared dashboard, the surface, the scripted proposals |
-| `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract |
-| `web/` | 3, 4, 6 | the cockpit, the Grammar panel, the jump box |
+| `data/geo/` | 1 · data | US state boundaries (Census-derived, via `us-atlas`), converted and committed with provenance |
+| `src/nndss/` | 1–5 | flags → absence, CSV → tables, the declared dashboard, the declared analyses, the surface, the scripted proposals, the analyst |
+| `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the chat and geo doors |
+| `web/` | 3, 4, 6 | the cockpit, the Grammar panel, the jump box, the Analyst panel |
 | `tests/` | — | vitest |
 
 ## What you see
@@ -38,9 +39,19 @@ clauses (the host sums, the chart draws), and four report chips:
 | **diseases** (bar) | reported cases by disease, summed over the kept cells of ONE kind (states unless the kinds view says otherwise) | picks the disease that drives the trend, the week line and the table |
 | **kinds** (bar) | cells by area kind — state, region, roll-up | names the kind every sum is over |
 | **weeks** (line) | reported cases per MMWR week, summed over the same one kind | brush = a `filter` on `t` |
+| **map** (choropleth) | the picked disease per state, summed over kept weeks; a hatched state has no present cell; places without a shape are named in the caption | selects a state |
 | **trend** (line) | the picked disease per region until a kind or an area is chosen, then per kept area — a missing point is a silence, never a zero | brush = a `filter` on `t` |
 | **table** | the picked disease at the latest week, the cells as CDC printed them, with their flag | selects an area |
 
+- **Analyst** — an agent on the same dashboard (layer 5). It drives the views
+  through the same verbs, never computes a number itself (every statistic is
+  one of the declared analyses in `src/nndss/analyses.ts`, run by the session
+  over present cells only), and every act lands as an `agent`-badged commit.
+  Under each reply, the acts it took are listed framed by the grammar — verb,
+  what it touched, landed / refused — derived from the tool calls, never from
+  its prose. Ask it to "save this as a beat" and it names a checkpoint.
+  Without a key it runs one scripted turn; with `ANTHROPIC_API_KEY` in `.env`
+  it is live (Anthropic over fetch, no SDK).
 - **Grammar** — the verbs off the wire (the library's own list), each with the
   gesture that produces it here; per view: driver, what it emits, which
   channels it may rebind and what they are bound to now; the wiring word
@@ -62,7 +73,8 @@ while viewing the past forks a branch.
 ```
 npm install
 npm run data:fetch      # only to refresh the snapshot — it is committed
-npm run serve           # http://localhost:5290/api/state
+npm run data:geo        # only to regenerate the map shapes — they are committed
+npm run serve           # http://localhost:5290/api/state  (put ANTHROPIC_API_KEY in .env for a live analyst)
 npm run web:dev         # http://localhost:5291
 npm test
 ```
@@ -81,7 +93,17 @@ npm test
   its kind; a silence is a missing row. A region's count is CDC's own row,
   not a sum the host made.
 - **MMWR weeks** become the Saturday that ends them (week 1 contains
-  January 4th).
+  January 4th); `week_index` counts whole weeks from the first, so a trend
+  can regress over time as a number.
+- **Analyses run over PRESENT cells only.** The library's group-by sums
+  `Number(cases)`, which would turn a silence into a zero; every declared
+  analysis here is wrapped to drop silent cells first, and says so in its
+  honesty notes.
+- **The map** is the Census's Albers-USA projection with Alaska and Hawaii as
+  insets (50 states + DC). Puerto Rico, Guam, American Samoa, the Northern
+  Mariana Islands, the U.S. Virgin Islands and New York City report to NNDSS
+  but have no shape there; the cockpit derives that list from the data and
+  prints it in the map's caption.
 
 ## Data
 
@@ -90,3 +112,8 @@ on data.cdc.gov (Office of Public Health Data, Surveillance, and Technology,
 CDC). A work of the United States Government — public domain. The committed
 snapshot is a slice (a handful of diseases, two MMWR years); its exact
 query, retrieval time and row count are in `data/nndss/PROVENANCE.json`.
+
+Map shapes: U.S. Census Bureau cartographic boundary files (1:10M) via the
+[`us-atlas`](https://github.com/topojson/us-atlas) package — the boundary
+data is a work of the U.S. Government, public domain; see
+`data/geo/PROVENANCE.json`.

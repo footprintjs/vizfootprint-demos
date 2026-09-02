@@ -23,21 +23,22 @@
  */
 import type { DashboardDef } from '../../../vizfootprint/src/agent/index.js';
 import type { ActorMeta } from '../../../vizfootprint/src/mosaic/index.js';
-import { groupByAnalysis } from '../../../vizfootprint/src/analysis/index.js';
+import { NNDSS_ANALYSES } from './analyses.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from './absence.js';
 import type { NndssTables } from './etl.js';
 
 const ALPHA = 0.05;
 
 const COVERAGE: ActorMeta = { actor: 'user', label: 'Coverage — which silence is which' };
-const DISEASES: ActorMeta = { actor: 'user', label: 'Cells by disease' };
+const DISEASES: ActorMeta = { actor: 'user', label: 'Reported cases by disease' };
 const KINDS: ActorMeta = { actor: 'user', label: 'Cells by area kind' };
 const WEEKS: ActorMeta = { actor: 'user', label: 'Reported cases by week' };
-const TREND: ActorMeta = { actor: 'user', label: 'Trend per state' };
+const TREND: ActorMeta = { actor: 'user', label: 'Trend per area' };
+const MAP: ActorMeta = { actor: 'user', label: 'Reported cases by state, on the map' };
 const TABLE: ActorMeta = { actor: 'user', label: 'The cells, as CDC printed them' };
 const ANALYST: ActorMeta = { actor: 'agent', label: 'Analyst' };
 
-export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'weeks', 'trend', 'table', 'analyst'] as const;
+export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'analyst'] as const;
 
 export function nndssDef(tables: NndssTables): DashboardDef {
   const absence = { field: ABSENCE_FIELD, states: [...ABSENCE_STATES] };
@@ -49,7 +50,7 @@ export function nndssDef(tables: NndssTables): DashboardDef {
       // no absence on `series`: a row that exists is present by construction
       series: { rows: tables.series.map((p) => ({ ...p })), grain: tables.grain },
     },
-    actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, weeks: WEEKS, trend: TREND, table: TABLE, analyst: ANALYST },
+    actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, analyst: ANALYST },
     encodings: [
       { viewId: 'coverage', chartKind: 'bar', channels: ['category'], initial: { category: ABSENCE_FIELD } },
       { viewId: 'diseases', chartKind: 'bar', channels: ['category'], initial: { category: 'disease' } },
@@ -57,11 +58,7 @@ export function nndssDef(tables: NndssTables): DashboardDef {
       { viewId: 'weeks', chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 't', y: 'cases' } },
       { viewId: 'trend', chartKind: 'line', channels: ['x', 'y', 'color', 'facet'], initial: { x: 't', y: 'value', color: 'entity' } },
     ],
-    analyses: {
-      // cases by disease (sum over PRESENT cells — the host's groupBy sees null as absent, never as 0)
-      casesByDisease: groupByAnalysis({ by: 'disease', measure: 'cases' }),
-      casesByKind: groupByAnalysis({ by: 'kind', measure: 'cases' }),
-    },
+    analyses: NNDSS_ANALYSES,
     fdr: { procedure: 'LORD++', alpha: ALPHA },
     defaultTable: 'cells',
   };

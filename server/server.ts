@@ -11,11 +11,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
+import { loadEnv } from './env.js';
 
 const PORT = Number(process.env['PORT'] ?? 5290);
 const WEB_DIST = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'web', 'dist');
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml' };
 
+loadEnv(); // the repo's own .env, if any — names only ever reach the log, never values
 const desk = createDesk();
 
 function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
@@ -41,5 +43,6 @@ server.listen(PORT, () => {
   const { tables } = desk.surface;
   console.log(`\n  vizfootprint-demo · NNDSS → http://localhost:${String(PORT)}`);
   console.log(`  cells ${String(tables.cells.length)} · series ${String(tables.series.length)} · diseases ${String(tables.diseases.length)} · weeks ${String(tables.weeks.length)}`);
-  console.log(`  states: ${Object.entries(tables.counts).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}\n`);
+  console.log(`  states: ${Object.entries(tables.counts).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}`);
+  console.log(`  analyst: ${desk.mode === 'live' ? 'live (ANTHROPIC_API_KEY present)' : 'mock — scripted turn (put ANTHROPIC_API_KEY in .env for live)'}\n`);
 });

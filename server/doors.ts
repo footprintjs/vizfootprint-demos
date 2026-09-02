@@ -11,27 +11,69 @@
  *   POST /api/seek | checkpoint | paths | compare | bring-over | undo
  *   POST /api/proposals    beat 1 — six scripted proposals; the ledger rules
  *   POST /api/reset        a fresh surface (a session is cheap)
+ *   GET  /api/geo          US state boundaries (Census-derived, pre-projected) for the map view
+ *   GET  /api/analyst      the analyst's transcript, its acts, its mode (mock | live)
+ *   POST /api/chat         one analyst turn — acts land as agent-badged commits meanwhile
  *
  * One surface per server, single-user — the honest scope of a demo.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
 import type { DispatchAction, FilterRange } from '../../vizfootprint/src/agent/index.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurface, type NndssSurface } from '../src/nndss/surface.js';
 import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
 import { nndssDef } from '../src/nndss/def.js';
+import { MODEL, createNndssAnalyst, liveProvider, scriptedNndssMock, type ActivityStep, type NndssAnalyst } from '../src/nndss/analyst.js';
+import type { NndssTables } from '../src/nndss/etl.js';
 
 export const API_ROOT = '/api';
+/** The committed US state boundaries (data/geo, with their provenance) — read once, served as-is. */
+let geoText: string | null = null;
+const geoJson = (): string => (geoText ??= readFileSync(new URL('../data/geo/us-states.geo.json', import.meta.url), 'utf8'));
 const MAX_BODY_BYTES = 64 * 1024;
+
+/** One line of the analyst conversation; an analyst line carries the acts it took. */
+export interface TranscriptLine {
+  readonly role: 'user' | 'analyst' | 'error';
+  readonly text: string;
+  readonly activity?: readonly ActivityStep[];
+}
 
 export interface Desk {
   surface: NndssSurface;
   proposals: readonly ProposalOutcome[];
+  analyst: NndssAnalyst;
+  /** `live` when an Anthropic key is present at boot; `mock` runs the scripted turn. */
+  readonly mode: 'mock' | 'live';
+  /** The acts of the turn in flight — ONE array for the desk's life, mutated in place (the analyst's closure holds it). */
+  readonly activity: ActivityStep[];
+  turnActive: boolean;
+  transcript: TranscriptLine[];
 }
 
-export function createDesk(): Desk {
-  return { surface: buildNndssSurface(), proposals: [] };
+/** Asks the panel offers on an empty transcript — each exercises a different verb. */
+export const SUGGESTIONS = [
+  'Which region reports the most pertussis this year? Save it as a beat.',
+  'Is gonorrhea tracking its 52-week high across the states?',
+  'Where are the silences this week, and what kind are they?',
+] as const;
+
+const hasKey = (): boolean => (process.env['ANTHROPIC_API_KEY'] ?? '') !== '';
+
+export function createDesk(tables?: NndssTables, activity: ActivityStep[] = []): Desk {
+  const surface = buildNndssSurface(tables);
+  const analyst = createNndssAnalyst(surface.port, {
+    provider: hasKey() ? liveProvider(process.env['ANTHROPIC_API_KEY']!) : scriptedNndssMock(),
+    onActivity: (step) => activity.push(step),
+  });
+  return { surface, proposals: [], analyst, mode: hasKey() ? 'live' : 'mock', activity, turnActive: false, transcript: [] };
+}
+
+/** What the Analyst panel renders. */
+function analystState(desk: Desk): Record<string, unknown> {
+  return { mode: desk.mode, model: desk.mode === 'live' ? MODEL : undefined, turnActive: desk.turnActive, activity: desk.activity, transcript: desk.transcript, suggestions: SUGGESTIONS, tools: desk.analyst.tools };
 }
 
 class BodyRefusal extends Error {
@@ -120,9 +162,9 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     defaultTable: overview.defaultTable,
     columns: overview.columns,
     encodings: overview.encodings,
-    activity: [],
-    turnActive: false,
-    mode: 'snapshot',
+    activity: desk.activity,
+    turnActive: desk.turnActive,
+    mode: desk.mode,
     cursor: overview.time.cursor,
     head: overview.time.head,
     branches: session.branches().map((b) => ({ tip: b.tip, length: b.length, actor: b.actor, active: b.active })),
@@ -191,6 +233,12 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
       }), true;
     }
     if (req.method === 'GET' && door === 'proposals') return sendJson(res, 200, { proposals: desk.proposals, ledger: (await session.overview()).fdr }), true;
+    if (req.method === 'GET' && door === 'analyst') return sendJson(res, 200, analystState(desk)), true;
+    if (req.method === 'GET' && door === 'geo') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(geoJson());
+      return true;
+    }
     if (req.method !== 'POST') return sendJson(res, 405, { error: `${door} is POST` }), true;
     const body = await readJson(req);
     switch (door) {
@@ -214,10 +262,34 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
       case 'proposals':
         desk.proposals = await runScriptedProposals(session);
         return sendJson(res, 200, { proposals: desk.proposals, ledger: (await session.overview()).fdr }), true;
-      case 'reset':
-        desk.surface = buildNndssSurface(desk.surface.tables);
+      case 'chat': {
+        const message = String(body['message'] ?? '').trim();
+        if (message === '') return sendJson(res, 400, { error: 'chat needs a message' }), true;
+        if (desk.turnActive) return sendJson(res, 409, { error: 'the analyst is mid-turn — wait for it' }), true;
+        desk.activity.length = 0;
+        desk.turnActive = true;
+        desk.transcript.push({ role: 'user', text: message });
+        try {
+          const turn = await desk.analyst.send(message);
+          desk.transcript.push({ role: 'analyst', text: turn.text, activity: [...desk.activity] });
+          return sendJson(res, 200, { ...turn, activity: desk.activity }), true;
+        } catch (error) {
+          const text = error instanceof Error ? error.message : String(error);
+          desk.transcript.push({ role: 'error', text, activity: [...desk.activity] });
+          return sendJson(res, 502, { error: text, activity: desk.activity }), true;
+        } finally {
+          desk.turnActive = false;
+        }
+      }
+      case 'reset': {
+        desk.activity.length = 0;
+        const fresh = createDesk(desk.surface.tables, desk.activity);
+        desk.surface = fresh.surface;
         desk.proposals = [];
+        desk.analyst = fresh.analyst;
+        desk.transcript = [];
         return sendJson(res, 200, { ok: true }), true;
+      }
       default:
         return sendJson(res, 404, { error: `no door "${door}"` }), true;
     }

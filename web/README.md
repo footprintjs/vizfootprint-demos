@@ -10,6 +10,9 @@ demo needed:
   the absence column. The same data the agent reads through `whats_here`.
 - **`JumpBox.tsx`** — "go to #34" when the timeline has ninety commits: a
   seek by number, validated against the active lineage.
+- **`AnalystPanel.tsx`** — the agent as a principal: a chat whose every
+  reply is read against the commit log. `frameStep` turns each tool call
+  into verb · what · outcome from the call itself, never from the prose.
 
 `App.tsx` feeds every chart host-side under the session's clauses — the host
 sums over ONE kind of area (the kinds view's pick, else states) so a case is
