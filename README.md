@@ -146,4 +146,6 @@ A swap of two axes is one act: `reencode` with `bindings` lands **one commit**, 
 
 **Encoding links.** One edge of kind `encoding` is declared: when the weekly line takes a color, the trend follows it — into its facet, where it is lawful, and into its color, where the trend's own rule refuses it ("a series value is only meaningful per entity") and the trend keeps `entity`. Nothing lands for the trend: its effective bindings are read through the edge, so undo and time travel on the weekly line carry it. Bind the weekly line's color to `kind` (the picker or the analyst) and the Grammar panel shows "⇠ follows weeks" on the facet and "⇠ refused to follow" on the color; the matrix shows the pairs beside the `follow` cell, and setting it to `none` un-follows as a commit.
 
-What the demo does not show yet: coercion (the def says `refuse`).
+**The prose plane.** The map and the weekly line carry their words as records: a title, a short alt that identifies the chart, a long visible description in the CDC's wording, and (on the line) a how-to-read slot the library derives from the chart's bindings every read. The analyst can caption a chart with `describe`, but only with a basis and never with a cause; a caption whose basis no longer matches the screen is shown as stale, naming what moved, never hidden or rewritten.
+
+What the demo does not show yet: coercion (the def says `refuse`), and the words edited in place on the chart.

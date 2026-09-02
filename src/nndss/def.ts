@@ -117,6 +117,34 @@ export function nndssDef(tables: NndssTables): DashboardDef {
         { rule: 'only-with', column: 'value', companion: 'entity', sentence: 'a series value is only meaningful per entity — keep "entity" on the chart' },
       ],
     },
+    // The PROSE plane: the words two views carry, as records with an author. The map's long alt is the W3C's
+    // two-part shape (a short alt that identifies the chart, a long description that carries the data), in the
+    // CDC's own wording; the weekly line's `howToRead` is derived — the library writes the construction line itself, every
+    // read (the map declares no encoding surface, so it has nothing to derive from).
+    prose: [
+      {
+        viewId: 'map',
+        slots: {
+          title: { text: 'Reported cases by state, this week', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+          altShort: { text: 'A map of the United States shaded by the number of reported cases in each state for the selected disease.', author: { kind: 'human' }, levels: ['construction'] },
+          altLong: {
+            text: 'Each state is shaded by its reported case count for the selected disease, summed over the weeks kept in view. A hatched state reported no present cell: a silence, never a zero. Territories and cities without a shape on the map are listed in the table instead.',
+            author: { kind: 'human' },
+            levels: ['construction'],
+            // the map declares no encoding surface, so its basis names the columns it reads, not bindings
+            basis: { columns: ['jurisdiction', 'cases', ABSENCE_FIELD] },
+          },
+        },
+      },
+      {
+        viewId: 'weeks',
+        slots: {
+          title: { text: 'Reported cases per MMWR week', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+          altShort: { text: 'A line chart of reported cases by MMWR week for the selected disease, summed over the kept areas.', author: { kind: 'human' }, levels: ['construction'] },
+          howToRead: { author: { kind: 'derived' } },
+        },
+      },
+    ],
     fdr: { procedure: 'LORD++', alpha: ALPHA },
     defaultTable: 'cells',
   };

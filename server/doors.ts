@@ -178,6 +178,14 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
         cause,
       };
     }
+    case 'describe': {
+      // the prose plane: one of a view's words as a record (the session judges it), or null = back to the declaration
+      const slot = str('slot');
+      if (viewId === undefined || slot === undefined) return { error: 'describe needs viewId and slot' };
+      const record = body['record'];
+      if (record !== undefined && record !== null && (typeof record !== 'object' || Array.isArray(record))) return { error: 'describe.record must be an object, or null' };
+      return { verb: 'describe', viewId, slot: slot as 'title', record: (record ?? null) as null, cause };
+    }
     case 'navigate':
       if (viewId === undefined) return { error: 'navigate needs a viewId' };
       return { verb: 'navigate', viewId, field, value: str('value'), cause };

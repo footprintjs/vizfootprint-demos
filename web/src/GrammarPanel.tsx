@@ -148,6 +148,27 @@ export function GrammarPanel(props: {
           <LinkMatrix graph={links} labels={labels} readOnly={readOnly} onChange={onLink} />
         </div>
       ) : null}
+      {views.some((v) => (v.prose ?? []).length > 0) ? (
+        <div style={{ marginTop: 10 }}>
+          <p style={{ margin: '0 0 4px' }}>
+            <b>Words (the prose plane)</b> — every title, caption and alt text is a record with an author; a caption whose basis no longer matches the screen is shown as stale, never hidden or rewritten; a derived line is written by the library from the chart's bindings, every read.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {views.flatMap((v) =>
+              (v.prose ?? []).map((p) => (
+                <li key={`${v.viewId}:${p.slot}`}>
+                  <b>{v.viewId}</b>.<code>{p.slot}</code> — {p.text}{' '}
+                  <span style={{ opacity: 0.6, fontSize: 11 }}>
+                    {p.status === 'stale' ? `stale (${p.changed.join(', ')} moved)` : p.status} · {p.author.kind}
+                    {p.author.by ? ` · ${p.author.by}` : ''}
+                    {p.author.model ? ` · ${p.author.model}` : ''}
+                  </span>
+                </li>
+              )),
+            )}
+          </ul>
+        </div>
+      ) : null}
       {rules !== undefined ? (
         <div style={{ marginTop: 10 }}>
           <p style={{ margin: '0 0 4px' }}>

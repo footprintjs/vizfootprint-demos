@@ -10,6 +10,7 @@
  * disease and both narrow to it — today through the library's implicit
  * crossfilter, named as such in the Grammar panel.
  */
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   CommitLog,
@@ -131,6 +132,28 @@ export function App(): JSX.Element {
   const fitsOf = (viewId: string) => state.views.find((v) => v.viewId === viewId)?.fits;
   // encoding links: render what each view SHOWS (followed channels laid over its own); edits still go to `encodings`
   const shown = state.effectiveEncodings ?? state.encodings;
+  // the prose plane: a view's words at the cursor, each with its author and whether it went stale — shown, never hidden
+  const proseOf = (viewId: string) => state.views.find((v) => v.viewId === viewId)?.prose ?? [];
+  const words = (viewId: string): ReactNode => {
+    const lines = proseOf(viewId);
+    if (lines.length === 0) return null;
+    return (
+      <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.45, whiteSpace: 'normal' }}>
+        {lines.map((p) => (
+          <div
+            key={p.slot}
+            style={{ color: p.status === 'stale' ? '#a8661a' : undefined, opacity: p.status === 'derived' ? 0.7 : 0.9 }}
+            title={p.status === 'stale' ? `stale — moved: ${p.changed.join(', ')}` : `${p.author.kind}${p.author.by ? ' · ' + p.author.by : ''}${p.author.model ? ' · ' + p.author.model : ''}`}
+          >
+            <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>{p.slot}</span> {p.text}
+            {p.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {p.changed.join(', ')} moved</span> : null}
+            {p.status === 'derived' ? <span style={{ fontSize: 11, opacity: 0.7 }}> derived</span> : null}
+            {p.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
+          </div>
+        ))}
+      </div>
+    );
+  };
   // Layer 4: the link graph decides what each clause does at each view — filter, highlight, navigate, mirror, or nothing
   const selFor = (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links);
   // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
@@ -329,7 +352,12 @@ export function App(): JSX.Element {
           id: 'map',
           weight: 4,
           ...clearable('map'),
-          caption: `${pickedDisease} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`,
+          caption: (
+            <>
+              {`${pickedDisease} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`}
+              {words('map')}
+            </>
+          ),
           render: ({ width, height }) =>
             geo === null ? (
               <div role="status" style={{ padding: 12, opacity: 0.7 }}>
@@ -343,7 +371,12 @@ export function App(): JSX.Element {
           id: 'weeks',
           weight: 3,
           ...clearable('weeks'),
-          caption: `Reported cases per ${grain?.bucket ?? 'week'}, summed over kept ${sumKind}s · ${grain?.note ?? ''}`,
+          caption: (
+            <>
+              {`Reported cases per ${grain?.bucket ?? 'week'}, summed over kept ${sumKind}s · ${grain?.note ?? ''}`}
+              {words('weeks')}
+            </>
+          ),
           render: ({ width, height }) => (
             <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, 'brush weeks')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
