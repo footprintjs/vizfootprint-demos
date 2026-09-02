@@ -397,7 +397,18 @@ export function App(): JSX.Element {
           title: 'Grammar',
           icon: '✍',
           badge: rows?.grammar.verbs.length ?? 0,
-          content: <GrammarPanel grammar={rows?.grammar ?? null} views={state.views} encodings={state.encodings} columns={columns} links={state.links} labels={viewLabels} />,
+          content: (
+            <GrammarPanel
+              grammar={rows?.grammar ?? null}
+              views={state.views}
+              encodings={state.encodings}
+              columns={columns}
+              links={state.links}
+              labels={viewLabels}
+              readOnly={readOnly}
+              onLink={(edge) => void view.link(edge, `${viewLabels[edge.source] ?? edge.source} ${edge.kind} → ${viewLabels[edge.target] ?? edge.target}: ${edge.response ?? 'back to the rule'}`)}
+            />
+          ),
         },
         {
           id: 'silences',

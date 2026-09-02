@@ -10,7 +10,7 @@
  *
  * The same data the agent reads through `whats_here` — one grammar, two readers.
  */
-import type { ColumnView, LinkGraphView, ViewView } from 'vizfootprint-ui';
+import type { ColumnView, LinkEdit, LinkGraphView, ViewView } from 'vizfootprint-ui';
 import { LinkMatrix } from 'vizfootprint-ui/links';
 
 export interface GrammarWire {
@@ -30,6 +30,7 @@ const GESTURE: Record<string, string> = {
   analyze: 'ask the analyst — it runs a declared analysis',
   annotate: 'no gesture in this build (a declared verb, unwired here)',
   navigate: 'switch the layout (Flow / Grid / Focus)',
+  link: 'change a cell in the matrix below — what one view does with another\'s pick — a commit like any act',
 };
 
 /** What a view's selection drives — read off the wiring word, never hand-written per view. */
@@ -46,8 +47,12 @@ export function GrammarPanel(props: {
   /** Layer 4: the link graph at the cursor — rendered as the matrix; absent on an older server. */
   readonly links?: LinkGraphView;
   readonly labels?: Readonly<Record<string, string>>;
+  /** Present mode: the matrix reads, never edits. */
+  readonly readOnly?: boolean;
+  /** Layer 4: an edit in the matrix — the host lands it as a `link` commit. */
+  readonly onLink?: (edge: LinkEdit) => void;
 }): JSX.Element {
-  const { grammar, views, encodings, columns, links, labels } = props;
+  const { grammar, views, encodings, columns, links, labels, readOnly, onLink } = props;
   if (grammar === null) return <div style={{ opacity: 0.7 }}>the grammar has not arrived yet</div>;
   const declared = new Map(grammar.encodings.map((e) => [e.viewId, e]));
   const absence = columns.find((c) => c.absence !== undefined);
@@ -117,9 +122,9 @@ export function GrammarPanel(props: {
       {links ? (
         <div style={{ marginTop: 10 }}>
           <p style={{ margin: '0 0 6px' }}>
-            <b>The links, as declared</b> — rows are a source view and what it emits, columns are targets, a cell is what the target does with it. The default rule is written out; a declared edge is what someone chose; <i>none</i> is off on purpose; a blank cell would be silence.
+            <b>The links, as declared — and editable</b> — rows are a source view and what it emits, columns are targets, a cell is what the target does with it. The default rule is written out; a declared edge is what someone chose; an edit made here is a commit like any act (undo it from the log); <i>none</i> is off on purpose; a blank cell would be silence.
           </p>
-          <LinkMatrix graph={links} labels={labels} readOnly />
+          <LinkMatrix graph={links} labels={labels} readOnly={readOnly} onChange={onLink} />
         </div>
       ) : null}
       {absence ? (

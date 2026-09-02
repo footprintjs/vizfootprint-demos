@@ -68,6 +68,16 @@ clauses (the host sums, the chart draws), and four report chips:
 Every act lands as a commit; ⚑ names the position as a story beat; acting
 while viewing the past forks a branch.
 
+The links between views are data too. `src/nndss/def.ts` declares four
+edges over the default rule (every view filters every other): the map
+lights the disease bar instead of narrowing it, a week brush moves the
+trend's window instead of filtering it, the map mirrors its state into the
+table, and a table row never reaches the bar. The Grammar panel shows the
+whole graph as a matrix — rows are a source view and what it emits, columns
+are targets, a cell is the response — and you can edit any cell there.
+Every edit is a `link` commit like any act, so undo, time travel and the
+analyst all see it; "back to the rule" un-declares an edit.
+
 Selection gestures (the library's SET-1 grammar): click a mark to select
 it, click it again to clear; shift-click adds a mark to the view's set;
 drag across bars selects the run between them; the chips under the time

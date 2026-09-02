@@ -145,6 +145,18 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
       if (viewId === undefined || channel === undefined || field === undefined) return { error: 'reencode needs viewId, channel, and field' };
       return { verb: 'reencode', viewId, channel, field, cause };
     }
+    case 'link': {
+      // layer 4: one edge, as the matrix hands it over — response null = back to the def's rule
+      const source = str('source');
+      const target = str('target');
+      const kind = str('kind');
+      const response = body['response'];
+      if (source === undefined || target === undefined || kind === undefined) return { error: 'link needs source, kind, and target' };
+      if (!['point', 'interval', 'cell', 'match'].includes(kind)) return { error: 'link.kind must be point | interval | cell | match' };
+      if (response !== null && !['filter', 'highlight', 'navigate', 'mirror', 'none'].includes(String(response))) return { error: 'link.response must be filter | highlight | navigate | mirror | none, or null' };
+      const mapping = Array.isArray(body['mapping']) ? (body['mapping'] as readonly { from: string; to: string }[]) : undefined;
+      return { verb: 'link', source, kind: kind as 'point' | 'interval' | 'cell' | 'match', target, response: response as 'filter' | 'highlight' | 'navigate' | 'mirror' | 'none' | null, ...(mapping !== undefined ? { mapping } : {}), cause };
+    }
     case 'navigate':
       if (viewId === undefined) return { error: 'navigate needs a viewId' };
       return { verb: 'navigate', viewId, field, value: str('value'), cause };
