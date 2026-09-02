@@ -176,9 +176,9 @@ export function loadSnapshot(path = new URL('../../data/nndss/snapshot.csv', imp
 }
 
 /** The snapshot through the library's source layer: a declared `{ format: 'csv', via: 'file', at }`, read by the file carrier, with the provenance it vouches for. */
-export async function loadSnapshotAsync(path = new URL('../../data/nndss/snapshot.csv', import.meta.url)): Promise<{ readonly tables: NndssTables; readonly source: { readonly version: string; readonly retrievedAt: string; readonly rows: number } }> {
+export async function loadSnapshotAsync(path = new URL('../../data/nndss/snapshot.csv', import.meta.url)): Promise<{ readonly tables: NndssTables; readonly source: { readonly format: 'csv'; readonly via: 'file'; readonly at: string; readonly version: string; readonly retrievedAt: string; readonly rows: number } }> {
   const handle = await openSource({ format: 'csv', via: 'file', at: path.href }, 'cells', [fileSource]);
   const snap = await handle.snapshot();
   await handle.close();
-  return { tables: nndssTablesFromRows(snap.rows), source: { version: snap.version, retrievedAt: snap.retrievedAt, rows: snap.rows.length } };
+  return { tables: nndssTablesFromRows(snap.rows), source: { format: 'csv', via: 'file', at: path.href, version: snap.version, retrievedAt: snap.retrievedAt, rows: snap.rows.length } };
 }

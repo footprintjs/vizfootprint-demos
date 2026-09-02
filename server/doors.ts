@@ -146,6 +146,8 @@ export interface Desk {
   readonly mode: 'mock' | 'live';
   /** The acts of the turn in flight — ONE array for the desk's life, mutated in place (the analyst's closure holds it). */
   readonly activity: ActivityStep[];
+  /** Provenance of the tables the desk was built from — what the snapshot's carrier vouched for (the def declares the ETL'd tables inline, so the overview's own `sources` is empty). */
+  readonly provenance: Readonly<Record<string, { readonly format: string; readonly via: string; readonly at?: string; readonly version: string; readonly retrievedAt: string; readonly rows: number }>>;
   turnActive: boolean;
   transcript: TranscriptLine[];
 }
@@ -159,13 +161,13 @@ export const SUGGESTIONS = [
 
 const hasKey = (): boolean => (process.env['ANTHROPIC_API_KEY'] ?? '') !== '';
 
-export function createDesk(tables?: NndssTables, activity: ActivityStep[] = []): Desk {
+export function createDesk(tables?: NndssTables, activity: ActivityStep[] = [], provenance: Desk['provenance'] = {}): Desk {
   const surface = buildNndssSurface(tables);
   const analyst = createNndssAnalyst(surface.port, {
     provider: hasKey() ? liveProvider(process.env['ANTHROPIC_API_KEY']!) : scriptedNndssMock(),
     onActivity: (step) => activity.push(step),
   });
-  return { surface, proposals: [], analyst, mode: hasKey() ? 'live' : 'mock', activity, turnActive: false, transcript: [] };
+  return { surface, proposals: [], analyst, mode: hasKey() ? 'live' : 'mock', activity, turnActive: false, transcript: [], provenance };
 }
 
 /** What the Analyst panel renders. */
@@ -320,8 +322,7 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
 /** The cockpit's polled state — vizfootprint-ui's documented `/api/state` shape. */
 async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
   const { session, tables } = desk.surface;
-  const overview = await session.overview();
-  const selected = await session.selectedRows();
+  const overview = await session.overview(); // one walk per poll: the overview already counted the selection through the engine
   return {
     records: session.log.records,
     fdr: overview.fdr,
@@ -330,7 +331,9 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     clearedSelections: overview.clearedSelections,
     views: overview.views,
     gaps: session.gaps(),
-    selectedCount: selected.length,
+    selectedCount: overview.selectedRowCount, // null when the engine could not answer — never a fake 0
+    // the def declares its ETL'd tables inline, so the library's own provenance is empty here; the snapshot's is what the desk was built from
+    sources: Object.keys(overview.sources).length > 0 ? overview.sources : desk.provenance,
     totalRows: tables.cells.length,
     defaultTable: overview.defaultTable,
     columns: overview.columns,

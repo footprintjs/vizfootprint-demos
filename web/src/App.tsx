@@ -96,7 +96,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 function useView() {
-  const view = useMemo(() => createSessionView(pollingSource({ intervalMs: 1000 }), { as: 'user' }), []);
+  const view = useMemo(() => createSessionView(pollingSource({ intervalMs: 1000 }), { as: 'user', defaultLayout: 'grid' }), []);
   useEffect(() => () => view.dispose(), [view]);
   return view;
 }
@@ -394,6 +394,16 @@ export function App(): JSX.Element {
             }}
           />
           <SavedSelections saved={state.saved ?? []} selections={state.selections} labels={viewLabels} readOnly={readOnly} onApply={(c) => void view.bringOver(c)} />
+          {state.sources && Object.keys(state.sources).length > 0 ? (
+            <div style={{ fontSize: 11.5, opacity: 0.65, marginTop: 4 }} data-vzf="provenance">
+              {Object.entries(state.sources).map(([table, src]) => (
+                <span key={table} style={{ marginRight: 12 }}>
+                  data <b>{table}</b>: {src.rows.toLocaleString()} rows via {src.via}
+                  {src.at ? ` (${src.at.split('/').pop() ?? src.at})` : ''} · {src.version} · read {new Date(src.retrievedAt).toLocaleString()}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       }
       toast={problem === null ? null : <div role="alert" style={{ padding: 10, fontSize: 13 }}>⚠ {problem}</div>}
