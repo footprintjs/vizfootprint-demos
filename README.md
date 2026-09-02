@@ -148,4 +148,6 @@ A swap of two axes is one act: `reencode` with `bindings` lands **one commit**, 
 
 **The prose plane.** The map and the weekly line carry their words as records: a title, a short alt that identifies the chart, a long visible description in the CDC's wording, and (on the line) a how-to-read slot the library derives from the chart's bindings every read. The analyst can caption a chart with `describe`, but only with a basis and never with a cause; a caption whose basis no longer matches the screen is shown as stale, naming what moved, never hidden or rewritten.
 
-What the demo does not show yet: coercion (the def says `refuse`), and the words edited in place on the chart.
+**The editor.** The "✎ Edit a chart" button opens a side drawer (never a modal, so the charts stay in view): pick a chart and edit its words, its channels and its links. Each edit is an act that lands as a commit — the same `describe`, `reencode` and `link` the analyst uses — so undo and time travel carry it, and a refused edit shows the session's own sentence. The drawer is `vizfootprint-ui/editor`, its own entry point.
+
+What the demo does not show yet: coercion (the def says `refuse`).

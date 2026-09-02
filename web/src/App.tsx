@@ -34,6 +34,7 @@ import 'vizfootprint-ui/styles.css';
 import { AnalystPanel } from './AnalystPanel.js';
 import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
 import { JumpBox } from './JumpBox.js';
+import { ChartEditor } from 'vizfootprint-ui/editor';
 
 interface CellRow {
   readonly jurisdiction: string;
@@ -106,6 +107,8 @@ export function App(): JSX.Element {
   const [problem, setProblem] = useState<string | null>(null);
   const [mode, setMode] = useState<'explore' | 'present'>('explore');
   const [analystTurns, setAnalystTurns] = useState(0);
+  // the in-place editor: a side drawer (never a modal) so a change is seen happening on the charts
+  const [editing, setEditing] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -286,8 +289,40 @@ export function App(): JSX.Element {
   const grain = rows?.grain;
 
   return (
+    <>
     <VizCockpit
       readOnly={readOnly}
+      aside={{
+        open: editing !== null,
+        title: `Edit ${editing !== null ? (viewLabels[editing] ?? editing) : ''}`,
+        onClose: () => setEditing(null),
+        children: (
+          <>
+      <label style={{ display: 'block', fontSize: 12.5, marginBottom: 10 }}>
+        Chart{' '}
+        <select value={editing ?? ''} onChange={(e) => setEditing(e.target.value)} style={{ font: 'inherit', fontSize: 13 }}>
+          {state.views.filter((v) => v.viewId !== 'analyst').map((v) => (
+            <option key={v.viewId} value={v.viewId}>
+              {viewLabels[v.viewId] ?? v.viewId}
+            </option>
+          ))}
+        </select>
+      </label>
+      {editing !== null && state.views.some((v) => v.viewId === editing) ? (
+        <ChartEditor
+          view={state.views.find((v) => v.viewId === editing)!}
+          links={state.links}
+          labels={viewLabels}
+          by="you"
+          readOnly={readOnly}
+          onDescribe={(id, slot, record) => void view.describe(id, slot, record)}
+          onReencode={(id, ch, field) => void view.reencode(id, ch, field)}
+          onLink={(edge) => void view.link(edge, `${viewLabels[edge.source] ?? edge.source} ${edge.kind} → ${viewLabels[edge.target] ?? edge.target}: ${edge.response ?? 'back'}`)}
+        />
+      ) : null}
+          </>
+        ),
+      }}
       layout={state.layout}
       onLayoutChange={(change) => void view.setLayout(change)}
       top={
@@ -519,5 +554,15 @@ export function App(): JSX.Element {
         },
       ]}
     />
+    <button
+      type="button"
+      onClick={() => setEditing((e) => (e === null ? (state.views.find((v) => v.viewId === 'weeks')?.viewId ?? state.views[0]?.viewId ?? null) : null))}
+      style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 31, font: 'inherit', fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }}
+      aria-label={editing === null ? 'Edit a chart' : 'Close the editor'}
+    >
+      {editing === null ? '✎ Edit a chart' : '✕ Close the editor'}
+    </button>
+
+    </>
   );
 }
