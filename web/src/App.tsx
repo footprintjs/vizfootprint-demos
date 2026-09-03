@@ -269,7 +269,7 @@ export function App(): JSX.Element {
             title={p.status === 'stale' ? `stale — moved: ${p.changed.join(', ')}` : `${p.author.kind}${p.author.by ? ' · ' + p.author.by : ''}${p.author.model ? ' · ' + p.author.model : ''}`}
           >
             <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>{p.slot}</span>{' '}
-            <ProseText text={p.text} refs={p.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBookmark={seekBookmark} />
+            <ProseText text={p.text} refs={p.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBookmark={seekBookmark} onSaved={applyPicture} />
             {p.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {p.changed.join(', ')} moved</span> : null}
             {p.status === 'derived' ? <span style={{ fontSize: 11, opacity: 0.7 }}> derived</span> : null}
             {p.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
@@ -305,6 +305,27 @@ export function App(): JSX.Element {
   // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
   const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== undefined).map((s) => s.viewId)), [state.selections]); // null is a live IS-NULL point
   const viewLabels = useMemo(() => Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId])), [state.views]);
+  // SAVED PICTURES — saved LOGIC, so both doors go through the library's store,
+  // never through a commit. Naming lands nothing; applying lands one ordinary
+  // commit per condition, and is JUDGED FIRST: a picture that could land nothing
+  // clears nothing and says why. Both answers are shown — a refusal is the whole
+  // point of judging first, and a partial apply must not read as a clean one.
+  const savePicture = (name: string, what?: { readonly viewId: string }): void => {
+    void view
+      .saveSelection(name, what ?? { live: 'all' })
+      .then((r) => setProblem(r.ok ? null : r.sentence))
+      .catch((e: unknown) => setProblem(`the picture was not saved: ${e instanceof Error ? e.message : String(e)}`));
+  };
+  const applyPicture = (savedId: string): void => {
+    void view
+      .applySaved(savedId)
+      .then((r) => {
+        if (!r.ok) return setProblem(r.sentence); // a saved picture that cannot land HERE says so, and nothing moved
+        // it landed — but honestly: a condition that could not come with it is named too
+        setProblem(r.refused.length === 0 ? null : `"${r.name}" came back without ${r.refused.map((c) => `${viewLabels[c.viewId] ?? c.viewId} (${c.rejected})`).join('; ')}`);
+      })
+      .catch((e: unknown) => setProblem(`the picture was not applied: ${e instanceof Error ? e.message : String(e)}`));
+  };
   const clearable = (id: string) => ({ active: liveViews.has(id), onClear: () => void view.clear(id, `clear ${viewLabels[id] ?? id}`) });
 
   /**
@@ -507,7 +528,7 @@ export function App(): JSX.Element {
         {dashCaption !== undefined ? (
           <span style={{ color: dashCaption.status === 'stale' ? '#a8661a' : undefined, opacity: 0.9 }} title={`${dashCaption.author.kind}${dashCaption.author.by ? ' · ' + dashCaption.author.by : ''}${dashCaption.author.model ? ' · ' + dashCaption.author.model : ''}`}>
             <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>summary</span>{' '}
-            <ProseText text={dashCaption.text} refs={dashCaption.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBookmark={seekBookmark} />
+            <ProseText text={dashCaption.text} refs={dashCaption.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBookmark={seekBookmark} onSaved={applyPicture} />
             {dashCaption.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {dashCaption.changed.join(', ')} moved</span> : null}
             {dashCaption.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
           </span>
@@ -600,7 +621,7 @@ export function App(): JSX.Element {
       .then((r) => { if (!r.ok) setProblem(r.sentence); }) // a refused note (a ref to a commit off this path, say) is said out loud, never dropped
       .catch((e: unknown) => setProblem(`the note did not land: ${e instanceof Error ? e.message : String(e)}`));
   };
-  const noteProps = { world: noteWorld, linkables: noteLinks, by: 'you', readOnly, onDescribe: describeNote, onSeek: (id: string) => void view.seek(id), onBookmark: seekBookmark, describeCommit };
+  const noteProps = { world: noteWorld, linkables: noteLinks, by: 'you', readOnly, onDescribe: describeNote, onSeek: (id: string) => void view.seek(id), onBookmark: seekBookmark, onSaved: applyPicture, describeCommit };
   const savedNoteIds = new Set((state.notes ?? []).map((n) => n.id));
   const noteCells = [
     ...(state.notes ?? []).map((n) => ({ id: `note:${n.id}`, render: () => <NoteCell note={n} {...noteProps} /> })),
@@ -624,8 +645,6 @@ export function App(): JSX.Element {
     })),
   ];
   // the cockpit menu: the host's acts, in the host's words — the two floating buttons that overlapped the report chips live here now
-  // the selection to save: the one the cursor stands on, else the last live one (the wire promises no recency order)
-  const liveSelection = state.selections.find((sel) => sel.commitId === state.cursor) ?? state.selections[state.selections.length - 1];
   // START FRESH: the reset door builds a new desk over the SAME tables — the
   // data stays exactly where it was, the commit log is emptied. Asked first,
   // because a cleared log cannot be walked back to.
@@ -644,7 +663,8 @@ export function App(): JSX.Element {
   const menuItems = [
     { id: 'analyst', label: `Analyst${analystTurns > 0 ? ` (${analystTurns})` : ''}`, icon: '🧭', onSelect: () => { setAsideTab('analyst'); setAsideOpen(true); } },
     { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
-    { id: 'save', label: 'Save selection', icon: '💾', disabled: liveSelection?.commitId === undefined || readOnly, hint: liveSelection === undefined ? 'nothing is selected' : `keep the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection by name`, onSelect: () => { const id = liveSelection?.commitId; if (liveSelection === undefined || id === undefined) return; const name = window.prompt(`Save the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection as…`); if (name) void view.saveSelection(id, name); } },
+    // the WHOLE picture, every live clause of it — a saved selection is one condition per view, not one view's clause
+    { id: 'save', label: 'Save selection', icon: '💾', disabled: state.selections.length === 0 || readOnly, hint: state.selections.length === 0 ? 'nothing is selected' : `keep all ${String(state.selections.length)} live selections as one named picture`, onSelect: () => { const name = window.prompt('Save everything selected as…'); if (name?.trim()) savePicture(name.trim()); } },
     { id: 'paths', label: `Paths${state.paths.list.length > 1 ? ` (${String(state.paths.list.length)})` : ''}`, icon: '⎇', hint: 'every line of work on this desk — switch back to any of them', onSelect: () => setPathsOpen(true) },
     // the bookmarks are the slides, and a bookmark is only a slide on ITS OWN path:
     // "name a bookmark first" is a lie when you have named three and walked
@@ -757,10 +777,10 @@ export function App(): JSX.Element {
             onSetPolarity={(id, exclude) => void view.setPolarity(id, exclude, `${exclude ? 'exclude' : 'keep'} the ${viewLabels[id] ?? id} selection`)}
             onSave={(id) => {
               const name = window.prompt(`Save the ${viewLabels[id] ?? id} selection as…`);
-              if (name && name.trim()) void view.saveSelection(id, name.trim());
+              if (name && name.trim()) savePicture(name.trim(), { viewId: id });
             }}
           />
-          <SavedSelections saved={state.saved ?? []} selections={state.selections} labels={viewLabels} readOnly={readOnly} onApply={(c) => void view.bringOver(c)} />
+          <SavedSelections saved={state.saved} selections={state.selections} labels={viewLabels} readOnly={readOnly} onApply={applyPicture} />
         </div>
       }
       toast={

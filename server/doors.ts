@@ -10,6 +10,8 @@
  *   GET  /api/proposals    what beat 1 already did here (survives a reload)
  *   POST /api/dispatch     a human gesture → a user-badged commit
  *   POST /api/seek | bookmark | paths | compare | bring-over | undo
+ *   POST /api/saved       name / rename / apply a SAVED PICTURE (the store's own
+ *                         doors — naming lands no commit, applying lands several)
  *   POST /api/proposals    beat 1 — six scripted proposals; the ledger rules
  *   POST /api/reset        a fresh surface (a session is cheap)
  *   GET  /api/geo          US state boundaries (Census-derived, pre-projected) for the map view
@@ -550,6 +552,10 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 const userCause = (intent: string) => ({ requestedBy: 'user', computedBy: 'user', intent }) as const;
+/** A person's cause with NO intent of ours — for an act the session names itself (an apply stamps "applied saved selection <name>"). */
+const plainUserCause = () => ({ requestedBy: 'user', computedBy: 'user' }) as const;
+/** A JSON object off the wire (never an array, never null). */
+const isObject = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
 /** The def's declared dashboard words (title, caption) as plain text — what a story falls back to before any describe. */
 function declaredDashboardWords(): { readonly title: string; readonly caption: string } {
@@ -698,6 +704,8 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     head: overview.time.head,
     branches: session.branches().map((b) => ({ tip: b.tip, length: b.length, actor: b.actor, active: b.active })),
     bookmarks: session.bookmarkViews().map((c) => ({ id: c.id, label: c.label, commitId: c.commitId, at: c.at, ts: c.ts })), // the tag's id travels: a note links a tag by id, never by its name
+    saved: overview.saved, // the saved PICTURES, whole: their own ids, their conditions, who saved them and when — the cockpit projects this list and derives nothing
+
     cursorTests: overview.time.cursorTests,
     viewingPast: overview.time.viewingPast,
     paths: { ...overview.paths, archivedList: session.paths({ includeArchived: true }) },
@@ -710,6 +718,39 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     // encoding links: what each view shows under the graph (views[] carry the per-view `effective` block)
     effectiveEncodings: overview.effectiveEncodings,
   };
+}
+
+/**
+ * The saved-picture door (`POST /api/saved`) — naming, renaming and applying,
+ * each answered with the SESSION'S OWN result, verbatim.
+ *
+ * None of these is a dispatch verb, and that is the point: naming a picture
+ * lands NO commit (it is a record beside the log), and applying one lands
+ * SEVERAL under a single cause. Routing either through `/api/dispatch` would put
+ * the act on the trace under another act's name.
+ */
+export async function savedAction(desk: Desk, body: Record<string, unknown>): Promise<unknown> {
+  const { session } = desk.surface;
+  const name = typeof body['name'] === 'string' ? body['name'] : '';
+  switch (body['action']) {
+    case 'save': {
+      const source = body['source'];
+      if (!isObject(source)) return { ok: false, rejected: 'saving a picture needs a source: { live: "all" }, { viewId } or { conditions }' };
+      return session.saveSelection(name, source as Parameters<typeof session.saveSelection>[1], 'user');
+    }
+    case 'rename': {
+      const from = typeof body['from'] === 'string' ? body['from'] : '';
+      const to = typeof body['to'] === 'string' ? body['to'] : '';
+      return session.renameSaved(from, to, 'user');
+    }
+    case 'apply': {
+      const mode = body['mode'] === 'layer' ? 'layer' : 'replace';
+      // no intent of our own: the session stamps "applied saved selection <name>" on every commit of the batch
+      return session.applySaved(name, plainUserCause(), { mode, as: 'user' });
+    }
+    default:
+      return { ok: false, rejected: `no saved-selection action "${String(body['action'])}" — save, rename or apply` };
+  }
 }
 
 async function pathsAction(desk: Desk, body: Record<string, unknown>): Promise<unknown> {
@@ -817,6 +858,8 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         return sendJson(res, 200, await session.dispatch({ verb: 'bookmark', label: String(body['label'] ?? ''), cause: userCause('name this position') }, { as: 'user' })), true;
       case 'paths':
         return sendJson(res, 200, await pathsAction(desk, body)), true;
+      case 'saved':
+        return sendJson(res, 200, await savedAction(desk, body)), true;
       case 'compare':
         return sendJson(res, 200, await session.compare(String(body['a'] ?? ''), String(body['b'] ?? ''))), true;
       case 'bring-over':
