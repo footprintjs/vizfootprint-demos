@@ -151,6 +151,15 @@ const geoJson = (): Promise<{ text: string; version: string }> => {
 };
 const MAX_BODY_BYTES = 64 * 1024;
 
+/** A span of an analyst reply tied to the record: a COMMIT to seek, or a BEAT (a tag) to go to. Resolved against the log, never invented. */
+export interface TranscriptRef {
+  readonly span: readonly [number, number];
+  readonly commit?: string;
+  /** A tag by its ID (`t1`, …) — how a checkpoint is cited, since it lands no commit of its own. */
+  readonly beat?: string;
+  readonly label?: string;
+}
+
 /** One line of the analyst conversation; an analyst line carries the acts it took. */
 export interface TranscriptLine {
   readonly role: 'user' | 'analyst' | 'error';
@@ -158,8 +167,10 @@ export interface TranscriptLine {
   readonly activity?: readonly ActivityStep[];
   /** A user line: the "on screen now" block that rode with the message (from the record). */
   readonly context?: string;
-  /** An analyst line: spans of the text tied to a commit — resolved against the log, never invented. */
-  readonly refs?: readonly { readonly span: readonly [number, number]; readonly commit: string; readonly label?: string }[];
+  /** An analyst line: the words that link, and where they link to. */
+  readonly refs?: readonly TranscriptRef[];
+  /** An analyst line: what was lost reading the reply — shown quietly under it, never in silence. */
+  readonly note?: string;
 }
 
 /** What is on screen now, FROM THE RECORD (never the browser): a bounded block the analyst reads as context. */
@@ -183,51 +194,289 @@ async function onScreenNow(session: InteractionSession): Promise<string> {
   return lines.join('\n').slice(0, 2000);
 }
 
-/** The analyst's reply parsed: JSON {text, refs} when it managed one, plain text otherwise; refs resolved against the log and this turn's acts, else dropped. */
-function parseReply(raw: string, session: InteractionSession, activity: readonly ActivityStep[]): { readonly text: string; readonly refs: TranscriptLine['refs'] } {
-  let parsed: { text?: unknown; refs?: unknown } | null = null;
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('{')) {
-    try {
-      parsed = JSON.parse(trimmed) as { text?: unknown; refs?: unknown };
-    } catch {
-      parsed = null;
-    }
-  }
-  if (parsed === null || typeof parsed.text !== 'string') return { text: raw, refs: [] };
-  const text = parsed.text;
-  const known = new Set(session.log.records.map((r) => r.id));
-  const refs: { span: readonly [number, number]; commit: string; label?: string }[] = [];
-  for (const r of Array.isArray(parsed.refs) ? parsed.refs : []) {
-    const x = r as { quote?: unknown; commit?: unknown; act?: unknown } | null;
-    if (x === null || typeof x !== 'object' || typeof x.quote !== 'string' || x.quote.length === 0) continue;
-    const quote: string = x.quote;
-    const start = text.indexOf(quote);
-    if (start < 0) continue;
-    let commit: string | undefined;
-    if (typeof x.commit === 'string' && known.has(x.commit)) commit = x.commit;
-    else if (typeof x.act === 'number' && Number.isInteger(x.act)) {
-      const step = activity[x.act - 1];
-      const result = step?.result as { ok?: boolean; commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } } } | undefined;
-      const id = result?.ok === true ? (typeof result.commit?.id === 'string' ? result.commit.id : typeof result.analysis?.commit?.id === 'string' ? result.analysis.commit.id : undefined) : undefined;
-      if (id !== undefined && known.has(id)) commit = id;
-    }
-    if (commit === undefined) continue;
-    if (refs.some((have) => start < have.span[1] && start + quote.length > have.span[0])) continue; // overlaps a ref already kept
-    refs.push({ span: [start, start + quote.length], commit, ...(step_label(activity, commit) !== undefined ? { label: step_label(activity, commit) } : {}) });
-  }
-  return { text, refs };
+/** What a reply turned out to be carrying, once the machinery was found. */
+type Reading =
+  | { readonly kind: 'words' }
+  | { readonly kind: 'envelope'; readonly value: EnvelopeValue; readonly prose: string; readonly envelopes: number; readonly strays: readonly string[] }
+  | { readonly kind: 'unreadable'; readonly source: string; readonly prose: string; readonly closed: boolean };
+
+/** The object the analyst was asked for, before anything in it is believed. */
+interface EnvelopeValue {
+  readonly text?: unknown;
+  readonly refs?: unknown;
 }
 
-/** Words for a ref's anchor: the act's framing when the commit came from this turn. */
-function step_label(activity: readonly ActivityStep[], commit: string): string | undefined {
+/** A fenced block whose fence OPENS and CLOSES at the start of a line — so a stray ``` inside the envelope's own words cannot close it early. */
+const FENCE = /^[ \t]*```[ \t]*[A-Za-z]*[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```[ \t]*$/gm;
+/** A line that is nothing but a fence marker: machinery, wherever it was left behind. A line with words on it is never touched. */
+const ORPHAN_FENCE = /^[ \t]*```[ \t]*[A-Za-z]*[ \t]*$/gm;
+/** The envelope's own keys — and the ONLY keys it may carry (see `isEnvelope`). */
+const ENVELOPE_KEYS: readonly string[] = ['text', 'refs'];
+/** How far into an object we look for its name. An envelope says what it is in its first characters, and a bounded look keeps a long reply linear. */
+const HEAD = 200;
+/** Shown when the machinery was all that arrived and nothing readable came with it. */
+const CUT_OFF = "(the analyst's reply was cut off before any words arrived)";
+/** Shown when there are no words to show: an empty reply, or an envelope that carried none. */
+const NO_WORDS = '(the analyst replied with no words)';
+
+/** The words with the machinery taken out: leftover fence lines go, and the gap they leave does not become a hole. */
+function tidy(prose: string): string {
+  return prose.replace(ORPHAN_FENCE, '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * How well does this parsed value fit the envelope?
+ *
+ *   exact — the envelope's own keys and NOTHING else.
+ *   loose — words and links of the right TYPE, beside keys we do not know.
+ *
+ * The distinction is PREFERENCE, not a gate (`readReply` takes the last exact
+ * one, and only falls back to a loose one). Both cases then come out right for
+ * the same reason rather than by luck: this product's prose records are objects
+ * with a `text` of their own, so a chart caption quoted in the words is never
+ * exact and never beats the real reply — while a model that adds a field of its
+ * own is still read, and the person is told what was ignored.
+ */
+function envelopeShape(value: unknown): 'exact' | 'loose' | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const keys = Object.keys(value);
+  if (keys.length > 0 && keys.every((key) => ENVELOPE_KEYS.includes(key))) return 'exact';
+  const held = value as { text?: unknown; refs?: unknown };
+  return typeof held.text === 'string' && (held.refs === undefined || Array.isArray(held.refs)) ? 'loose' : undefined;
+}
+
+/** The keys of an envelope we do not know — what the note names, so nothing is ignored in silence. */
+function strayKeys(value: EnvelopeValue): readonly string[] {
+  return Object.keys(value).filter((key) => !ENVELOPE_KEYS.includes(key));
+}
+
+/** Does this offset begin its line? What tells a BLOCK of machinery from a brace inside a sentence — and a brace inside a sentence is words. */
+function startsLine(raw: string, at: number): boolean {
+  for (let i = at - 1; i >= 0; i -= 1) {
+    const ch = raw[i];
+    if (ch === '\n') return true;
+    if (ch !== ' ' && ch !== '\t' && ch !== '\r') return false;
+  }
+  return true;
+}
+
+/** Does the object opening here name itself as the envelope? Only its first characters are read, so a long reply stays linear. */
+function looksLikeEnvelope(raw: string, from: number): boolean {
+  const head = raw.slice(from, from + HEAD);
+  return ENVELOPE_KEYS.some((key) => head.includes(`"${key}"`));
+}
+
+/**
+ * Every `{…}` in the reply, in ONE left-to-right pass: where each opened, and
+ * where it closed (`end` -1 = it never did). Strings and their escapes are
+ * counted, so a brace inside a quoted value is just a character. One pass, so a
+ * reply full of unclosed braces costs what its length costs and no more.
+ */
+function objects(raw: string): readonly { readonly start: number; readonly end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  const open: number[] = [];
+  let inString = false;
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (inString) {
+      if (ch === '\\') i += 1;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === '{') {
+      open.push(out.length);
+      out.push({ start: i, end: -1 });
+    } else if (ch === '}') {
+      const k = open.pop();
+      if (k !== undefined) out[k]!.end = i + 1;
+    }
+  }
+  return out;
+}
+
+/** One place the reply could be carrying its envelope. */
+interface Candidate {
+  readonly json: string;
+  readonly start: number;
+  readonly end: number;
+  /** Fenced machinery is machinery wherever it sits; a bare object has to start its line to count as a block. */
+  readonly fenced: boolean;
+}
+
+/**
+ * What the reply is carrying, wherever the model put it: a fenced block, a bare
+ * object, or the whole body. The LAST candidate that parses as an envelope wins,
+ * so a self-correction ("Actually: …") comes out right — and `envelopes` counts
+ * how many there were, because more than one is worth saying out loud. When
+ * nothing parses, the machinery is still named — `closed: false` for a reply cut
+ * off mid-object — so half-written JSON is never handed over in silence. An
+ * unreadable object INSIDE a sentence is left exactly where it is: words are
+ * never deleted to tidy up.
+ */
+export function readReply(raw: string): Reading {
+  const fences = [...raw.matchAll(FENCE)].map((m) => ({ start: m.index, end: m.index + m[0].length, json: (m[1] ?? '').trim() }));
+  const inFence = (at: number): boolean => fences.some((f) => at >= f.start && at < f.end);
+  const all = objects(raw);
+  const found: Candidate[] = [
+    ...fences.filter((f) => f.json.startsWith('{')).map((f) => ({ json: f.json, start: f.start, end: f.end, fenced: true })), // a fence around prose or code is not the envelope and is left where it is
+    ...all.filter((o) => o.end > 0 && !inFence(o.start)).map((o) => ({ json: raw.slice(o.start, o.end), start: o.start, end: o.end, fenced: false })),
+  ].sort((a, b) => a.start - b.start);
+
+  const held: Record<'exact' | 'loose', { value: EnvelopeValue; prose: string; seen: number } | null> = { exact: null, loose: null };
+  let broken: { readonly source: string; readonly prose: string } | null = null;
+  for (const c of found) {
+    const block = c.fenced || startsLine(raw, c.start);
+    let value: unknown;
+    try {
+      value = JSON.parse(c.json);
+    } catch {
+      // only a BLOCK that plainly meant to be the envelope counts as machinery — an object inside a sentence stays in the sentence
+      if (block && looksLikeEnvelope(raw, c.start)) broken = { source: c.json, prose: tidy(raw.slice(0, c.start) + raw.slice(c.end)) };
+      continue;
+    }
+    const shape = envelopeShape(value);
+    if (shape === undefined) continue;
+    if (shape === 'loose' && !block) continue; // a shape we cannot recognise on sight is trusted only where the model wrote a BLOCK, never mid-sentence
+    held[shape] = { value: value as EnvelopeValue, prose: tidy(raw.slice(0, c.start) + raw.slice(c.end)), seen: (held[shape]?.seen ?? 0) + 1 };
+  }
+  const chosen = held.exact ?? held.loose;
+  if (chosen !== null) return { kind: 'envelope', value: chosen.value, prose: chosen.prose, envelopes: chosen.seen, strays: strayKeys(chosen.value) };
+  const open = all.find((o) => o.end < 0 && !inFence(o.start) && startsLine(raw, o.start) && looksLikeEnvelope(raw, o.start));
+  if (open !== undefined) return { kind: 'unreadable', source: raw.slice(open.start), prose: tidy(raw.slice(0, open.start)), closed: false };
+  if (broken !== null) return { kind: 'unreadable', source: broken.source, prose: broken.prose, closed: true };
+  return { kind: 'words' };
+}
+
+/** The words of a `"text": "…"` that was begun and never finished — everything up to the closing quote, or to the end of what arrived. */
+function salvageText(source: string): string | undefined {
+  const m = /"text"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(source);
+  if (m === null) return undefined;
+  const body = m[1] ?? '';
+  let words: string;
+  try {
+    words = JSON.parse(`"${body}"`) as string; // the escapes as the model meant them
+  } catch {
+    words = body; // an escape or a control character cut in half — the characters as they arrived
+  }
+  return words.trim() === '' ? undefined : words;
+}
+
+/** What a ref may point at, as the record actually holds it: the commits in the log, and the tags beside it. */
+export interface KnownTargets {
+  readonly commits: ReadonlySet<string>;
+  readonly beats: ReadonlySet<string>;
+}
+
+/** Where one ref lands: a commit to seek, or a beat (a tag) to go to. */
+type RefTarget = { readonly commit: string; readonly beat?: undefined } | { readonly commit?: undefined; readonly beat: string };
+
+/** What an act left behind: the commit it landed, or the TAG it named — a checkpoint lands no commit, and is cited by its tag. */
+function landedBy(activity: readonly ActivityStep[], act: number): RefTarget | undefined {
+  const result = activity[act - 1]?.result as { ok?: boolean; commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; checkpoint?: { id?: unknown } } | undefined;
+  if (result?.ok !== true) return undefined;
+  if (typeof result.commit?.id === 'string') return { commit: result.commit.id };
+  if (typeof result.analysis?.commit?.id === 'string') return { commit: result.analysis.commit.id };
+  if (typeof result.checkpoint?.id === 'string') return { beat: result.checkpoint.id };
+  return undefined;
+}
+
+/** The one target a cited ref resolves to, or nothing — a commit the log does not hold and a tag nobody named resolve to nothing, and nothing is guessed. */
+function resolveTarget(cited: { readonly commit?: unknown; readonly beat?: unknown; readonly act?: unknown }, known: KnownTargets, activity: readonly ActivityStep[]): RefTarget | undefined {
+  if (typeof cited.commit === 'string' && known.commits.has(cited.commit)) return { commit: cited.commit };
+  if (typeof cited.beat === 'string' && known.beats.has(cited.beat)) return { beat: cited.beat };
+  if (typeof cited.act !== 'number' || !Number.isInteger(cited.act)) return undefined;
+  const landed = landedBy(activity, cited.act);
+  if (landed?.commit !== undefined && known.commits.has(landed.commit)) return landed;
+  if (landed?.beat !== undefined && known.beats.has(landed.beat)) return landed;
+  return undefined;
+}
+
+/** Words for a ref's anchor: the act's own framing when the target came from this turn. */
+function actLabel(activity: readonly ActivityStep[], target: RefTarget): string | undefined {
   const step = activity.find((st) => {
-    const r = st.result as { commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } } };
-    return r.commit?.id === commit || r.analysis?.commit?.id === commit;
+    const r = st.result as { commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; checkpoint?: { id?: unknown } };
+    return target.commit !== undefined ? r.commit?.id === target.commit || r.analysis?.commit?.id === target.commit : r.checkpoint?.id === target.beat;
   });
   if (step === undefined) return undefined;
   const args = step.args as { verb?: unknown; intent?: unknown; label?: unknown; analysisId?: unknown };
   return [step.tool, typeof args.verb === 'string' ? args.verb : undefined, typeof args.intent === 'string' ? args.intent : typeof args.label === 'string' ? args.label : typeof args.analysisId === 'string' ? args.analysisId : undefined].filter((w) => w !== undefined).join(' · ');
+}
+
+/** One sentence per way a citation was lost — the two are DIFFERENT facts and are said differently. */
+function droppedNote(offered: number, unverified: number, overlapped: number): string | undefined {
+  const said: string[] = [];
+  if (unverified > 0) said.push(`${String(unverified)} of ${String(offered)} links could not be verified and ${unverified === 1 ? 'was' : 'were'} dropped`);
+  if (overlapped > 0) said.push(`${String(overlapped)} of ${String(offered)} links repeated words already linked and ${overlapped === 1 ? 'was' : 'were'} dropped`);
+  return said.length > 0 ? said.join('; ') : undefined;
+}
+
+/** The reply as the person should read it, with the note the panel shows under it (and the door logs). */
+export interface ParsedReply {
+  readonly text: string;
+  readonly refs: readonly TranscriptRef[];
+  /** What was lost on the way, in plain words — a silent drop is never the answer. `undefined` = nothing to say. */
+  readonly note?: string;
+}
+
+/**
+ * The analyst's reply as the PERSON should read it. The envelope is found
+ * wherever it landed and its `text` is what is shown — the JSON itself never
+ * reaches the screen, whether the model wrote words before it, after it, or
+ * both. Prose beside an envelope that carries words is dropped (the model was
+ * told it would be); prose is what is shown when the envelope carried none.
+ * A reply cut off at the token ceiling keeps whatever words it managed and
+ * SAYS it was cut off.
+ *
+ * Refs are resolved against the commit log and this turn's acts: a quote that
+ * is not in the final text, a commit the log does not hold, a tag nobody named,
+ * and a quote that overlaps one already kept are DROPPED — a span is never
+ * guessed — and the count of each comes back in `note`.
+ */
+export function parseReply(raw: string, known: KnownTargets, activity: readonly ActivityStep[]): ParsedReply {
+  if (raw.trim() === '') return { text: NO_WORDS, refs: [] }; // an empty reply is said, never shown as a blank bubble
+  const reading = readReply(raw);
+  if (reading.kind === 'words') return { text: raw, refs: [] }; // words only — the reply exactly as written
+  if (reading.kind === 'unreadable') {
+    const salvaged = salvageText(reading.source);
+    return {
+      text: salvaged ?? (reading.prose !== '' ? reading.prose : CUT_OFF),
+      refs: [],
+      note: reading.closed ? "the analyst's envelope could not be read as JSON, so its links were lost" : "the analyst's reply was cut off before it finished",
+    };
+  }
+
+  const many = reading.envelopes > 1 ? `the reply carried ${String(reading.envelopes)} envelopes; the last one was read as the answer` : undefined;
+  const stray = reading.strays.length > 0 ? `the analyst's envelope carried fields I do not know: ${reading.strays.join(', ')}; its words and links were read anyway` : undefined;
+  const said = (...parts: readonly (string | undefined)[]): string | undefined => {
+    const words = parts.filter((w) => w !== undefined);
+    return words.length > 0 ? words.join('; ') : undefined;
+  };
+  if (reading.value.text !== undefined && typeof reading.value.text !== 'string') {
+    return { text: reading.prose !== '' ? reading.prose : NO_WORDS, refs: [], note: said(stray, many, "the analyst's words were not text, so none of its links could be placed")! };
+  }
+  const envelopeText = typeof reading.value.text === 'string' && reading.value.text.trim() !== '' ? reading.value.text : undefined;
+  const text = envelopeText ?? (reading.prose !== '' ? reading.prose : NO_WORDS);
+  if (reading.value.refs !== undefined && !Array.isArray(reading.value.refs)) return { text, refs: [], note: said(stray, many, "the analyst's links were not a list, so none could be kept")! };
+
+  const offered = Array.isArray(reading.value.refs) ? (reading.value.refs as readonly unknown[]) : [];
+  const refs: TranscriptRef[] = [];
+  let overlapped = 0;
+  for (const r of offered) {
+    const cited = r as { quote?: unknown; commit?: unknown; beat?: unknown; act?: unknown } | null;
+    if (cited === null || typeof cited !== 'object' || typeof cited.quote !== 'string' || cited.quote === '') continue;
+    const quote: string = cited.quote;
+    const start = text.indexOf(quote); // first occurrence, exact — an unfindable quote is dropped, never approximated
+    if (start < 0) continue;
+    const target = resolveTarget(cited, known, activity);
+    if (target === undefined) continue;
+    if (refs.some((have) => start < have.span[1] && start + quote.length > have.span[0])) {
+      overlapped += 1; // the words are already linked — a different fact from a citation that did not resolve
+      continue;
+    }
+    const label = actLabel(activity, target);
+    refs.push({ span: [start, start + quote.length], ...target, ...(label !== undefined ? { label } : {}) });
+  }
+  const note = said(stray, many, droppedNote(offered.length, offered.length - refs.length - overlapped, overlapped));
+  return { text, refs, ...(note !== undefined ? { note } : {}) };
 }
 
 export interface Desk {
@@ -587,9 +836,12 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         desk.transcript.push({ role: 'user', text: message, context });
         try {
           const turn = await desk.analyst.send(message, context);
-          const reply = parseReply(turn.text, session, desk.activity);
-          desk.transcript.push({ role: 'analyst', text: reply.text, refs: reply.refs, activity: [...desk.activity] });
-          return sendJson(res, 200, { ...turn, text: reply.text, refs: reply.refs, activity: desk.activity }), true;
+          const known = { commits: new Set(session.log.records.map((r) => r.id)), beats: new Set(session.checkpoints().map((c) => c.id)) };
+          const reply = parseReply(turn.text, known, desk.activity);
+          if (reply.note !== undefined) console.warn(`  chat: ${reply.note}`); // the log hears it too; the person is handed words and the same sentence, never machinery
+          const said = { text: reply.text, refs: reply.refs, ...(reply.note !== undefined ? { note: reply.note } : {}) };
+          desk.transcript.push({ role: 'analyst', ...said, activity: [...desk.activity] });
+          return sendJson(res, 200, { ...turn, ...said, activity: desk.activity }), true;
         } catch (error) {
           const text = error instanceof Error ? error.message : String(error);
           desk.transcript.push({ role: 'error', text, activity: [...desk.activity] });

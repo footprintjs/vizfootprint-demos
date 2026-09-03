@@ -22,6 +22,8 @@ export interface TranscriptLine {
   readonly activity?: readonly ActivityStep[];
   readonly context?: string;
   readonly refs?: readonly TranscriptRef[];
+  /** What was lost reading this reply, in plain words — shown under it, because a silent drop is not honest about what the analyst cited. */
+  readonly note?: string;
 }
 export interface AnalystWire {
   readonly mode: 'mock' | 'live';
@@ -32,11 +34,17 @@ export interface AnalystWire {
   readonly tools: readonly string[];
 }
 
+/** A span of the reply tied to the record: a COMMIT to seek, or a BEAT (a tag) to go to — a checkpoint lands no commit, so it is cited by its tag. */
 export interface TranscriptRef {
   readonly span: readonly [number, number];
-  readonly commit: string;
+  readonly commit?: string;
+  readonly beat?: string;
   readonly label?: string;
 }
+
+/** A ref that points at a commit — the only shape the dashboard note takes today (its host resolves commit ids). */
+export type CommitRef = TranscriptRef & { readonly commit: string };
+const isCommitRef = (r: TranscriptRef): r is CommitRef => r.commit !== undefined;
 
 export interface FramedAct {
   readonly verb: string;
@@ -97,8 +105,10 @@ export function AnalystPanel(props: {
   readonly describeCommit?: (commitId: string) => string | undefined;
   /** Go to the commit a ref points at. */
   readonly onSeek?: (commitId: string) => void;
-  /** Put a reply on the dashboard as a note — its words and its refs travel; absent = the door is closed (present mode). */
-  readonly onAddToDashboard?: (line: { readonly text: string; readonly refs?: readonly TranscriptRef[] }, model?: string) => void;
+  /** Go to the beat (tag) a ref points at, by its ID — how a cited checkpoint travels. */
+  readonly onBeat?: (beatId: string) => void;
+  /** Put a reply on the dashboard as a note — its words and its COMMIT refs travel; absent = the door is closed (present mode). */
+  readonly onAddToDashboard?: (line: { readonly text: string; readonly refs?: readonly CommitRef[] }, model?: string) => void;
 }): JSX.Element {
   const [wire, setWire] = useState<AnalystWire | null>(null);
   const [text, setText] = useState('');
@@ -165,9 +175,15 @@ export function AnalystPanel(props: {
               }}
             >
               <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', opacity: 0.6 }}>{line.role === 'user' ? 'you' : line.role === 'error' ? 'the turn failed' : 'analyst'}</span>
-              <div>{line.role === 'analyst' && line.refs !== undefined && line.refs.length > 0 ? <ProseText text={line.text} refs={line.refs} describeCommit={props.describeCommit} onSeek={props.onSeek} /> : line.text}</div>
+              {/* every analyst reply goes through the same renderer — one with links and one without read the same, and the light marks the model writes (**bold**, `code`) are formatting, not characters */}
+              <div>{line.role === 'analyst' ? <ProseText markdown text={line.text} refs={line.refs ?? []} describeCommit={props.describeCommit} onSeek={props.onSeek} onBeat={props.onBeat} /> : line.text}</div>
+              {line.role === 'analyst' && line.note !== undefined ? (
+                <div style={{ marginTop: 4, fontSize: 11, opacity: 0.65 }} title="what the door could not verify in this reply">
+                  {line.note}
+                </div>
+              ) : null}
               {line.role === 'analyst' && props.onAddToDashboard !== undefined ? (
-                <button type="button" onClick={() => props.onAddToDashboard?.(line, wire?.model)} style={{ marginTop: 6, font: 'inherit', fontSize: 11.5, padding: '2px 8px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }} title="Keep this reply on the dashboard as a note — its links travel with it">
+                <button type="button" onClick={() => props.onAddToDashboard?.({ text: line.text, refs: (line.refs ?? []).filter(isCommitRef) }, wire?.model)} style={{ marginTop: 6, font: 'inherit', fontSize: 11.5, padding: '2px 8px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }} title="Keep this reply on the dashboard as a note — its links travel with it">
                   + Add to dashboard
                 </button>
               ) : null}
