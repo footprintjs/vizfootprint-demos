@@ -24,9 +24,9 @@
  *      CAPPED, because a column with 900 distinct values is not a bar chart
  *      and pretending otherwise costs ~766 ms per keystroke of interaction.
  *
- * Plus one small resolver, `beatCommitId`, for a note's link to a named beat.
+ * Plus one small resolver, `bookmarkCommitId`, for a note's link to a named bookmark.
  */
-import type { CheckpointView, RenderSelection, SelectionClauseView } from 'vizfootprint-ui';
+import type { BookmarkView, RenderSelection, SelectionClauseView } from 'vizfootprint-ui';
 
 /** A row of either demo table, as the wire carries it. */
 export type Row = Readonly<Record<string, string | number | null | undefined>>;
@@ -210,54 +210,54 @@ export function capNote(vocabulary: Vocabulary, field: string, drawn?: number): 
 
 /**
  * One link inside an analyst reply: a COMMIT by id, or a named BEAT by tag id
- * (a checkpoint lands no commit of its own, so it is cited by its tag).
+ * (a bookmark lands no commit of its own, so it is cited by its tag).
  * Exactly one of the two is set — the same pair the library's own
  * `ProseRefView` carries and the analyst panel puts on the wire.
  */
 export interface ReplyRef {
   readonly span: readonly [number, number];
   readonly commit?: string;
-  readonly beat?: string;
+  readonly bookmark?: string;
   readonly label?: string;
 }
 
 /** A note ref: the same shape, with the keys it does not use ABSENT (the wire refuses undefined). */
-export type NoteRef = { readonly span: readonly [number, number] } & Partial<Pick<ReplyRef, 'commit' | 'beat' | 'label'>>;
+export type NoteRef = { readonly span: readonly [number, number] } & Partial<Pick<ReplyRef, 'commit' | 'bookmark' | 'label'>>;
 
 /**
  * The refs a note keeps when a reply becomes one. A ref that names NEITHER a
- * commit nor a beat anchors nothing and is dropped; everything else travels,
- * beats included — a payload typed `commit: string` (which this demo had) made
- * the panel filter every beat citation out before the note was written, and
+ * commit nor a bookmark anchors nothing and is dropped; everything else travels,
+ * bookmarks included — a payload typed `commit: string` (which this demo had) made
+ * the panel filter every bookmark citation out before the note was written, and
  * the reply's link to "@[the spike week]" disappeared without a word.
  */
 export function noteRefs(refs: readonly ReplyRef[] | undefined): readonly NoteRef[] {
   return (refs ?? []).flatMap((r) =>
-    r.commit === undefined && r.beat === undefined
+    r.commit === undefined && r.bookmark === undefined
       ? []
       : [
           {
             span: r.span,
             ...(r.commit !== undefined ? { commit: r.commit } : {}),
-            ...(r.beat !== undefined ? { beat: r.beat } : {}),
+            ...(r.bookmark !== undefined ? { bookmark: r.bookmark } : {}),
             ...(r.label !== undefined ? { label: r.label } : {}),
           },
         ],
   );
 }
 
-// ── a note's link to a named beat ───────────────────────────────────────────
+// ── a note's link to a named bookmark ───────────────────────────────────────────
 
 /**
- * The commit a note's beat anchor points at.
+ * The commit a note's bookmark anchor points at.
  *
- * A note's `@[beat]` ref carries the tag's ID (`t1`), not its name — renaming
+ * A note's `@[bookmark]` ref carries the tag's ID (`t1`), not its name — renaming
  * a tag must leave every note working. Older notes (and any wire that predates
  * tag ids) carry the NAME, so both are accepted: id first, then label. Returns
  * null when nothing matches, which is a click that should do nothing rather
  * than seek somewhere arbitrary.
  */
-export function beatCommitId(checkpoints: readonly CheckpointView[], beatRef: string): string | null {
-  const beat = checkpoints.find((c) => c.id === beatRef) ?? checkpoints.find((c) => c.label === beatRef);
-  return beat?.commitId ?? null;
+export function bookmarkCommitId(bookmarks: readonly BookmarkView[], bookmarkRef: string): string | null {
+  const bookmark = bookmarks.find((c) => c.id === bookmarkRef) ?? bookmarks.find((c) => c.label === bookmarkRef);
+  return bookmark?.commitId ?? null;
 }

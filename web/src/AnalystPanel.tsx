@@ -3,7 +3,7 @@
  *
  * A chat whose every reply is read against the commit log: under each
  * answer, the acts the analyst took are listed FRAMED BY THE GRAMMAR — the
- * verb first (select, filter, analyze, checkpoint, …), then what it touched,
+ * verb first (select, filter, analyze, bookmark, …), then what it touched,
  * then how it ended (landed / refused / read). The framing is derived from
  * the tool call itself, never from the model's prose, so a reply that claims
  * an act it did not take is visible as such.
@@ -34,15 +34,15 @@ export interface AnalystWire {
   readonly tools: readonly string[];
 }
 
-/** A span of the reply tied to the record: a COMMIT to seek, or a BEAT (a tag) to go to — a checkpoint lands no commit, so it is cited by its tag. */
+/** A span of the reply tied to the record: a COMMIT to seek, or a BEAT (a tag) to go to — a bookmark lands no commit, so it is cited by its tag. */
 export interface TranscriptRef {
   readonly span: readonly [number, number];
   readonly commit?: string;
-  readonly beat?: string;
+  readonly bookmark?: string;
   readonly label?: string;
 }
 
-/** A reply's ref names either a commit or a beat (a tag). Both travel onto a note — a checkpoint lands no commit, so filtering to commits used to lose every beat citation. */
+/** A reply's ref names either a commit or a bookmark (a tag). Both travel onto a note — a bookmark lands no commit, so filtering to commits used to lose every bookmark citation. */
 export type KeptRef = TranscriptRef;
 
 export interface FramedAct {
@@ -69,8 +69,8 @@ export function frameStep(step: ActivityStep): FramedAct {
     }
     case 'declare_analysis':
       return { verb: 'analyze', what: str(a['analysisId']), outcome };
-    case 'checkpoint':
-      return { verb: 'checkpoint', what: `"${str(a['label'])}"`, outcome };
+    case 'bookmark':
+      return { verb: 'bookmark', what: `"${str(a['label'])}"`, outcome };
     case 'fork':
       return { verb: 'fork', what: str(a['commitId'] ?? 'from the cursor'), outcome };
     case 'propose_chart':
@@ -104,9 +104,9 @@ export function AnalystPanel(props: {
   readonly describeCommit?: (commitId: string) => string | undefined;
   /** Go to the commit a ref points at. */
   readonly onSeek?: (commitId: string) => void;
-  /** Go to the beat (tag) a ref points at, by its ID — how a cited checkpoint travels. */
-  readonly onBeat?: (beatId: string) => void;
-  /** Put a reply on the dashboard as a note — its words and its refs travel, commits and beats alike; absent = the door is closed (present mode). */
+  /** Go to the bookmark (tag) a ref points at, by its ID — how a cited bookmark travels. */
+  readonly onBookmark?: (beatId: string) => void;
+  /** Put a reply on the dashboard as a note — its words and its refs travel, commits and bookmarks alike; absent = the door is closed (present mode). */
   readonly onAddToDashboard?: (line: { readonly text: string; readonly refs?: readonly KeptRef[] }, model?: string) => void;
 }): JSX.Element {
   const [wire, setWire] = useState<AnalystWire | null>(null);
@@ -175,7 +175,7 @@ export function AnalystPanel(props: {
             >
               <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', opacity: 0.6 }}>{line.role === 'user' ? 'you' : line.role === 'error' ? 'the turn failed' : 'analyst'}</span>
               {/* every analyst reply goes through the same renderer — one with links and one without read the same, and the light marks the model writes (**bold**, `code`) are formatting, not characters */}
-              <div>{line.role === 'analyst' ? <ProseText markdown text={line.text} refs={line.refs ?? []} describeCommit={props.describeCommit} onSeek={props.onSeek} onBeat={props.onBeat} /> : line.text}</div>
+              <div>{line.role === 'analyst' ? <ProseText markdown text={line.text} refs={line.refs ?? []} describeCommit={props.describeCommit} onSeek={props.onSeek} onBookmark={props.onBookmark} /> : line.text}</div>
               {line.role === 'analyst' && line.note !== undefined ? (
                 <div style={{ marginTop: 4, fontSize: 11, opacity: 0.65 }} title="what the door could not verify in this reply">
                   {line.note}
@@ -254,7 +254,7 @@ export function AnalystPanel(props: {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={props.readOnly ? 'return to Explore mode to ask' : 'ask the analyst — e.g. "which region has the most pertussis this year? save it as a beat"'}
+          placeholder={props.readOnly ? 'return to Explore mode to ask' : 'ask the analyst — e.g. "which region has the most pertussis this year? save it as a bookmark"'}
           disabled={disabled}
           aria-label="message to the analyst"
           style={{ flex: 1, padding: '6px 8px', font: 'inherit' }}

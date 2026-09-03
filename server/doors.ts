@@ -9,7 +9,7 @@
  *   GET  /api/window       ONE window of rows for the Sheet (the session's view-query port)
  *   GET  /api/proposals    what beat 1 already did here (survives a reload)
  *   POST /api/dispatch     a human gesture → a user-badged commit
- *   POST /api/seek | checkpoint | paths | compare | bring-over | undo
+ *   POST /api/seek | bookmark | paths | compare | bring-over | undo
  *   POST /api/proposals    beat 1 — six scripted proposals; the ledger rules
  *   POST /api/reset        a fresh surface (a session is cheap)
  *   GET  /api/geo          US state boundaries (Census-derived, pre-projected) for the map view
@@ -155,8 +155,8 @@ const MAX_BODY_BYTES = 64 * 1024;
 export interface TranscriptRef {
   readonly span: readonly [number, number];
   readonly commit?: string;
-  /** A tag by its ID (`t1`, …) — how a checkpoint is cited, since it lands no commit of its own. */
-  readonly beat?: string;
+  /** A tag by its ID (`t1`, …) — how a bookmark is cited, since it lands no commit of its own. */
+  readonly bookmark?: string;
   readonly label?: string;
 }
 
@@ -185,8 +185,8 @@ async function onScreenNow(session: InteractionSession): Promise<string> {
     .filter(([, enc]) => Object.keys(enc).length > 0)
     .map(([viewId, enc]) => `${viewId}(${Object.entries(enc).map(([ch, f]) => `${ch}=${f}`).join(', ')})`);
   lines.push(`- charts show: ${shown.join('; ')}`);
-  const beats = session.checkpoints().map((b) => b.label);
-  if (beats.length > 0) lines.push(`- beats: ${beats.join('; ')}`);
+  const bookmarks = session.bookmarkViews().map((b) => b.label);
+  if (bookmarks.length > 0) lines.push(`- bookmarks: ${bookmarks.join('; ')}`);
   const summary = o.dashboard.prose.find((p) => p.slot === 'caption');
   if (summary !== undefined) lines.push(`- the dashboard's summary (${summary.status}${summary.status === 'stale' ? ', moved: ' + summary.changed.join(', ') : ''}): ${summary.text}`);
   const drafts = o.dashboard.proposals.filter((p) => p.status === 'open').map((p) => p.slot);
@@ -363,38 +363,38 @@ function salvageText(source: string): string | undefined {
 /** What a ref may point at, as the record actually holds it: the commits in the log, and the tags beside it. */
 export interface KnownTargets {
   readonly commits: ReadonlySet<string>;
-  readonly beats: ReadonlySet<string>;
+  readonly bookmarks: ReadonlySet<string>;
 }
 
-/** Where one ref lands: a commit to seek, or a beat (a tag) to go to. */
-type RefTarget = { readonly commit: string; readonly beat?: undefined } | { readonly commit?: undefined; readonly beat: string };
+/** Where one ref lands: a commit to seek, or a bookmark (a tag) to go to. */
+type RefTarget = { readonly commit: string; readonly bookmark?: undefined } | { readonly commit?: undefined; readonly bookmark: string };
 
-/** What an act left behind: the commit it landed, or the TAG it named — a checkpoint lands no commit, and is cited by its tag. */
+/** What an act left behind: the commit it landed, or the TAG it named — a bookmark lands no commit, and is cited by its tag. */
 function landedBy(activity: readonly ActivityStep[], act: number): RefTarget | undefined {
-  const result = activity[act - 1]?.result as { ok?: boolean; commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; checkpoint?: { id?: unknown } } | undefined;
+  const result = activity[act - 1]?.result as { ok?: boolean; commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } } | undefined;
   if (result?.ok !== true) return undefined;
   if (typeof result.commit?.id === 'string') return { commit: result.commit.id };
   if (typeof result.analysis?.commit?.id === 'string') return { commit: result.analysis.commit.id };
-  if (typeof result.checkpoint?.id === 'string') return { beat: result.checkpoint.id };
+  if (typeof result.bookmark?.id === 'string') return { bookmark: result.bookmark.id };
   return undefined;
 }
 
 /** The one target a cited ref resolves to, or nothing — a commit the log does not hold and a tag nobody named resolve to nothing, and nothing is guessed. */
-function resolveTarget(cited: { readonly commit?: unknown; readonly beat?: unknown; readonly act?: unknown }, known: KnownTargets, activity: readonly ActivityStep[]): RefTarget | undefined {
+function resolveTarget(cited: { readonly commit?: unknown; readonly bookmark?: unknown; readonly act?: unknown }, known: KnownTargets, activity: readonly ActivityStep[]): RefTarget | undefined {
   if (typeof cited.commit === 'string' && known.commits.has(cited.commit)) return { commit: cited.commit };
-  if (typeof cited.beat === 'string' && known.beats.has(cited.beat)) return { beat: cited.beat };
+  if (typeof cited.bookmark === 'string' && known.bookmarks.has(cited.bookmark)) return { bookmark: cited.bookmark };
   if (typeof cited.act !== 'number' || !Number.isInteger(cited.act)) return undefined;
   const landed = landedBy(activity, cited.act);
   if (landed?.commit !== undefined && known.commits.has(landed.commit)) return landed;
-  if (landed?.beat !== undefined && known.beats.has(landed.beat)) return landed;
+  if (landed?.bookmark !== undefined && known.bookmarks.has(landed.bookmark)) return landed;
   return undefined;
 }
 
 /** Words for a ref's anchor: the act's own framing when the target came from this turn. */
 function actLabel(activity: readonly ActivityStep[], target: RefTarget): string | undefined {
   const step = activity.find((st) => {
-    const r = st.result as { commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; checkpoint?: { id?: unknown } };
-    return target.commit !== undefined ? r.commit?.id === target.commit || r.analysis?.commit?.id === target.commit : r.checkpoint?.id === target.beat;
+    const r = st.result as { commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } };
+    return target.commit !== undefined ? r.commit?.id === target.commit || r.analysis?.commit?.id === target.commit : r.bookmark?.id === target.bookmark;
   });
   if (step === undefined) return undefined;
   const args = step.args as { verb?: unknown; intent?: unknown; label?: unknown; analysisId?: unknown };
@@ -461,7 +461,7 @@ export function parseReply(raw: string, known: KnownTargets, activity: readonly 
   const refs: TranscriptRef[] = [];
   let overlapped = 0;
   for (const r of offered) {
-    const cited = r as { quote?: unknown; commit?: unknown; beat?: unknown; act?: unknown } | null;
+    const cited = r as { quote?: unknown; commit?: unknown; bookmark?: unknown; act?: unknown } | null;
     if (cited === null || typeof cited !== 'object' || typeof cited.quote !== 'string' || cited.quote === '') continue;
     const quote: string = cited.quote;
     const start = text.indexOf(quote); // first occurrence, exact — an unfindable quote is dropped, never approximated
@@ -495,7 +495,7 @@ export interface Desk {
 
 /** Asks the panel offers on an empty transcript — each exercises a different verb. */
 export const SUGGESTIONS = [
-  'Which region reports the most pertussis this year? Save it as a beat.',
+  'Which region reports the most pertussis this year? Save it as a bookmark.',
   'Is gonorrhea tracking its 52-week high across the states?',
   'Where are the silences this week, and what kind are they?',
 ] as const;
@@ -697,7 +697,7 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     cursor: overview.time.cursor,
     head: overview.time.head,
     branches: session.branches().map((b) => ({ tip: b.tip, length: b.length, actor: b.actor, active: b.active })),
-    checkpoints: session.checkpoints().map((c) => ({ id: c.id, label: c.label, commitId: c.commitId, at: c.at, ts: c.ts })), // the tag's id travels: a note links a tag by id, never by its name
+    bookmarks: session.bookmarkViews().map((c) => ({ id: c.id, label: c.label, commitId: c.commitId, at: c.at, ts: c.ts })), // the tag's id travels: a note links a tag by id, never by its name
     cursorTests: overview.time.cursorTests,
     viewingPast: overview.time.viewingPast,
     paths: { ...overview.paths, archivedList: session.paths({ includeArchived: true }) },
@@ -759,7 +759,7 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         // THE GRAMMAR, as declared — the Grammar panel renders this and nothing else:
         // the verbs the library dispatches, each view's channel vocabulary and its
         // starting bindings, and the one wiring rule in force today.
-        // the def's DECLARED dashboard words — the story's fallback for beats no describe reached (never the live words)
+        // the def's DECLARED dashboard words — the story's fallback for bookmarks no describe reached (never the live words)
         declared: { dashboard: declaredDashboardWords() },
         grammar: {
           verbs: DISPATCH_VERBS,
@@ -813,8 +813,8 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
       }
       case 'seek':
         return sendJson(res, 200, session.seek(String(body['commitId'] ?? ''))), true;
-      case 'checkpoint':
-        return sendJson(res, 200, await session.dispatch({ verb: 'checkpoint', label: String(body['label'] ?? ''), cause: userCause('name this position') }, { as: 'user' })), true;
+      case 'bookmark':
+        return sendJson(res, 200, await session.dispatch({ verb: 'bookmark', label: String(body['label'] ?? ''), cause: userCause('name this position') }, { as: 'user' })), true;
       case 'paths':
         return sendJson(res, 200, await pathsAction(desk, body)), true;
       case 'compare':
@@ -836,7 +836,7 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         desk.transcript.push({ role: 'user', text: message, context });
         try {
           const turn = await desk.analyst.send(message, context);
-          const known = { commits: new Set(session.log.records.map((r) => r.id)), beats: new Set(session.checkpoints().map((c) => c.id)) };
+          const known = { commits: new Set(session.log.records.map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
           const reply = parseReply(turn.text, known, desk.activity);
           if (reply.note !== undefined) console.warn(`  chat: ${reply.note}`); // the log hears it too; the person is handed words and the same sentence, never machinery
           const said = { text: reply.text, refs: reply.refs, ...(reply.note !== undefined ? { note: reply.note } : {}) };

@@ -37,7 +37,7 @@ import {
   Workbook,
   httpSheetData,
   type SheetColumn,
-  orderedCheckpoints, currentBeatIndex, beatTarget,
+  orderedBookmarks, currentBookmarkIndex, bookmarkTarget,
   NoteCell, linkablesOf, mentionWorldOf,
   boundField,
   BranchMap,
@@ -48,7 +48,7 @@ import {
 import 'vizfootprint-ui/styles.css';
 import {
   arrivesFrom,
-  beatCommitId,
+  bookmarkCommitId,
   noteRefs,
   type ReplyRef,
   capNote,
@@ -96,7 +96,7 @@ interface RowsPayload {
   readonly counts: Readonly<Record<string, number>>;
   readonly absence: { readonly field: string; readonly states: readonly string[] };
   readonly grammar: GrammarWire;
-  /** The def's declared dashboard words — the story's fallback for beats no describe reached. */
+  /** The def's declared dashboard words — the story's fallback for bookmarks no describe reached. */
   readonly declared?: { readonly dashboard?: { readonly title?: string; readonly caption?: string } };
 }
 interface Proposal {
@@ -159,7 +159,7 @@ export function App(): JSX.Element {
   const [geo, setGeo] = useState<GeoFeatureCollection | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [mode, setMode] = useState<'explore' | 'present'>('explore');
-  // Present mode as a slideshow: the dashboard is the slide, prev/next seek the named checkpoints, interactions stay off
+  // Present mode as a slideshow: the dashboard is the slide, prev/next seek the named bookmarks, interactions stay off
   const [showing, setShowing] = useState(false);
   const [analystTurns, setAnalystTurns] = useState(0);
   // the in-place editor: a side drawer (never a modal) so a change is seen happening on the charts
@@ -269,7 +269,7 @@ export function App(): JSX.Element {
             title={p.status === 'stale' ? `stale — moved: ${p.changed.join(', ')}` : `${p.author.kind}${p.author.by ? ' · ' + p.author.by : ''}${p.author.model ? ' · ' + p.author.model : ''}`}
           >
             <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>{p.slot}</span>{' '}
-            <ProseText text={p.text} refs={p.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBeat={seekBeat} />
+            <ProseText text={p.text} refs={p.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBookmark={seekBookmark} />
             {p.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {p.changed.join(', ')} moved</span> : null}
             {p.status === 'derived' ? <span style={{ fontSize: 11, opacity: 0.7 }}> derived</span> : null}
             {p.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
@@ -281,17 +281,17 @@ export function App(): JSX.Element {
   // Layer 4: the link graph decides what each clause does at each view — filter, highlight, navigate, mirror, or nothing
   const selFor = (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links, state.cleared);
   /**
-   * SEEK TO A NAMED BEAT — the ONE resolver every beat anchor uses (a view's
+   * SEEK TO A NAMED BEAT — the ONE resolver every bookmark anchor uses (a view's
    * words, the dashboard summary, a note, the analyst's reply).
    *
-   * A note's `@[beat]` link carries the tag's ID (`t1`), not its name, so that
+   * A note's `@[bookmark]` link carries the tag's ID (`t1`), not its name, so that
    * renaming a tag leaves every note working. Resolving it as a name (which
    * this demo did in three places) can never match: the click did nothing at
-   * all — no seek, no error, no sentence. `beatCommitId` takes the id first
+   * all — no seek, no error, no sentence. `bookmarkCommitId` takes the id first
    * and still accepts a label, so notes written before tag ids kept working.
    */
-  const seekBeat = (beatRef: string): void => {
-    const commitId = beatCommitId(state.checkpoints, beatRef);
+  const seekBookmark = (bookmarkRef: string): void => {
+    const commitId = bookmarkCommitId(state.bookmarks, bookmarkRef);
     if (commitId !== null) void view.seek(commitId);
   };
   /** The words a commit anchor shows on hover — the same sentence everywhere. */
@@ -507,7 +507,7 @@ export function App(): JSX.Element {
         {dashCaption !== undefined ? (
           <span style={{ color: dashCaption.status === 'stale' ? '#a8661a' : undefined, opacity: 0.9 }} title={`${dashCaption.author.kind}${dashCaption.author.by ? ' · ' + dashCaption.author.by : ''}${dashCaption.author.model ? ' · ' + dashCaption.author.model : ''}`}>
             <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>summary</span>{' '}
-            <ProseText text={dashCaption.text} refs={dashCaption.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBeat={seekBeat} />
+            <ProseText text={dashCaption.text} refs={dashCaption.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBookmark={seekBookmark} />
             {dashCaption.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {dashCaption.changed.join(', ')} moved</span> : null}
             {dashCaption.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
           </span>
@@ -531,8 +531,8 @@ export function App(): JSX.Element {
         ))}
       </div>
     );
-  // The STORY layer: the named beats along the head's lineage as a storydeck post (figures are the host's — none here yet).
-  // The fallback words are the def's DECLARED ones, never the live caption — the live words would misdate every earlier beat.
+  // The STORY layer: the named bookmarks along the head's lineage as a storydeck post (figures are the host's — none here yet).
+  // The fallback words are the def's DECLARED ones, never the live caption — the live words would misdate every earlier bookmark.
   const declaredWords = rows?.declared?.dashboard;
   const story = useMemo(() => toStory(state, { declared: declaredWords ?? {}, author: 'the desk', date: new Date().toISOString().slice(0, 10) }), [state, declaredWords]);
   const grain = rows?.grain;
@@ -543,43 +543,43 @@ export function App(): JSX.Element {
     setAsideTab('edit');
     setAsideOpen(true);
   };
-  // the slideshow's beats: the named checkpoints along the head's lineage, the dashboard's caption as the slide's words
-  const beats = orderedCheckpoints(state.checkpoints, state.commits, state.head);
-  const rawBeatIndex = currentBeatIndex(state.checkpoints, state.commits, state.cursor, state.head); // -1 = the cursor is off the story
-  const beatIndex = Math.max(0, rawBeatIndex);
-  // a seek is asynchronous: two fast presses target from the beat already asked for, never the one still on screen
-  const pendingBeat = useRef<number | null>(null);
+  // the slideshow's bookmarks: the named bookmarks along the head's lineage, the dashboard's caption as the slide's words
+  const bookmarks = orderedBookmarks(state.bookmarks, state.commits, state.head);
+  const rawBookmarkIndex = currentBookmarkIndex(state.bookmarks, state.commits, state.cursor, state.head); // -1 = the cursor is off the story
+  const bookmarkIndex = Math.max(0, rawBookmarkIndex);
+  // a seek is asynchronous: two fast presses target from the bookmark already asked for, never the one still on screen
+  const pendingBookmark = useRef<number | null>(null);
   useEffect(() => {
-    if (pendingBeat.current === rawBeatIndex) pendingBeat.current = null;
-  }, [rawBeatIndex]);
-  const goBeat = (i: number): Promise<void> => {
-    const b = beats[i];
+    if (pendingBookmark.current === rawBookmarkIndex) pendingBookmark.current = null;
+  }, [rawBookmarkIndex]);
+  const goBookmark = (i: number): Promise<void> => {
+    const b = bookmarks[i];
     if (b === undefined) return Promise.resolve();
-    pendingBeat.current = i;
+    pendingBookmark.current = i;
     // a seek that fails must not leave a target the presenter never reached
-    return view.seek(beatTarget(b) as string).then(() => undefined, () => { pendingBeat.current = null; });
+    return view.seek(bookmarkTarget(b) as string).then(() => undefined, () => { pendingBookmark.current = null; });
   };
-  const stepBeat = (by: number): void => void goBeat((pendingBeat.current ?? beatIndex) + by);
-  // entering the show from a cursor that reaches no beat begins at the first beat — never a slide the dashboard is not showing
+  const stepBookmark = (by: number): void => void goBookmark((pendingBookmark.current ?? bookmarkIndex) + by);
+  // entering the show from a cursor that reaches no bookmark begins at the first bookmark — never a slide the dashboard is not showing
   const startShow = (): void => {
     setMode('present');
-    if (rawBeatIndex < 0) void goBeat(0).then(() => setShowing(true)); // the slide bar names a beat only once the charts show it
+    if (rawBookmarkIndex < 0) void goBookmark(0).then(() => setShowing(true)); // the slide bar names a bookmark only once the charts show it
     else setShowing(true);
   };
-  const slideshow = showing && mode === 'present' && beats.length > 0 ? {
+  const slideshow = showing && mode === 'present' && bookmarks.length > 0 ? {
     active: true,
-    title: beats[beatIndex]?.label ?? '',
+    title: bookmarks[bookmarkIndex]?.label ?? '',
     ...(dashCaption !== undefined ? { words: dashCaption.text } : {}),
-    index: beatIndex,
-    count: beats.length,
-    onPrev: () => stepBeat(-1),
-    onNext: () => stepBeat(1),
+    index: bookmarkIndex,
+    count: bookmarks.length,
+    onPrev: () => stepBookmark(-1),
+    onNext: () => stepBookmark(1),
     onExit: () => setShowing(false),
   } : undefined;
   // THE TEXT TOOL: notes are prose subjects (`note:<id>`); every save is a describe the session answers; links are mentions resolved against the session
   // (the world and the picker list are keyed on the slices they read, so an idle poll does not rebuild them)
-  const noteWorld = useMemo(() => mentionWorldOf(state), [state.commits, state.checkpoints, state.saved]); // eslint-disable-line react-hooks/exhaustive-deps
-  const noteLinks = useMemo(() => linkablesOf(state), [state.commits, state.checkpoints, state.saved, state.selections]); // eslint-disable-line react-hooks/exhaustive-deps
+  const noteWorld = useMemo(() => mentionWorldOf(state), [state.commits, state.bookmarks, state.saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  const noteLinks = useMemo(() => linkablesOf(state), [state.commits, state.bookmarks, state.saved, state.selections]); // eslint-disable-line react-hooks/exhaustive-deps
   const describeNote = (id: string, slot: 'title' | 'caption', record: Readonly<Record<string, unknown>> | null) =>
     view.describe(`note:${id}`, slot, record, record === null ? `clear the ${slot} of note ${id}` : `write note ${id}`);
   // a new note is opened, not committed: nothing lands until its first Save, so the log never holds words nobody wrote
@@ -589,9 +589,9 @@ export function App(): JSX.Element {
   const newNote = (): void => setFreshNotes((f) => [...f, freshNoteId()]);
   // an analyst reply becomes a note: its words and its refs, the analyst (and its model) as author, the cursor and the live selections as its basis — so it goes stale honestly; no claim level is invented for it
   const addReplyToDashboard = (line: { readonly text: string; readonly refs?: readonly ReplyRef[] }, model?: string): void => {
-    // a ref names EITHER a commit or a BEAT (a checkpoint lands no commit of
+    // a ref names EITHER a commit or a BEAT (a bookmark lands no commit of
     // its own, so it is cited by its tag). This payload used to demand
-    // `commit: string`, so every beat citation was filtered out before it got
+    // `commit: string`, so every bookmark citation was filtered out before it got
     // here and the note lost it without a word — see `noteRefs`.
     const refs = noteRefs(line.refs);
     const basis = { ...(typeof state.cursor === 'string' ? { atCommit: state.cursor } : {}), ...(state.filters !== undefined ? { filters: state.filters } : {}) };
@@ -600,7 +600,7 @@ export function App(): JSX.Element {
       .then((r) => { if (!r.ok) setProblem(r.sentence); }) // a refused note (a ref to a commit off this path, say) is said out loud, never dropped
       .catch((e: unknown) => setProblem(`the note did not land: ${e instanceof Error ? e.message : String(e)}`));
   };
-  const noteProps = { world: noteWorld, linkables: noteLinks, by: 'you', readOnly, onDescribe: describeNote, onSeek: (id: string) => void view.seek(id), onBeat: seekBeat, describeCommit };
+  const noteProps = { world: noteWorld, linkables: noteLinks, by: 'you', readOnly, onDescribe: describeNote, onSeek: (id: string) => void view.seek(id), onBookmark: seekBookmark, describeCommit };
   const savedNoteIds = new Set((state.notes ?? []).map((n) => n.id));
   const noteCells = [
     ...(state.notes ?? []).map((n) => ({ id: `note:${n.id}`, render: () => <NoteCell note={n} {...noteProps} /> })),
@@ -646,12 +646,12 @@ export function App(): JSX.Element {
     { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
     { id: 'save', label: 'Save selection', icon: '💾', disabled: liveSelection?.commitId === undefined || readOnly, hint: liveSelection === undefined ? 'nothing is selected' : `keep the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection by name`, onSelect: () => { const id = liveSelection?.commitId; if (liveSelection === undefined || id === undefined) return; const name = window.prompt(`Save the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection as…`); if (name) void view.saveSelection(id, name); } },
     { id: 'paths', label: `Paths${state.paths.list.length > 1 ? ` (${String(state.paths.list.length)})` : ''}`, icon: '⎇', hint: 'every line of work on this desk — switch back to any of them', onSelect: () => setPathsOpen(true) },
-    // the beats are the slides, and a beat is only a slide on ITS OWN path:
-    // "name a checkpoint first" is a lie when you have named three and walked
+    // the bookmarks are the slides, and a bookmark is only a slide on ITS OWN path:
+    // "name a bookmark first" is a lie when you have named three and walked
     // onto another lane, so say which of the two is actually true
-    { id: 'present', label: mode === 'present' ? 'Back to Explore' : 'Present the beats', icon: '▶', disabled: mode !== 'present' && beats.length === 0, hint: mode === 'present' || beats.length > 0 ? undefined : state.checkpoints.length > 0 ? 'your checkpoints are on another path — switch to it (⎇ Paths) to present them' : 'name a checkpoint first — the beats are the slides', onSelect: () => { if (mode === 'present') { setShowing(false); setMode('explore'); } else startShow(); } },
+    { id: 'present', label: mode === 'present' ? 'Back to Explore' : 'Present the bookmarks', icon: '▶', disabled: mode !== 'present' && bookmarks.length === 0, hint: mode === 'present' || bookmarks.length > 0 ? undefined : state.bookmarks.length > 0 ? 'your bookmarks are on another path — switch to it (⎇ Paths) to present them' : 'name a bookmark first — the bookmarks are the slides', onSelect: () => { if (mode === 'present') { setShowing(false); setMode('explore'); } else startShow(); } },
     { id: 'add-chart', label: 'Add a chart', icon: '＋', disabled: true, hint: 'next packet: an accepted proposal joins the cockpit', onSelect: () => undefined },
-    { id: 'text', label: 'Text tool', icon: '¶', disabled: readOnly, hint: 'a note on the dashboard — its words link to selections, checkpoints and commits', onSelect: newNote },
+    { id: 'text', label: 'Text tool', icon: '¶', disabled: readOnly, hint: 'a note on the dashboard — its words link to selections, bookmarks and commits', onSelect: newNote },
     { id: 'reset', label: 'Start fresh', icon: '↺', disabled: readOnly, hint: 'clear every commit and begin again — the data stays, the log is emptied', onSelect: startFresh },
   ];
   return (
@@ -684,7 +684,7 @@ export function App(): JSX.Element {
                 onScreen={{ selections: state.selections.map((sel) => `${viewLabels[sel.viewId] ?? sel.viewId}: ${chipWords(sel)}`), cursor: state.cursor }}
                 describeCommit={describeCommit}
                 onSeek={(id) => void view.seek(id)}
-                onBeat={seekBeat}
+                onBookmark={seekBookmark}
                 onAddToDashboard={readOnly ? undefined : addReplyToDashboard}
               />
             ) : null}
@@ -730,7 +730,7 @@ export function App(): JSX.Element {
             commits={state.commits}
             cursor={state.cursor}
             head={state.head}
-            checkpoints={state.checkpoints}
+            bookmarks={state.bookmarks}
             branches={state.branches}
             viewingPast={state.viewingPast}
             // the rail draws ONE path; these two say which, so eleven bars
@@ -740,7 +740,7 @@ export function App(): JSX.Element {
             onSeek={(id) => void view.seek(id)}
             onStepBack={() => void view.stepBack()}
             onStepForward={() => void view.stepForward()}
-            onCheckpoint={(label) => void view.checkpoint(label)}
+            onNameBookmark={(label) => void view.bookmark(label)}
             onPlay={startShow}
             onReturnToNow={() => void view.returnToNow()}
           />
@@ -991,7 +991,7 @@ export function App(): JSX.Element {
                 commits={state.commits}
                 cursor={state.cursor}
                 head={state.head}
-                checkpoints={state.checkpoints}
+                bookmarks={state.bookmarks}
                 paths={state.paths.list}
                 archivedPaths={state.paths.archivedList}
                 onSeek={(id) => void view.seek(id)}
@@ -1033,7 +1033,7 @@ export function App(): JSX.Element {
           id: 'story',
           title: 'Story',
           icon: '📖',
-          badge: story.meta.beatCount,
+          badge: story.meta.bookmarkCount,
           content: <StoryReport post={story} />,
         },
       ]}
@@ -1043,18 +1043,18 @@ export function App(): JSX.Element {
   );
 }
 
-/** The Story report: one section per named beat along the lineage, its words and the steps since the previous beat, plus the post as JSON for storydeck. */
+/** The Story report: one section per named bookmark along the lineage, its words and the steps since the previous bookmark, plus the post as JSON for storydeck. */
 function StoryReport({ post }: { readonly post: StoryPost }): ReactNode {
   const [copied, setCopied] = useState(false);
   if (post.sections.length === 0) {
-    return <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>No beats named on this lineage yet — name a checkpoint in the time strip and it becomes a section here.</p>;
+    return <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>No bookmarks named on this lineage yet — name a bookmark in the time strip and it becomes a section here.</p>;
   }
   return (
     <div style={{ fontSize: 13, lineHeight: 1.5 }}>
       <p style={{ margin: '0 0 8px', opacity: 0.8 }}>
-        <b>{post.meta.title}</b> · {post.meta.beatCount} beat{post.meta.beatCount === 1 ? '' : 's'} on {post.meta.path ?? "the head's lineage"}. Every beat is a section: its words as they stood, and the acts since the previous beat. Copy the JSON into storydeck's <code>assemblePost</code> for Read, Scroll and Watch.
+        <b>{post.meta.title}</b> · {post.meta.bookmarkCount} bookmark{post.meta.bookmarkCount === 1 ? '' : 's'} on {post.meta.path ?? "the head's lineage"}. Every bookmark is a section: its words as they stood, and the acts since the previous bookmark. Copy the JSON into storydeck's <code>assemblePost</code> for Read, Scroll and Watch.
       </p>
-      {post.beats.map((b) => (
+      {post.bookmarks.map((b) => (
         <div key={b.key} style={{ marginBottom: 10 }}>
           <div style={{ fontWeight: 600 }}>
             {b.index + 1}. {b.label} <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6 }}>at #{b.at}</span>

@@ -13,15 +13,15 @@ import { createNndssAnalyst, scriptedNndssMock } from '../src/nndss/analyst.js';
  * record cannot vouch for.
  */
 
-/** One turn's acts, as the tool port really shapes them: two dispatches that landed commits, an analysis whose commit rides under `analysis`, and a checkpoint — a TAG, which lands no commit and is cited by its tag id. */
+/** One turn's acts, as the tool port really shapes them: two dispatches that landed commits, an analysis whose commit rides under `analysis`, and a bookmark — a TAG, which lands no commit and is cited by its tag id. */
 const ACTS: readonly ActivityStep[] = [
   { tool: 'whats_here', args: {}, result: { ok: true } },
   { tool: 'dispatch', args: { verb: 'select', viewId: 'diseases', field: 'disease', intent: 'focus on pertussis' }, result: { ok: true, verb: 'select', intent: 'focus on pertussis', commit: { id: 's67' } } },
   { tool: 'dispatch', args: { verb: 'filter', viewId: 'weeks', field: 't' }, result: { ok: true, verb: 'filter', commit: { id: 's69' } } },
   { tool: 'declare_analysis', args: { analysisId: 'casesByArea' }, result: { ok: true, verb: 'analyze', analysis: { analysisId: 'casesByArea', commit: { id: 's70' } } } },
-  { tool: 'checkpoint', args: { label: 'Pertussis by region' }, result: { ok: true, verb: 'checkpoint', checkpoint: { id: 't1', label: 'Pertussis by region' } } },
+  { tool: 'bookmark', args: { label: 'Pertussis by region' }, result: { ok: true, verb: 'bookmark', bookmark: { id: 't1', label: 'Pertussis by region' } } },
 ];
-const KNOWN: KnownTargets = { commits: new Set(['s67', 's68', 's69', 's70']), beats: new Set(['t1']) };
+const KNOWN: KnownTargets = { commits: new Set(['s67', 's68', 's69', 's70']), bookmarks: new Set(['t1']) };
 const read = (raw: string): ParsedReply => parseReply(raw, KNOWN, ACTS);
 /** What a ref actually points at in the words the person reads — the span cut back out of the text. */
 const quoted = (r: ParsedReply): readonly string[] => r.refs.map((ref) => r.text.slice(ref.span[0], ref.span[1]));
@@ -168,15 +168,15 @@ describe('parseReply — links the record can vouch for', () => {
   });
 
   it('a commit the log does not hold and a tag nobody named are dropped', () => {
-    const out = read('{"text": "South Atlantic leads, and I named the moment.", "refs": [{"quote": "South Atlantic", "commit": "s99"}, {"quote": "named the moment", "beat": "t9"}, {"quote": "leads", "act": 2}]}');
+    const out = read('{"text": "South Atlantic leads, and I named the moment.", "refs": [{"quote": "South Atlantic", "commit": "s99"}, {"quote": "named the moment", "bookmark": "t9"}, {"quote": "leads", "act": 2}]}');
     expect(quoted(out)).toEqual(['leads']);
     expect(out.note).toBe('2 of 3 links could not be verified and were dropped');
   });
 
   it('a CHECKPOINT is citable: the act that named it resolves to its tag, and so does the tag id itself', () => {
-    const out = read('{"text": "I named this moment Pertussis by region, and the beat is here.", "refs": [{"quote": "named this moment", "act": 5}, {"quote": "the beat is here", "beat": "t1"}]}');
-    expect(out.refs.map((r) => [r.beat, r.commit])).toEqual([['t1', undefined], ['t1', undefined]]);
-    expect(out.refs[0]?.label).toBe('checkpoint · Pertussis by region');
+    const out = read('{"text": "I named this moment Pertussis by region, and the bookmark is here.", "refs": [{"quote": "named this moment", "act": 5}, {"quote": "the bookmark is here", "bookmark": "t1"}]}');
+    expect(out.refs.map((r) => [r.bookmark, r.commit])).toEqual([['t1', undefined], ['t1', undefined]]);
+    expect(out.refs[0]?.label).toBe('bookmark · Pertussis by region');
     expect(out.note).toBeUndefined();
   });
 
@@ -237,17 +237,17 @@ describe('readReply', () => {
 });
 
 describe('a real scripted turn', () => {
-  it('the acts the analyst really took resolve to what they really landed — commits for the dispatches, the TAG for the checkpoint', async () => {
+  it('the acts the analyst really took resolve to what they really landed — commits for the dispatches, the TAG for the bookmark', async () => {
     const { session, port } = buildNndssSurface();
     const acts: ActivityStep[] = [];
     const analyst = createNndssAnalyst(port, { provider: scriptedNndssMock(), onActivity: (s) => acts.push(s) });
     const turn = await analyst.send('Focus on pertussis by area and save the moment.');
-    const known: KnownTargets = { commits: new Set(session.log.records.map((r) => r.id)), beats: new Set(session.checkpoints().map((c) => c.id)) };
+    const known: KnownTargets = { commits: new Set(session.log.records.map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
     const out = parseReply(turn.text, known, acts);
     expect(out.text.startsWith('I selected Pertussis')).toBe(true);
     expect(quoted(out)).toEqual(['selected Pertussis on the diseases view', 'ran casesByArea over the present cells', 'named this position "Pertussis by area"']);
     expect(out.refs.filter((r) => r.commit !== undefined).every((r) => session.log.records.some((rec) => rec.id === r.commit))).toBe(true);
-    expect(out.refs.filter((r) => r.beat !== undefined).map((r) => r.beat)).toEqual(session.checkpoints().map((c) => c.id)); // the beat it named is citable
+    expect(out.refs.filter((r) => r.bookmark !== undefined).map((r) => r.bookmark)).toEqual(session.bookmarkViews().map((c) => c.id)); // the bookmark it named is citable
     expect(out.note).toBeUndefined(); // every citation the analyst offered resolved
   });
 });

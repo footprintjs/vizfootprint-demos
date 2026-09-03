@@ -6,7 +6,7 @@
  *   · a link the person switched OFF moves nothing;
  *   · the bars are counted in one pass, whatever the number of bars;
  *   · a capped axis says so, and never lies about the total;
- *   · a note's beat anchor resolves by tag ID (and still by name).
+ *   · a note's bookmark anchor resolves by tag ID (and still by name).
  *
  * The selections are built with the library's own `selectionForView`, over a
  * real link graph — the same call `App.tsx` makes — so an "off" link here is
@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { selectionForView, keepPredicate, type LinkEdgeView, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
 import {
   arrivesFrom,
-  beatCommitId,
+  bookmarkCommitId,
   capNote,
   categoryCounts,
   categorySums,
@@ -185,45 +185,45 @@ describe('columnVocabulary / capNote — defect 8: a 900-value column is not a b
   });
 });
 
-describe('beatCommitId — defect 9: a note links a tag by ID, not by name', () => {
+describe('bookmarkCommitId — defect 9: a note links a tag by ID, not by name', () => {
   const CHECKPOINTS = [
     { id: 't1', label: 'the spike week', commitId: 'c7', ts: 1 },
-    { label: 'an older beat', commitId: 'c3', ts: 2 }, // a wire that predates tag ids
+    { label: 'an older bookmark', commitId: 'c3', ts: 2 }, // a wire that predates tag ids
   ];
 
   it('resolves the tag ID a note actually carries', () => {
-    expect(beatCommitId(CHECKPOINTS, 't1')).toBe('c7');
+    expect(bookmarkCommitId(CHECKPOINTS, 't1')).toBe('c7');
   });
 
   it('still resolves a NAME, so notes written before tag ids keep working', () => {
-    expect(beatCommitId(CHECKPOINTS, 'an older beat')).toBe('c3');
-    expect(beatCommitId(CHECKPOINTS, 'the spike week')).toBe('c7');
+    expect(bookmarkCommitId(CHECKPOINTS, 'an older bookmark')).toBe('c3');
+    expect(bookmarkCommitId(CHECKPOINTS, 'the spike week')).toBe('c7');
   });
 
   it('an id wins over a same-named label, and an unknown ref resolves to nothing (a click that does nothing, never a wrong seek)', () => {
-    expect(beatCommitId([{ id: 't2', label: 't1', commitId: 'cA', ts: 1 }, { id: 't1', label: 'x', commitId: 'cB', ts: 2 }], 't1')).toBe('cB');
-    expect(beatCommitId(CHECKPOINTS, 't9')).toBe(null);
-    expect(beatCommitId([{ id: 't1', label: 'floating', commitId: null, ts: 1 }], 't1')).toBe(null);
+    expect(bookmarkCommitId([{ id: 't2', label: 't1', commitId: 'cA', ts: 1 }, { id: 't1', label: 'x', commitId: 'cB', ts: 2 }], 't1')).toBe('cB');
+    expect(bookmarkCommitId(CHECKPOINTS, 't9')).toBe(null);
+    expect(bookmarkCommitId([{ id: 't1', label: 'floating', commitId: null, ts: 1 }], 't1')).toBe(null);
   });
 });
 
 describe('noteRefs — defect 10: a reply that cites a BEAT keeps the citation', () => {
-  it('carries commit refs AND beat refs into the note', () => {
+  it('carries commit refs AND bookmark refs into the note', () => {
     expect(
       noteRefs([
         { span: [0, 3], commit: 'c7', label: '#c7' },
-        { span: [5, 9], beat: 't1', label: 'the spike week' },
+        { span: [5, 9], bookmark: 't1', label: 'the spike week' },
       ]),
     ).toEqual([
       { span: [0, 3], commit: 'c7', label: '#c7' },
-      { span: [5, 9], beat: 't1', label: 'the spike week' },
+      { span: [5, 9], bookmark: 't1', label: 'the spike week' },
     ]);
   });
 
   it('drops a ref that anchors nothing, and leaves absent keys ABSENT (never undefined on the wire)', () => {
-    const out = noteRefs([{ span: [0, 1] }, { span: [2, 3], beat: 't2' }]);
+    const out = noteRefs([{ span: [0, 1] }, { span: [2, 3], bookmark: 't2' }]);
     expect(out).toHaveLength(1);
-    expect(Object.keys(out[0]!)).toEqual(['span', 'beat']);
+    expect(Object.keys(out[0]!)).toEqual(['span', 'bookmark']);
     expect(noteRefs(undefined)).toEqual([]);
   });
 });
