@@ -20,7 +20,7 @@ describe('the NNDSS analyst (scripted provider)', () => {
     for (const a of acts) expect(JSON.stringify(a.result)).not.toMatch(/"error"/);
 
     const records = session.log.records as readonly { readonly actor?: string; readonly cause?: { readonly requestedBy?: string } }[];
-    expect(records.length).toBeGreaterThanOrEqual(3); // select + analyze + the beat
+    expect(records.length).toBeGreaterThanOrEqual(2); // select + analyze — the checkpoint is a TAG beside the log, so it lands no commit
     expect(records.some((r) => r.actor === 'agent' || r.cause?.requestedBy === 'agent')).toBe(true);
     expect(session.checkpoints().map((c) => c.label)).toEqual(['Pertussis by area']);
     expect(analyst.trace()).toBeDefined();
