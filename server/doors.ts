@@ -371,11 +371,21 @@ export interface KnownTargets {
 /** Where one ref lands: a commit to seek, or a bookmark (a tag) to go to. */
 type RefTarget = { readonly commit: string; readonly bookmark?: undefined } | { readonly commit?: undefined; readonly bookmark: string };
 
-/** What an act left behind: the commit it landed, or the TAG it named — a bookmark lands no commit, and is cited by its tag. */
+/**
+ * What an act left behind: the commit it landed, or the TAG it named — a
+ * bookmark lands no commit, and is cited by its tag.
+ *
+ * `commitId` is the chart proposal's: `propose_chart` deliberately never hands
+ * back the commit RECORD (its value is the spec, and the surface does not echo
+ * a spec), so it names the moment by id. Without that case a reply saying "the
+ * chart I just proposed" resolved to nothing and the link was dropped as
+ * unverifiable — a real act, on the trace, that the reply could not point at.
+ */
 function landedBy(activity: readonly ActivityStep[], act: number): RefTarget | undefined {
-  const result = activity[act - 1]?.result as { ok?: boolean; commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } } | undefined;
+  const result = activity[act - 1]?.result as { ok?: boolean; commit?: { id?: unknown }; commitId?: unknown; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } } | undefined;
   if (result?.ok !== true) return undefined;
   if (typeof result.commit?.id === 'string') return { commit: result.commit.id };
+  if (typeof result.commitId === 'string') return { commit: result.commitId };
   if (typeof result.analysis?.commit?.id === 'string') return { commit: result.analysis.commit.id };
   if (typeof result.bookmark?.id === 'string') return { bookmark: result.bookmark.id };
   return undefined;
@@ -395,8 +405,8 @@ function resolveTarget(cited: { readonly commit?: unknown; readonly bookmark?: u
 /** Words for a ref's anchor: the act's own framing when the target came from this turn. */
 function actLabel(activity: readonly ActivityStep[], target: RefTarget): string | undefined {
   const step = activity.find((st) => {
-    const r = st.result as { commit?: { id?: unknown }; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } };
-    return target.commit !== undefined ? r.commit?.id === target.commit || r.analysis?.commit?.id === target.commit : r.bookmark?.id === target.bookmark;
+    const r = st.result as { commit?: { id?: unknown }; commitId?: unknown; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } };
+    return target.commit !== undefined ? r.commit?.id === target.commit || r.commitId === target.commit || r.analysis?.commit?.id === target.commit : r.bookmark?.id === target.bookmark;
   });
   if (step === undefined) return undefined;
   const args = step.args as { verb?: unknown; intent?: unknown; label?: unknown; analysisId?: unknown };
