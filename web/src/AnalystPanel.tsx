@@ -42,9 +42,8 @@ export interface TranscriptRef {
   readonly label?: string;
 }
 
-/** A ref that points at a commit — the only shape the dashboard note takes today (its host resolves commit ids). */
-export type CommitRef = TranscriptRef & { readonly commit: string };
-const isCommitRef = (r: TranscriptRef): r is CommitRef => r.commit !== undefined;
+/** A reply's ref names either a commit or a beat (a tag). Both travel onto a note — a checkpoint lands no commit, so filtering to commits used to lose every beat citation. */
+export type KeptRef = TranscriptRef;
 
 export interface FramedAct {
   readonly verb: string;
@@ -107,8 +106,8 @@ export function AnalystPanel(props: {
   readonly onSeek?: (commitId: string) => void;
   /** Go to the beat (tag) a ref points at, by its ID — how a cited checkpoint travels. */
   readonly onBeat?: (beatId: string) => void;
-  /** Put a reply on the dashboard as a note — its words and its COMMIT refs travel; absent = the door is closed (present mode). */
-  readonly onAddToDashboard?: (line: { readonly text: string; readonly refs?: readonly CommitRef[] }, model?: string) => void;
+  /** Put a reply on the dashboard as a note — its words and its refs travel, commits and beats alike; absent = the door is closed (present mode). */
+  readonly onAddToDashboard?: (line: { readonly text: string; readonly refs?: readonly KeptRef[] }, model?: string) => void;
 }): JSX.Element {
   const [wire, setWire] = useState<AnalystWire | null>(null);
   const [text, setText] = useState('');
@@ -183,7 +182,7 @@ export function AnalystPanel(props: {
                 </div>
               ) : null}
               {line.role === 'analyst' && props.onAddToDashboard !== undefined ? (
-                <button type="button" onClick={() => props.onAddToDashboard?.({ text: line.text, refs: (line.refs ?? []).filter(isCommitRef) }, wire?.model)} style={{ marginTop: 6, font: 'inherit', fontSize: 11.5, padding: '2px 8px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }} title="Keep this reply on the dashboard as a note — its links travel with it">
+                <button type="button" onClick={() => props.onAddToDashboard?.({ text: line.text, refs: line.refs ?? [] }, wire?.model)} style={{ marginTop: 6, font: 'inherit', fontSize: 11.5, padding: '2px 8px', borderRadius: 6, border: '1px solid #d8dee4', background: '#fff', cursor: 'pointer' }} title="Keep this reply on the dashboard as a note — its links travel with it">
                   + Add to dashboard
                 </button>
               ) : null}

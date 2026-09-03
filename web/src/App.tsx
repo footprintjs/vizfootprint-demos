@@ -39,8 +39,26 @@ import {
   type SheetColumn,
   orderedCheckpoints, currentBeatIndex, beatTarget,
   NoteCell, linkablesOf, mentionWorldOf,
+  boundField,
+  BranchMap,
+  BranchPill,
+  PathsModal,
+  ForkToast,
 } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
+import {
+  arrivesFrom,
+  beatCommitId,
+  noteRefs,
+  type ReplyRef,
+  capNote,
+  categoryCounts,
+  categorySums,
+  columnVocabulary,
+  emitIntent,
+  pickedFrom,
+  type Vocabulary,
+} from './derive.js';
 import { AnalystPanel } from './AnalystPanel.js';
 import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
 import { JumpBox } from './JumpBox.js';
@@ -99,6 +117,8 @@ const colorOfArea = (name: string | undefined): string => {
   return AREA_PALETTE[h % AREA_PALETTE.length] ?? '#888';
 };
 const DEFAULT_DISEASE = 'Pertussis';
+/** The one area kind every sum is over until the kinds view says otherwise. */
+const DEFAULT_KIND = 'state';
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -146,6 +166,10 @@ export function App(): JSX.Element {
   const [editing, setEditing] = useState<string | null>(null);
   const [asideTab, setAsideTab] = useState<'analyst' | 'edit'>('edit');
   const [asideOpen, setAsideOpen] = useState(false);
+  // BR-2: the named-paths door. A fork is only reversible if it is VISIBLE —
+  // the pill says which path you are on, the toast says one was just born, and
+  // this modal is the way back to the other one.
+  const [pathsOpen, setPathsOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -173,6 +197,63 @@ export function App(): JSX.Element {
   const fitsOf = (viewId: string) => state.views.find((v) => v.viewId === viewId)?.fits;
   // encoding links: render what each view SHOWS (followed channels laid over its own); edits still go to `encodings`
   const shown = state.effectiveEncodings ?? state.encodings;
+  /**
+   * WHICH FIELD A CHART'S CHANNEL ENCODES — the session's answer, not a
+   * constant written here at build time. A `reencode` moves `shown[viewId]`;
+   * every binding below reads through this, so BOTH sides of the chart follow
+   * it: the host aggregation that makes the marks, and the field the chart
+   * names on its axis. (They must move together — an axis that changed while
+   * the marks did not would be a lie, and marks that changed under an
+   * unchanged axis is the bug this replaced.)
+   */
+  const bound = (viewId: string, channel: string, fallback: string): string => boundField(shown[viewId] ?? {}, channel, fallback);
+  const coverageField = bound('coverage', 'category', absenceField);
+  const diseasesField = bound('diseases', 'category', 'disease');
+  const kindsField = bound('kinds', 'category', 'kind');
+  const weeksX = bound('weeks', 'x', 't');
+  const weeksY = bound('weeks', 'y', 'cases');
+  const trendX = bound('trend', 'x', 't');
+  const trendY = bound('trend', 'y', 'value');
+  const trendSeries = bound('trend', 'color', 'entity');
+  /**
+   * The vocabulary of a categorical axis when no DECLARED list names it: the
+   * distinct values the column actually carries, in first-seen order, CAPPED
+   * (see `columnVocabulary`). Counted once per column per snapshot — the cache
+   * is keyed on the rows themselves, so it is thrown away when they change and
+   * never otherwise. Uncached and uncapped, re-encoding a bar to a 900-value
+   * column cost ~766 ms and drew 900 bars nobody can read.
+   */
+  const vocabCache = useMemo(() => new Map<string, Vocabulary>(), [cells]);
+  const vocabOf = (field: string): Vocabulary => {
+    const hit = vocabCache.get(field);
+    if (hit !== undefined) return hit;
+    const fresh = columnVocabulary(cells, field);
+    vocabCache.set(field, fresh);
+    return fresh;
+  };
+  /**
+   * The cap, said on screen where it bites — never a silent truncation. The
+   * DRAWN count is passed in because it is not always the number the cap
+   * allowed: a category with no reported cell gets no bar.
+   */
+  const capWords = (field: string, drawn: number): string => {
+    const note = capNote(vocabOf(field), field, drawn);
+    return note === null ? '' : ` · ${note}`;
+  };
+  /**
+   * THE NOUN A CAPTION USES FOR A CHANNEL — the column NAME the session has
+   * that channel bound to, never a word written here at build time. The axis
+   * label, the accessible name, the tooltip and the emitted field all moved
+   * with a re-encode; the sentence under the chart was the last place still
+   * reading "by disease" over a chart of jurisdictions.
+   *
+   * It is the raw column name on purpose: that is exactly what the axis label
+   * beside it says, so the two cannot drift. (The def declares prettier words
+   * per column — "area kind", "week of the year" — but `state.columns` does
+   * not carry them; when the wire grows a label, this is the one place to
+   * read it.)
+   */
+  const noun = (field: string): string => field;
   // the prose plane: a view's words at the cursor, each with its author and whether it went stale — shown, never hidden
   const proseOf = (viewId: string) => state.views.find((v) => v.viewId === viewId)?.prose ?? [];
   const words = (viewId: string): ReactNode => {
@@ -188,7 +269,7 @@ export function App(): JSX.Element {
             title={p.status === 'stale' ? `stale — moved: ${p.changed.join(', ')}` : `${p.author.kind}${p.author.by ? ' · ' + p.author.by : ''}${p.author.model ? ' · ' + p.author.model : ''}`}
           >
             <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>{p.slot}</span>{' '}
-            <ProseText text={p.text} refs={p.refs} describeCommit={(id) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; }} onSeek={(id) => void view.seek(id)} onBeat={(label) => { const b = state.checkpoints.find((x) => x.label === label); if (b?.commitId) void view.seek(b.commitId); }} />
+            <ProseText text={p.text} refs={p.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBeat={seekBeat} />
             {p.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {p.changed.join(', ')} moved</span> : null}
             {p.status === 'derived' ? <span style={{ fontSize: 11, opacity: 0.7 }}> derived</span> : null}
             {p.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
@@ -199,6 +280,25 @@ export function App(): JSX.Element {
   };
   // Layer 4: the link graph decides what each clause does at each view — filter, highlight, navigate, mirror, or nothing
   const selFor = (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links, state.cleared);
+  /**
+   * SEEK TO A NAMED BEAT — the ONE resolver every beat anchor uses (a view's
+   * words, the dashboard summary, a note, the analyst's reply).
+   *
+   * A note's `@[beat]` link carries the tag's ID (`t1`), not its name, so that
+   * renaming a tag leaves every note working. Resolving it as a name (which
+   * this demo did in three places) can never match: the click did nothing at
+   * all — no seek, no error, no sentence. `beatCommitId` takes the id first
+   * and still accepts a label, so notes written before tag ids kept working.
+   */
+  const seekBeat = (beatRef: string): void => {
+    const commitId = beatCommitId(state.checkpoints, beatRef);
+    if (commitId !== null) void view.seek(commitId);
+  };
+  /** The words a commit anchor shows on hover — the same sentence everywhere. */
+  const describeCommit = (id: string): string | undefined => {
+    const c = state.commits.find((x) => x.id === id);
+    return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined;
+  };
   // the prose plane's altShort is the chart's accessible name; absent = the chart names itself
   // an empty altShort is a choice (a decorative chart) and stays empty; no slot at all = the chart names itself
   const altShortOf = (viewId: string): string | undefined => proseOf(viewId).find((p) => p.slot === 'altShort')?.text;
@@ -207,35 +307,50 @@ export function App(): JSX.Element {
   const viewLabels = useMemo(() => Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId])), [state.views]);
   const clearable = (id: string) => ({ active: liveViews.has(id), onClear: () => void view.clear(id, `clear ${viewLabels[id] ?? id}`) });
 
-  // the disease the person picked (the diseases view's point clause), else the default
-  const pickedDisease = useMemo(() => {
-    const clause = state.selections.find((s) => s.viewId === 'diseases');
-    return typeof clause?.value === 'string' ? clause.value : DEFAULT_DISEASE;
-  }, [state.selections]);
+  /**
+   * THE DISEASE A VIEW IS SHOWING — read through the LINK GRAPH, like every
+   * other consumer. These used to read `state.selections` directly, which
+   * skipped `selFor`/`keepPredicate` entirely: a link the person had switched
+   * OFF still moved the map, the trend, the table and four captions, while the
+   * Grammar panel and the log both said the link was off. The clause has to be
+   * ON the disease column too — re-encode that bar to jurisdictions and its
+   * clause names a STATE, and reading that as a disease puts "California"
+   * everywhere.
+   */
+  const diseaseFor = (viewId: string): string => pickedFrom(selFor(viewId), 'diseases', 'disease', DEFAULT_DISEASE);
+  /**
+   * The kind a view SUMS over — the kinds view's point clause on the kind
+   * column as it reaches that view, else states (summing states + regions +
+   * roll-ups would count every case three times).
+   */
+  const kindFor = (viewId: string): string => pickedFrom(selFor(viewId), 'kinds', 'kind', DEFAULT_KIND);
 
-  // the kind the host SUMS over — the kinds view's point clause, else states
-  // (summing states + regions + roll-ups would count every case three times)
-  const sumKind = useMemo(() => {
-    const clause = state.selections.find((s) => s.viewId === 'kinds');
-    return typeof clause?.value === 'string' ? clause.value : 'state';
-  }, [state.selections]);
-
+  // cells per category of whatever column the bar encodes. The DECLARED silence
+  // states name the categories only while it still encodes the absence field — a
+  // re-encoded bar takes its vocabulary from the data (a declared list belonging
+  // to another column would invent bars this column never had).
   const coverageData = useMemo(() => {
     const keep = keepPredicate(selFor('coverage'));
-    return absenceStates.map((category) => ({ category, count: cells.filter((r) => r[absenceField] === category && keep(r)).length }));
-  }, [cells, absenceStates, absenceField, state.selections]);
+    const categories = coverageField === absenceField ? absenceStates : vocabOf(coverageField).values;
+    // ONE pass over the cells, whatever the number of bars: a filter per bar is
+    // O(categories × rows), and 70 jurisdictions over 90,300 cells took 58 ms
+    // on every selection change (the budget is 50).
+    return categoryCounts(cells, coverageField, keep, categories);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor/vocabOf read the slices already listed
+  }, [cells, absenceStates, absenceField, coverageField, state.selections, state.links, state.cleared]);
 
-  // reported cases per disease over the kept cells of ONE kind — the host sums, the chart draws
+  // reported cases per category of whatever column the bar encodes, over the kept
+  // cells of ONE kind — the host sums, the chart draws
   const diseaseData = useMemo(() => {
-    const keep = keepPredicate(selFor('diseases'));
-    const sums = new Map<string, number>();
-    for (const c of cells) {
-      if (c.kind !== sumKind || c.cases === null || !keep(c)) continue;
-      sums.set(c.disease, (sums.get(c.disease) ?? 0) + c.cases);
-    }
-    // a disease with no present cell in view gets NO bar — a missing bar is a silence, a zero would be a lie
-    return (rows?.diseases ?? []).flatMap((category) => (sums.has(category) ? [{ category, count: sums.get(category)! }] : []));
-  }, [cells, rows?.diseases, sumKind, state.selections, state.links]);
+    const sel = selFor('diseases');
+    const keep = keepPredicate(sel);
+    const kind = pickedFrom(sel, 'kinds', 'kind', DEFAULT_KIND);
+    const sums = categorySums(cells, diseasesField, 'cases', (r) => r['kind'] === kind && keep(r));
+    // a category with no present cell in view gets NO bar — a missing bar is a silence, a zero would be a lie
+    const categories = diseasesField === 'disease' ? (rows?.diseases ?? []) : vocabOf(diseasesField).values;
+    return categories.flatMap((category) => (sums.has(category) ? [{ category, count: sums.get(category)! }] : []));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor/vocabOf read the slices already listed
+  }, [cells, rows?.diseases, diseasesField, state.selections, state.links, state.cleared]);
 
   // the HIGHLIGHT share of each disease bar: the same sums over the rows a highlight edge keeps bright
   // (the map lighting the bar) — only when such an edge is live, so the overlay never repeats the base
@@ -243,53 +358,81 @@ export function App(): JSX.Element {
     const sel = selFor('diseases');
     if (![...sel.clauses.values()].some((c) => c.response === 'highlight')) return undefined;
     const bright = brightPredicate(sel);
-    const sums = new Map<string, number>();
-    for (const c of cells) {
-      if (c.kind !== sumKind || c.cases === null || !bright(c)) continue;
-      sums.set(c.disease, (sums.get(c.disease) ?? 0) + c.cases);
-    }
+    const kind = pickedFrom(sel, 'kinds', 'kind', DEFAULT_KIND);
+    const sums = categorySums(cells, diseasesField, 'cases', (r) => r['kind'] === kind && bright(r));
     return [...sums.entries()].map(([category, count]) => ({ category, count }));
-  }, [cells, sumKind, state.selections, state.links]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+  }, [cells, diseasesField, state.selections, state.links, state.cleared]);
 
   const kindData = useMemo(() => {
     const keep = keepPredicate(selFor('kinds'));
-    return ['state', 'region', 'total'].map((category) => ({ category, count: cells.filter((r) => r.kind === category && keep(r)).length }));
-  }, [cells, state.selections]);
+    // the three declared area kinds name the categories only while the bar still encodes `kind`
+    const categories = kindsField === 'kind' ? ['state', 'region', 'total'] : vocabOf(kindsField).values;
+    return categoryCounts(cells, kindsField, keep, categories); // ONE pass, whatever the number of bars
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor/vocabOf read the slices already listed
+  }, [cells, kindsField, state.selections, state.links, state.cleared]);
 
-  // reported cases per week over the kept cells of the same ONE kind
+  // the y column summed per bucket of the x column, over the kept cells of the same
+  // ONE kind — both columns are the session's bindings, so a re-encode moves the line
   const weekData = useMemo(() => {
-    const keep = keepPredicate(selFor('weeks'));
+    const sel = selFor('weeks');
+    const keep = keepPredicate(sel);
+    const sumKind = pickedFrom(sel, 'kinds', 'kind', DEFAULT_KIND);
     const byWeek = new Map<string, number>();
     for (const c of cells) {
-      if (c.kind !== sumKind || c.cases === null || !keep(c)) continue;
-      byWeek.set(c.t, (byWeek.get(c.t) ?? 0) + c.cases);
+      if (c.kind !== sumKind || !keep(c)) continue;
+      const value = c[weeksY];
+      const bucket = c[weeksX];
+      if (typeof value !== 'number' || bucket === null || bucket === undefined) continue; // a silence is never a zero
+      const key = String(bucket);
+      byWeek.set(key, (byWeek.get(key) ?? 0) + value);
     }
     return [...byWeek.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, value]) => ({ date, value, series: `kept ${sumKind}s` }));
-  }, [cells, sumKind, state.selections]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+  }, [cells, weeksX, weeksY, state.selections, state.links, state.cleared]);
 
   // the trend for the picked disease — present cells only (a silence is a missing point).
   // Fifty-eight state lines are spaghetti, so until a kind or an area is chosen the
   // line shows the regions; the other views' clauses narrow it like any other view.
-  const areaChosen = state.selections.some((s) => (s.viewId === 'kinds' || s.viewId === 'table' || s.viewId === 'map') && s.value != null); // a map pick is an area chosen too
+  // "has an area been chosen?" is the same question as any other: what reaches
+  // the TREND through the link graph (a map pick is an area chosen too) — not
+  // what some other view happens to hold.
+  const areaChosenIn = (viewId: string): boolean => arrivesFrom(selFor(viewId), ['kinds', 'table', 'map']);
   const trendData = useMemo(() => {
-    const keep = keepPredicate(selFor('trend'));
-    return series
+    const sel = selFor('trend');
+    const keep = keepPredicate(sel);
+    const pickedDisease = pickedFrom(sel, 'diseases', 'disease', DEFAULT_DISEASE);
+    const areaChosen = arrivesFrom(sel, ['kinds', 'table', 'map']);
+    // one flat record per series row, carrying BOTH the series table's own names
+    // (t · entity · value) and the cell table's (jurisdiction · kind · disease), so a
+    // clause and a re-encoded channel can each name the column they know
+    const flat: Record<string, string | number>[] = series
       .filter((s) => s.metric === pickedDisease)
-      .map((s) => ({ t: s.t, jurisdiction: s.entity, kind: s.entity_kind, disease: s.metric, [absenceField]: 'present', value: s.value }))
-      .filter((r) => keep(r) && (areaChosen || r.kind === 'region'))
-      .map((r) => ({ date: r.t, value: r.value, series: r.jurisdiction }));
-  }, [series, pickedDisease, absenceField, areaChosen, state.selections]);
+      .map((s) => ({ t: s.t, entity: s.entity, entity_kind: s.entity_kind, metric: s.metric, value: s.value, jurisdiction: s.entity, kind: s.entity_kind, disease: s.metric, [absenceField]: 'present' }));
+    return flat
+      .filter((r) => keep(r) && (areaChosen || r['kind'] === 'region'))
+      .flatMap((r) => {
+        const date = r[trendX];
+        const value = r[trendY];
+        if (typeof value !== 'number' || date === undefined) return []; // an unbound channel draws nothing, never a guess
+        return [{ date: String(date), value, series: String(r[trendSeries] ?? '') }];
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+  }, [series, absenceField, trendX, trendY, trendSeries, state.selections, state.links, state.cleared]);
 
   // the picked disease per STATE, summed over the kept weeks — a state with no present cell gets no datum (the map hatches it)
   const mapData = useMemo(() => {
-    const keep = keepPredicate(selFor('map'));
+    const sel = selFor('map');
+    const keep = keepPredicate(sel);
+    const pickedDisease = pickedFrom(sel, 'diseases', 'disease', DEFAULT_DISEASE);
     const sums = new Map<string, number>();
     for (const c of cells) {
       if (c.kind !== 'state' || c.disease !== pickedDisease || c.cases === null || !keep(c)) continue;
       sums.set(c.jurisdiction, (sums.get(c.jurisdiction) ?? 0) + c.cases);
     }
     return [...sums.entries()].map(([region, value]) => ({ region, value }));
-  }, [cells, pickedDisease, state.selections]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+  }, [cells, state.selections, state.links, state.cleared]);
 
   // places that report to NNDSS but have no shape on this map — read off the data, never hand-listed
   const noShape = useMemo(() => {
@@ -300,7 +443,11 @@ export function App(): JSX.Element {
   }, [geo, cells]);
 
   const latestWeek = rows?.weeks[rows.weeks.length - 1] ?? '';
-  const tableRows = useMemo(() => cells.filter((c) => c.disease === pickedDisease && c.t === latestWeek), [cells, pickedDisease, latestWeek]);
+  const tableRows = useMemo(() => {
+    const pickedDisease = diseaseFor('table');
+    return cells.filter((c) => c.disease === pickedDisease && c.t === latestWeek);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- diseaseFor reads the slices already listed
+  }, [cells, latestWeek, state.selections, state.links, state.cleared]);
 
   const keepAll = keepPredicate(selFor(null));
   const keptCount = useMemo(() => cells.filter((r) => keepAll(r)).length, [cells, state.selections]);
@@ -360,7 +507,7 @@ export function App(): JSX.Element {
         {dashCaption !== undefined ? (
           <span style={{ color: dashCaption.status === 'stale' ? '#a8661a' : undefined, opacity: 0.9 }} title={`${dashCaption.author.kind}${dashCaption.author.by ? ' · ' + dashCaption.author.by : ''}${dashCaption.author.model ? ' · ' + dashCaption.author.model : ''}`}>
             <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6, marginRight: 4 }}>summary</span>{' '}
-            <ProseText text={dashCaption.text} refs={dashCaption.refs} describeCommit={(id) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; }} onSeek={(id) => void view.seek(id)} onBeat={(label) => { const b = state.checkpoints.find((x) => x.label === label); if (b?.commitId) void view.seek(b.commitId); }} />
+            <ProseText text={dashCaption.text} refs={dashCaption.refs} describeCommit={describeCommit} onSeek={(id) => void view.seek(id)} onBeat={seekBeat} />
             {dashCaption.status === 'stale' ? <span style={{ fontSize: 11, opacity: 0.8 }}> stale · {dashCaption.changed.join(', ')} moved</span> : null}
             {dashCaption.author.kind === 'agent' ? <span style={{ fontSize: 11, opacity: 0.7 }}> by the analyst</span> : null}
           </span>
@@ -441,15 +588,19 @@ export function App(): JSX.Element {
   const freshNoteId = (): string => `n${typeof crypto.randomUUID === 'function' ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10)}`;
   const newNote = (): void => setFreshNotes((f) => [...f, freshNoteId()]);
   // an analyst reply becomes a note: its words and its refs, the analyst (and its model) as author, the cursor and the live selections as its basis — so it goes stale honestly; no claim level is invented for it
-  const addReplyToDashboard = (line: { readonly text: string; readonly refs?: readonly { readonly span: readonly [number, number]; readonly commit: string; readonly label?: string }[] }, model?: string): void => {
-    const refs = (line.refs ?? []).map((r) => ({ span: r.span, commit: r.commit, ...(r.label !== undefined ? { label: r.label } : {}) }));
+  const addReplyToDashboard = (line: { readonly text: string; readonly refs?: readonly ReplyRef[] }, model?: string): void => {
+    // a ref names EITHER a commit or a BEAT (a checkpoint lands no commit of
+    // its own, so it is cited by its tag). This payload used to demand
+    // `commit: string`, so every beat citation was filtered out before it got
+    // here and the note lost it without a word — see `noteRefs`.
+    const refs = noteRefs(line.refs);
     const basis = { ...(typeof state.cursor === 'string' ? { atCommit: state.cursor } : {}), ...(state.filters !== undefined ? { filters: state.filters } : {}) };
     void view
       .describe(`note:${freshNoteId()}`, 'caption', { text: line.text, author: { kind: 'agent', ...(model !== undefined ? { model } : {}) }, ...(Object.keys(basis).length > 0 ? { basis } : {}), ...(refs.length > 0 ? { refs } : {}) }, 'add the analyst reply to the dashboard')
       .then((r) => { if (!r.ok) setProblem(r.sentence); }) // a refused note (a ref to a commit off this path, say) is said out loud, never dropped
       .catch((e: unknown) => setProblem(`the note did not land: ${e instanceof Error ? e.message : String(e)}`));
   };
-  const noteProps = { world: noteWorld, linkables: noteLinks, by: 'you', readOnly, onDescribe: describeNote, onSeek: (id: string) => void view.seek(id), onBeat: (label: string) => { const b = state.checkpoints.find((x) => x.label === label); if (b?.commitId) void view.seek(b.commitId); }, describeCommit: (id: string) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; } };
+  const noteProps = { world: noteWorld, linkables: noteLinks, by: 'you', readOnly, onDescribe: describeNote, onSeek: (id: string) => void view.seek(id), onBeat: seekBeat, describeCommit };
   const savedNoteIds = new Set((state.notes ?? []).map((n) => n.id));
   const noteCells = [
     ...(state.notes ?? []).map((n) => ({ id: `note:${n.id}`, render: () => <NoteCell note={n} {...noteProps} /> })),
@@ -494,7 +645,11 @@ export function App(): JSX.Element {
     { id: 'analyst', label: `Analyst${analystTurns > 0 ? ` (${analystTurns})` : ''}`, icon: '🧭', onSelect: () => { setAsideTab('analyst'); setAsideOpen(true); } },
     { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
     { id: 'save', label: 'Save selection', icon: '💾', disabled: liveSelection?.commitId === undefined || readOnly, hint: liveSelection === undefined ? 'nothing is selected' : `keep the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection by name`, onSelect: () => { const id = liveSelection?.commitId; if (liveSelection === undefined || id === undefined) return; const name = window.prompt(`Save the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection as…`); if (name) void view.saveSelection(id, name); } },
-    { id: 'present', label: mode === 'present' ? 'Back to Explore' : 'Present the beats', icon: '▶', disabled: mode !== 'present' && beats.length === 0, hint: mode !== 'present' && beats.length === 0 ? 'name a checkpoint first — the beats are the slides' : undefined, onSelect: () => { if (mode === 'present') { setShowing(false); setMode('explore'); } else startShow(); } },
+    { id: 'paths', label: `Paths${state.paths.list.length > 1 ? ` (${String(state.paths.list.length)})` : ''}`, icon: '⎇', hint: 'every line of work on this desk — switch back to any of them', onSelect: () => setPathsOpen(true) },
+    // the beats are the slides, and a beat is only a slide on ITS OWN path:
+    // "name a checkpoint first" is a lie when you have named three and walked
+    // onto another lane, so say which of the two is actually true
+    { id: 'present', label: mode === 'present' ? 'Back to Explore' : 'Present the beats', icon: '▶', disabled: mode !== 'present' && beats.length === 0, hint: mode === 'present' || beats.length > 0 ? undefined : state.checkpoints.length > 0 ? 'your checkpoints are on another path — switch to it (⎇ Paths) to present them' : 'name a checkpoint first — the beats are the slides', onSelect: () => { if (mode === 'present') { setShowing(false); setMode('explore'); } else startShow(); } },
     { id: 'add-chart', label: 'Add a chart', icon: '＋', disabled: true, hint: 'next packet: an accepted proposal joins the cockpit', onSelect: () => undefined },
     { id: 'text', label: 'Text tool', icon: '¶', disabled: readOnly, hint: 'a note on the dashboard — its words link to selections, checkpoints and commits', onSelect: newNote },
     { id: 'reset', label: 'Start fresh', icon: '↺', disabled: readOnly, hint: 'clear every commit and begin again — the data stays, the log is emptied', onSelect: startFresh },
@@ -527,8 +682,9 @@ export function App(): JSX.Element {
                   void view.refresh();
                 }}
                 onScreen={{ selections: state.selections.map((sel) => `${viewLabels[sel.viewId] ?? sel.viewId}: ${chipWords(sel)}`), cursor: state.cursor }}
-                describeCommit={(id) => { const c = state.commits.find((x) => x.id === id); return c ? `${c.label}${c.intent ? ' — ' + c.intent : ''}` : undefined; }}
+                describeCommit={describeCommit}
                 onSeek={(id) => void view.seek(id)}
+                onBeat={seekBeat}
                 onAddToDashboard={readOnly ? undefined : addReplyToDashboard}
               />
             ) : null}
@@ -577,6 +733,10 @@ export function App(): JSX.Element {
             checkpoints={state.checkpoints}
             branches={state.branches}
             viewingPast={state.viewingPast}
+            // the rail draws ONE path; these two say which, so eleven bars
+            // where fifty-three stood reads as a fork and not as data loss
+            {...(state.paths.current !== null ? { pathName: state.paths.current } : {})}
+            pathPill={<BranchPill paths={state.paths} onClick={() => setPathsOpen(true)} />}
             onSeek={(id) => void view.seek(id)}
             onStepBack={() => void view.stepBack()}
             onStepForward={() => void view.stepForward()}
@@ -603,16 +763,34 @@ export function App(): JSX.Element {
           <SavedSelections saved={state.saved ?? []} selections={state.selections} labels={viewLabels} readOnly={readOnly} onApply={(c) => void view.bringOver(c)} />
         </div>
       }
-      toast={problem === null ? null : <div role="alert" style={{ padding: 10, fontSize: 13 }}>⚠ {problem}</div>}
+      toast={
+        <>
+          {problem === null ? null : <div role="alert" style={{ padding: 10, fontSize: 13 }}>⚠ {problem}</div>}
+          {/* acting from a past cursor forks: the toast names the new path the moment it is born, and offers the way back */}
+          <ForkToast events={state.paths.events} onOpenPaths={() => setPathsOpen(true)} />
+          <PathsModal
+            open={pathsOpen}
+            onClose={() => setPathsOpen(false)}
+            paths={state.paths}
+            cursor={state.cursor}
+            readOnly={readOnly}
+            onSwitch={(name) => void view.switchPath(name)}
+            onRename={(from, to) => void view.renamePath(from, to)}
+            onNewPath={(commitId) => void view.newPathAt(commitId)}
+            onArchive={(name) => void view.archivePath(name)}
+            onRestore={(name) => void view.restorePath(name)}
+          />
+        </>
+      }
       charts={[
         {
           id: 'coverage',
           onEdit: () => editChart('coverage'),
           weight: 2,
           ...clearable('coverage'),
-          caption: `Coverage — ${String(keptCount)} of ${String(cells.length)} cells in view · which silence is which (click to select)`,
+          caption: `Coverage — ${String(keptCount)} of ${String(cells.length)} cells in view · ${coverageField === absenceField ? 'which silence is which' : `cells by ${noun(coverageField)}`} (click to select)${coverageField === absenceField ? '' : capWords(coverageField, coverageData.length)}`,
           render: ({ width, height }) => (
-            <VizBar viewId="coverage" data={coverageData} field={absenceField} colorOf={colorOfState} selection={selFor('coverage')} columns={columns} fits={fitsOf('coverage')} encoding={shown['coverage'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('coverage', e, 'select report state')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizBar viewId="coverage" data={coverageData} field={coverageField} colorOf={colorOfState} selection={selFor('coverage')} columns={columns} fits={fitsOf('coverage')} encoding={shown['coverage'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('coverage', e, emitIntent('select', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -620,9 +798,9 @@ export function App(): JSX.Element {
           onEdit: () => editChart('diseases'),
           weight: 4,
           ...clearable('diseases'),
-          caption: `Reported cases by disease, summed over kept ${sumKind}s (a disease with no present cell has no bar) — click one to drive the trend, the week line and the table (now: ${pickedDisease})`,
+          caption: `Reported cases by ${noun(diseasesField)}, summed over kept ${kindFor('diseases')}s (a ${noun(diseasesField)} with no present cell has no bar) — click one to drive the trend, the week line and the table wherever the links carry it (now: ${diseaseFor('diseases')})${diseasesField === 'disease' ? '' : capWords(diseasesField, diseaseData.length)}`,
           render: ({ width, height }) => (
-            <VizBar viewId="diseases" data={diseaseData} highlight={diseaseHighlight} field="disease" selection={selFor('diseases')} columns={columns} fits={fitsOf('diseases')} encoding={shown['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, 'pick disease')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizBar viewId="diseases" data={diseaseData} highlight={diseaseHighlight} field={diseasesField} selection={selFor('diseases')} columns={columns} fits={fitsOf('diseases')} encoding={shown['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, emitIntent('pick', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -630,9 +808,9 @@ export function App(): JSX.Element {
           onEdit: () => editChart('kinds'),
           weight: 1.5,
           ...clearable('kinds'),
-          caption: 'Cells by area kind — states, regions, roll-ups (click to select)',
+          caption: `Cells by ${kindsField === 'kind' ? 'area kind — states, regions, roll-ups' : noun(kindsField)} (click to select)${kindsField === 'kind' ? '' : capWords(kindsField, kindData.length)}`,
           render: ({ width, height }) => (
-            <VizBar viewId="kinds" data={kindData} field="kind" selection={selFor('kinds')} columns={columns} fits={fitsOf('kinds')} encoding={shown['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, 'select area kind')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizBar viewId="kinds" data={kindData} field={kindsField} selection={selFor('kinds')} columns={columns} fits={fitsOf('kinds')} encoding={shown['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, emitIntent('select', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -642,7 +820,7 @@ export function App(): JSX.Element {
           ...clearable('map'),
           caption: (
             <>
-              {`${pickedDisease} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`}
+              {`${diseaseFor('map')} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`}
               {words('map')}
             </>
           ),
@@ -652,7 +830,7 @@ export function App(): JSX.Element {
                 the map shapes have not arrived yet
               </div>
             ) : (
-              <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" ariaLabel={altShortOf('map')} selection={selFor('map')} width={width} height={height} onEmit={(e) => void view.emit('map', e, 'select state on the map')} />
+              <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" ariaLabel={altShortOf('map')} selection={selFor('map')} width={width} height={height} onEmit={(e) => void view.emit('map', e, emitIntent('select', e))} />
             ),
         },
         {
@@ -662,12 +840,12 @@ export function App(): JSX.Element {
           ...clearable('weeks'),
           caption: (
             <>
-              {`Reported cases per ${grain?.bucket ?? 'week'}, summed over kept ${sumKind}s · ${grain?.note ?? ''}`}
+              {`${noun(weeksY)} per ${weeksX === 't' ? (grain?.bucket ?? 'week') : noun(weeksX)}, summed over kept ${kindFor('weeks')}s · ${grain?.note ?? ''}`}
               {words('weeks')}
             </>
           ),
           render: ({ width, height }) => (
-            <VizLine viewId="weeks" data={weekData} dateField="t" valueField="cases" ariaLabel={altShortOf('weeks')} columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, 'brush weeks')} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+            <VizLine viewId="weeks" data={weekData} dateField={weeksX} valueField={weeksY} ariaLabel={altShortOf('weeks')} columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, emitIntent('brush', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
           ),
         },
         {
@@ -675,13 +853,13 @@ export function App(): JSX.Element {
           onEdit: () => editChart('trend'),
           weight: 3,
           ...clearable('trend'),
-          caption: `${pickedDisease} per ${areaChosen ? 'kept area' : 'region (the default until you pick a kind or an area)'}, ${grain?.bucket ?? 'week'} — a missing point is a silence, never a zero`,
+          caption: `${diseaseFor('trend')} — ${noun(trendY)} per ${areaChosenIn('trend') ? 'kept area' : 'region (the default until you pick a kind or an area)'}, by ${trendX === 't' ? (grain?.bucket ?? 'week') : noun(trendX)} — a missing point is a silence, never a zero`,
           render: ({ width, height }) => (
             <VizLine
               viewId="trend"
               data={trendData}
-              dateField="t"
-              valueField="value"
+              dateField={trendX}
+              valueField={trendY}
               colorOf={colorOfArea}
               columns={columns}
               fits={fitsOf('trend')}
@@ -689,7 +867,7 @@ export function App(): JSX.Element {
               xDomain={navigateDomain(selFor('trend'))?.range as readonly [string | null, string | null] | undefined}
               width={width}
               height={height}
-              onEmit={(e) => void view.emit('trend', e, 'brush the trend')}
+              onEmit={(e) => void view.emit('trend', e, emitIntent('brush', e))}
               onReencode={(v, c, f) => void view.reencode(v, c, f)}
             />
           ),
@@ -699,9 +877,9 @@ export function App(): JSX.Element {
           onEdit: () => editChart('table'),
           weight: 3,
           ...clearable('table'),
-          caption: `${pickedDisease}, week ending ${latestWeek} — the cells as CDC printed them, with their flag (click a row to select)`,
+          caption: `${diseaseFor('table')}, week ending ${latestWeek} — the cells as CDC printed them, with their flag (click a row to select)`,
           render: ({ width, height }) => (
-            <VizTable viewId="table" data={tableRows} columns={['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max']} idField="jurisdiction" selection={selFor('table')} width={width} height={height} onEmit={(e) => void view.emit('table', e, 'select area')} />
+            <VizTable viewId="table" data={tableRows} columns={['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max']} idField="jurisdiction" selection={selFor('table')} width={width} height={height} onEmit={(e) => void view.emit('table', e, emitIntent('select', e))} />
           ),
         },
         // notes join after the charts — the same place a saved arrangement puts anything it has not seen (orderCharts puts unknown ids last), so a new note lands in one place either way
@@ -796,6 +974,33 @@ export function App(): JSX.Element {
           content: <CommitLog commits={state.commits} onSeek={(id) => void view.seek(id)} />,
         },
         {
+          // WHERE THE FORKS ARE. The rail draws one path; this draws the whole
+          // story, every lane at once, with each named path's label on its tip —
+          // so "eleven bars where fifty-three stood" can be SEEN, and any step
+          // on any lane is one click away.
+          id: 'branches',
+          title: 'Paths',
+          icon: '⎇',
+          badge: state.paths.list.length,
+          content: (
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+              <p style={{ margin: '0 0 8px' }}>
+                Every line of work on this desk. The rail up top draws ONE of them — the one you are standing on; this draws them all. Click a step to go there, or use the ⎇ pill to switch paths by name.
+              </p>
+              <BranchMap
+                commits={state.commits}
+                cursor={state.cursor}
+                head={state.head}
+                checkpoints={state.checkpoints}
+                paths={state.paths.list}
+                archivedPaths={state.paths.archivedList}
+                onSeek={(id) => void view.seek(id)}
+                {...(readOnly ? {} : { onNewPath: (id: string) => void view.newPathAt(id), onBringOver: (id: string) => void view.bringOver(id) })}
+              />
+            </div>
+          ),
+        },
+        {
           // the data layer, two tabs: where the rows came from, and the rows themselves
           id: 'data',
           title: 'Data',
@@ -817,7 +1022,7 @@ export function App(): JSX.Element {
                     cursor={state.cursor}
                     {...(sheetRowId !== undefined ? { selectedRowId: sheetRowId } : {})}
                     readOnly={readOnly}
-                    onSelect={(field, value) => void view.emit('sheet', { rawValue: value, encoding: { kind: 'point', field } }, 'pick a row of the sheet')}
+                    onSelect={(field, value) => void view.emit('sheet', { rawValue: value, encoding: { kind: 'point', field } }, emitIntent('pick', { encoding: { field } }))}
                   />
                 )
               }

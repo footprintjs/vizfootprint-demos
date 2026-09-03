@@ -697,7 +697,7 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     cursor: overview.time.cursor,
     head: overview.time.head,
     branches: session.branches().map((b) => ({ tip: b.tip, length: b.length, actor: b.actor, active: b.active })),
-    checkpoints: session.checkpoints().map((c) => ({ label: c.label, commitId: c.commitId, at: c.at, ts: c.ts })),
+    checkpoints: session.checkpoints().map((c) => ({ id: c.id, label: c.label, commitId: c.commitId, at: c.at, ts: c.ts })), // the tag's id travels: a note links a tag by id, never by its name
     cursorTests: overview.time.cursorTests,
     viewingPast: overview.time.viewingPast,
     paths: { ...overview.paths, archivedList: session.paths({ includeArchived: true }) },
