@@ -33,6 +33,10 @@ import {
   selectionForView,
   useSessionView,
   Sources,
+  Sheet,
+  Workbook,
+  httpSheetData,
+  type SheetColumn,
   orderedCheckpoints, currentBeatIndex, beatTarget,
   NoteCell, linkablesOf, mentionWorldOf,
 } from 'vizfootprint-ui';
@@ -325,6 +329,27 @@ export function App(): JSX.Element {
   };
 
   const readOnly = mode === 'present';
+  // ── the Data tab: the Sheet over `cells`, through the window door ──
+  // The adapter is memoized on the SCHEMA's facts, never on the poll's object identity:
+  // a new adapter every second would be a new question every second.
+  const cellsFacetsKey = JSON.stringify(state.columns['cells'] ?? []);
+  const sheetColumns = useMemo<readonly SheetColumn[]>(
+    () =>
+      (JSON.parse(cellsFacetsKey) as { field: string; type: string; role?: string }[]).map((c) => ({
+        name: c.field,
+        type: c.type as SheetColumn['type'],
+        // the role the def declared rides to the header's badge; the KEY comes from the window itself
+        ...(c.role !== undefined ? { role: c.role as NonNullable<SheetColumn['role']> } : {}),
+      })),
+    [cellsFacetsKey],
+  );
+  const sheetData = useMemo(() => httpSheetData({ endpoint: '/api/window', table: 'cells', columns: sheetColumns }), [sheetColumns]);
+  // the table's version at the cursor: the sheet's blocks are keyed by it, so a refresh empties them
+  const cellsVersion = state.sources?.['cells']?.version;
+  // the sheet's OWN live clause, as a row id — so the row a person picked stays marked
+  const sheetClause = state.selections.find((sel) => sel.viewId === 'sheet');
+  const sheetRowId = typeof sheetClause?.value === 'string' || typeof sheetClause?.value === 'number' ? String(sheetClause.value) : undefined;
+  const sheetHeight = Math.max(280, Math.min(520, Math.round(window.innerHeight * 0.82) - 190));
   // The DASHBOARD's own words: its caption is the one-line summary of the whole desk, kept by the analyst (who proposes;
   // a person accepts). Shown under the time strip with its status; a stale summary says what moved.
   const dashCaption = state.dashboard?.prose.find((p) => p.slot === 'caption');
@@ -467,7 +492,7 @@ export function App(): JSX.Element {
   };
   const menuItems = [
     { id: 'analyst', label: `Analyst${analystTurns > 0 ? ` (${analystTurns})` : ''}`, icon: '🧭', onSelect: () => { setAsideTab('analyst'); setAsideOpen(true); } },
-    { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? state.views[0]?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
+    { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
     { id: 'save', label: 'Save selection', icon: '💾', disabled: liveSelection?.commitId === undefined || readOnly, hint: liveSelection === undefined ? 'nothing is selected' : `keep the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection by name`, onSelect: () => { const id = liveSelection?.commitId; if (liveSelection === undefined || id === undefined) return; const name = window.prompt(`Save the ${viewLabels[liveSelection.viewId] ?? liveSelection.viewId} selection as…`); if (name) void view.saveSelection(id, name); } },
     { id: 'present', label: mode === 'present' ? 'Back to Explore' : 'Present the beats', icon: '▶', disabled: mode !== 'present' && beats.length === 0, hint: mode !== 'present' && beats.length === 0 ? 'name a checkpoint first — the beats are the slides' : undefined, onSelect: () => { if (mode === 'present') { setShowing(false); setMode('explore'); } else startShow(); } },
     { id: 'add-chart', label: 'Add a chart', icon: '＋', disabled: true, hint: 'next packet: an accepted proposal joins the cockpit', onSelect: () => undefined },
@@ -512,7 +537,7 @@ export function App(): JSX.Element {
       <label style={{ display: 'block', fontSize: 12.5, marginBottom: 10 }}>
         Chart{' '}
         <select value={editing ?? ''} onChange={(e) => setEditing(e.target.value)} style={{ font: 'inherit', fontSize: 13 }}>
-          {state.views.filter((v) => v.viewId !== 'analyst').map((v) => (
+          {state.views.filter((v) => v.viewId !== 'analyst' && v.viewId !== 'sheet').map((v) => (
             <option key={v.viewId} value={v.viewId}>
               {viewLabels[v.viewId] ?? v.viewId}
             </option>
@@ -771,11 +796,33 @@ export function App(): JSX.Element {
           content: <CommitLog commits={state.commits} onSeek={(id) => void view.seek(id)} />,
         },
         {
-          id: 'sources',
-          title: 'Sources',
-          icon: '🗂',
+          // the data layer, two tabs: where the rows came from, and the rows themselves
+          id: 'data',
+          title: 'Data',
+          icon: '▦',
           badge: state.tables?.length ?? 0,
-          content: <Sources tables={state.tables ?? []} sources={state.sources} columns={state.columns} journal={state.journal} journalTotal={state.journalTotal} checks={checks} checksError={checksError} onRefresh={refreshSources} refreshing={refreshing} readOnly={readOnly} />,
+          content: (
+            <Workbook
+              sources={<Sources tables={state.tables ?? []} sources={state.sources} columns={state.columns} journal={state.journal} journalTotal={state.journalTotal} checks={checks} checksError={checksError} onRefresh={refreshSources} refreshing={refreshing} readOnly={readOnly} />}
+              sheet={
+                cellsVersion === undefined ? (
+                  <p style={{ fontSize: 13, opacity: 0.8 }}>reading the session…</p>
+                ) : (
+                  <Sheet
+                    data={sheetData}
+                    viewId="sheet"
+                    table="cells"
+                    height={sheetHeight}
+                    version={cellsVersion}
+                    cursor={state.cursor}
+                    {...(sheetRowId !== undefined ? { selectedRowId: sheetRowId } : {})}
+                    readOnly={readOnly}
+                    onSelect={(field, value) => void view.emit('sheet', { rawValue: value, encoding: { kind: 'point', field } }, 'pick a row of the sheet')}
+                  />
+                )
+              }
+            />
+          ),
         },
         {
           id: 'story',

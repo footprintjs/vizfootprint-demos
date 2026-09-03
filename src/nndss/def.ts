@@ -36,9 +36,12 @@ const WEEKS: ActorMeta = { actor: 'user', label: 'Reported cases by week', does:
 const TREND: ActorMeta = { actor: 'user', label: 'Trend per area', does: 'follow one area\'s weekly trend' };
 const MAP: ActorMeta = { actor: 'user', label: 'Reported cases by state, on the map', does: 'click a state on the map to select it, shift-click for several' };
 const TABLE: ActorMeta = { actor: 'user', label: 'The cells, as CDC printed them', does: 'pick one row of the table: a jurisdiction and its cells' };
+// The SHEET (the data layer's second tab): every row the charts see, read through the same link
+// graph as any chart — its own clause excluded, the others' applied. Grain [] : one mark per row.
+const SHEET: ActorMeta = { actor: 'user', label: 'Sheet', does: 'scroll every row the charts see, and read the window it is showing' };
 const ANALYST: ActorMeta = { actor: 'agent', label: 'Analyst' };
 
-export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'analyst'] as const;
+export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'sheet', 'analyst'] as const;
 
 /** The dashboard's DECLARED words (title + summary) — the def's prose entry and the story's fallback read the same constant. */
 export const DASHBOARD_WORDS = {
@@ -76,7 +79,7 @@ export function nndssDef(tables: NndssTables): DashboardDef {
         columns: { t: { role: 'dimension', type: 'date' }, entity: { role: 'dimension' }, metric: { role: 'dimension' }, value: { role: 'measure' }, entity_kind: { role: 'dimension' } },
       },
     },
-    actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, analyst: ANALYST },
+    actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, sheet: SHEET, analyst: ANALYST },
     encodings: [
       { viewId: 'coverage', chartKind: 'bar', channels: ['category'], initial: { category: ABSENCE_FIELD } },
       { viewId: 'diseases', chartKind: 'bar', channels: ['category'], initial: { category: 'disease' } },
@@ -96,7 +99,12 @@ export function nndssDef(tables: NndssTables): DashboardDef {
       { viewId: 'weeks', keys: ['t'] },
       { viewId: 'trend', keys: ['t', 'entity'] },
       { viewId: 'table', keys: ['jurisdiction'] },
+      // the sheet stands for ROWS, not groups: grain [] is one mark per row of `cells`
+      { viewId: 'sheet', keys: [] },
     ],
+    // The sheet's honest capability envelope: it can emit a point (a row) and a match
+    // (a header filter, when that lands) — never an interval, and never the compound cell.
+    capabilities: [{ viewId: 'sheet', canProbe: true, encodings: ['point', 'match'] }],
     // Layer 4 — the LINKS between views, declared. Everything not listed here is the default
     // rule (every view filters every other, self excluded), written out by the library so the
     // matrix shows it. These four are the demo's story: the map LIGHTS the disease bar instead of

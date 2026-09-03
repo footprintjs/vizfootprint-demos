@@ -6,6 +6,7 @@
  *
  *   GET  /api/state        everything the cockpit renders
  *   GET  /api/rows         the three tables + grain + the absence vocabulary
+ *   GET  /api/window       ONE window of rows for the Sheet (the session's view-query port)
  *   GET  /api/proposals    what beat 1 already did here (survives a reload)
  *   POST /api/dispatch     a human gesture → a user-badged commit
  *   POST /api/seek | checkpoint | paths | compare | bring-over | undo
@@ -25,13 +26,99 @@ import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposa
 import { buildNndssSurfaceAsync, type NndssSurface } from '../src/nndss/surface.js';
 import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
 import { DASHBOARD_WORDS, nndssDef } from '../src/nndss/def.js';
-import type { InteractionSession } from '../../vizfootprint/src/session/index.js';
+import type { InteractionSession, ViewQuery } from '../../vizfootprint/src/session/index.js';
+import type { SortSpec } from '../../vizfootprint/src/data/index.js';
 import { openSource } from '../../vizfootprint/src/source/index.js';
 import { fileSource } from '../../vizfootprint/src/source/file.js';
 import { MODEL, createNndssAnalyst, liveProvider, scriptedNndssMock, type ActivityStep, type NndssAnalyst } from '../src/nndss/analyst.js';
 import type { NndssTables } from '../src/nndss/etl.js';
 
 export const API_ROOT = '/api';
+
+// ── the window door: the Sheet's one question, parsed strictly ───────────────
+
+/** One sort key as the wire may carry it: a field, a direction, and where absent values go. */
+function isSortSpec(value: unknown): value is SortSpec {
+  if (typeof value !== 'object' || value === null) return false;
+  const spec = value as { field?: unknown; dir?: unknown; absent?: unknown };
+  return typeof spec.field === 'string' && spec.field !== '' && (spec.dir === 'asc' || spec.dir === 'desc') && (spec.absent === undefined || spec.absent === 'first' || spec.absent === 'last');
+}
+
+/** A whole number of rows, or the sentence saying what arrived instead. */
+function rowCount(name: string, raw: string): number | { readonly error: string } {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) return { error: `${name}=${raw} is not a whole number of rows` };
+  return n;
+}
+
+/** The most rows one window may ask for. A grid shows tens; a thousand is already a generous block. */
+export const WINDOW_LIMIT_MAX = 1000;
+
+/**
+ * `?table=&viewId=&columns=&sort=&offset=&limit=` → the session's `ViewQuery`.
+ * Every part is optional and every bad part is REFUSED with a sentence — a
+ * query the door could not read is never quietly turned into a default window.
+ */
+export function windowQueryOf(params: URLSearchParams): ViewQuery | { readonly error: string } {
+  const query: { table?: string; viewId?: string; columns?: string[]; sort?: SortSpec[]; offset?: number; limit?: number } = {};
+  const table = params.get('table');
+  if (table !== null) {
+    if (table === '') return { error: 'table= was empty — name a declared table, or leave it out for the default one' };
+    query.table = table;
+  }
+  const viewId = params.get('viewId');
+  if (viewId !== null) {
+    if (viewId === '') return { error: 'viewId= was empty — name a declared view, or leave it out for every live clause' };
+    query.viewId = viewId;
+  }
+  const columns = params.get('columns');
+  if (columns !== null) {
+    // JSON, never a joined list: a column may be called `a,b`, and a delimiter would split it in two
+    let names: unknown;
+    try {
+      names = JSON.parse(columns);
+    } catch {
+      return { error: 'columns= is not JSON — send a list like ["jurisdiction","cases"]' };
+    }
+    if (!Array.isArray(names) || names.length === 0 || !names.every((n) => typeof n === 'string' && n !== '')) {
+      return { error: 'columns= must be a non-empty JSON list of column names — or leave it out for every column the cursor sees' };
+    }
+    query.columns = names as string[];
+  }
+  const sort = params.get('sort');
+  if (sort !== null) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(sort);
+    } catch {
+      return { error: 'sort= is not JSON — send a list like [{"field":"cases","dir":"desc"}]' };
+    }
+    if (!Array.isArray(parsed) || !parsed.every(isSortSpec)) return { error: 'sort= must be a list of {field, dir: "asc" | "desc", absent?: "first" | "last"} — nothing else' };
+    query.sort = parsed;
+  }
+  const offset = params.get('offset');
+  if (offset !== null) {
+    const n = rowCount('offset', offset);
+    if (typeof n !== 'number') return n;
+    query.offset = n;
+  }
+  const limit = params.get('limit');
+  if (limit !== null) {
+    const n = rowCount('limit', limit);
+    if (typeof n !== 'number') return n;
+    if (n === 0) return { error: 'limit=0 asks for no rows — ask for at least one' };
+    if (n > WINDOW_LIMIT_MAX) return { error: `limit=${String(n)} is more than one window — ask for at most ${String(WINDOW_LIMIT_MAX)} rows` };
+    query.limit = n;
+  }
+  return query;
+}
+
+/** The window door itself: a refusal with its sentence, or the session's own `ViewQueryResult`, verbatim. */
+export async function answerWindow(session: Pick<InteractionSession, 'viewQuery'>, params: URLSearchParams): Promise<{ readonly status: number; readonly body: unknown }> {
+  const query = windowQueryOf(params);
+  if ('error' in query) return { status: 400, body: { error: query.error } };
+  return { status: 200, body: await session.viewQuery(query) };
+}
 /**
  * The committed US state boundaries (data/geo, with their provenance) — read
  * once through the source layer, served with the version the file system
@@ -432,6 +519,11 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
           linksMeaning: 'every view\'s selection filters every other view; a view never filters itself',
         },
       }), true;
+    }
+    // the Sheet's window: one question, answered by the session's view-query port verbatim
+    if (req.method === 'GET' && door === 'window') {
+      const answer = await answerWindow(session, url.searchParams);
+      return sendJson(res, answer.status, answer.body), true;
     }
     if (req.method === 'GET' && door === 'proposals') return sendJson(res, 200, { proposals: desk.proposals, ledger: (await session.overview()).fdr }), true;
     if (req.method === 'GET' && door === 'analyst') return sendJson(res, 200, analystState(desk)), true;
