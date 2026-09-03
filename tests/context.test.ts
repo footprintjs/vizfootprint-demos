@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { onScreenNow } from '../server/doors.js';
 import { buildNndssSurface } from '../src/nndss/surface.js';
-import type { Cause } from '../../vizfootprint/src/cause/index.js';
+import type { Cause } from 'vizfootprint/cause';
 
 /**
  * WHAT THE ANALYST IS TOLD IS ON SCREEN.

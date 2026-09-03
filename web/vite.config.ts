@@ -1,8 +1,9 @@
 /**
  * The web app's build — a plain Vite + React page that speaks to the demo
- * server over `/api` (proxied in dev, same-origin in a build). `vizfootprint-ui`
- * is a `file:` link to the sibling checkout, outside this repo, so the dev
- * server is allowed to read it.
+ * server over `/api` (proxied in dev, same-origin in a build). `vizfootprint`
+ * and `vizfootprint-ui` are `file:` links to the sibling checkout, outside this
+ * repo, so the dev server is allowed to read it — the whole checkout, because
+ * the library's dist/ now sits beside the ui package rather than inside it.
  */
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -20,7 +21,7 @@ export default defineConfig({
     port: 5291,
     strictPort: true,
     proxy: { '/api': API },
-    fs: { allow: [REPO, path.resolve(REPO, '..', 'vizfootprint', 'ui')] },
+    fs: { allow: [REPO, path.resolve(REPO, '..', 'vizfootprint')] },
   },
   build: { outDir: path.join(HERE, 'dist'), emptyOutDir: true },
 });

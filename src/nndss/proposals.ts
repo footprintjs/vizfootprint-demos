@@ -12,7 +12,7 @@
  *   3  refused  — it encodes no data field at all — there is no claim to ledger
  *   4  refused  — it re-uses chart A's id — one id, one proposal
  */
-import type { InteractionSession } from '../../../vizfootprint/src/agent/index.js';
+import type { InteractionSession } from 'vizfootprint/agent';
 
 export interface ProposalOutcome {
   readonly id: string;

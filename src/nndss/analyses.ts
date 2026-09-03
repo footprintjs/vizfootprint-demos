@@ -10,8 +10,8 @@
  * turn a silence into a zero. `presentOnly` wraps each built-in so it runs
  * over the present cells of the selection and says so in its honesty notes.
  */
-import type { AnalysisModule, AnalysisOutput } from '../../../vizfootprint/src/analysis/index.js';
-import { correlationAnalysis, groupByAnalysis, regressionAnalysis } from '../../../vizfootprint/src/analysis/index.js';
+import type { AnalysisModule, AnalysisOutput } from 'vizfootprint/analysis';
+import { correlationAnalysis, groupByAnalysis, regressionAnalysis } from 'vizfootprint/analysis';
 import { WEEK_INDEX_FIELD } from './etl.js';
 
 type Rows = readonly Record<string, unknown>[];

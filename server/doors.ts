@@ -22,17 +22,17 @@
  * One surface per server, single-user — the honest scope of a demo.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { whatLanded } from '../../vizfootprint/src/agent/index.js';
-import type { DispatchAction, FilterRange, VizLanded } from '../../vizfootprint/src/agent/index.js';
+import { whatLanded } from 'vizfootprint/agent';
+import type { DispatchAction, FilterRange, VizLanded } from 'vizfootprint/agent';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurfaceAsync, type NndssSurface } from '../src/nndss/surface.js';
-import { DISPATCH_VERBS } from '../../vizfootprint/src/def/index.js';
+import { DISPATCH_VERBS } from 'vizfootprint/def';
 import { DASHBOARD_WORDS, nndssDef } from '../src/nndss/def.js';
-import type { InteractionSession, ViewQuery } from '../../vizfootprint/src/session/index.js';
-import type { SortSpec } from '../../vizfootprint/src/data/index.js';
-import { openSource } from '../../vizfootprint/src/source/index.js';
-import { fileSource } from '../../vizfootprint/src/source/file.js';
+import type { InteractionSession, ViewQuery } from 'vizfootprint/session';
+import type { SortSpec } from 'vizfootprint/data';
+import { openSource } from 'vizfootprint/source';
+import { fileSource } from 'vizfootprint/source/file';
 import { MODEL, createNndssAnalyst, liveProvider, scriptedNndssMock, type ActivityStep, type NndssAnalyst } from '../src/nndss/analyst.js';
 import type { NndssTables } from '../src/nndss/etl.js';
 

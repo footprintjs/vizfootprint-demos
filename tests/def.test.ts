@@ -3,8 +3,8 @@
  * library reads at build, at dispatch, and in the picker — one sentence each.
  */
 import { describe, expect, it } from 'vitest';
-import { buildDashboard, validateDashboardDef } from '../../vizfootprint/src/def/index.js';
-import type { Cause } from '../../vizfootprint/src/cause/index.js';
+import { buildDashboard, validateDashboardDef } from 'vizfootprint/def';
+import type { Cause } from 'vizfootprint/cause';
 import { nndssDef } from '../src/nndss/def.js';
 import type { NndssTables } from '../src/nndss/etl.js';
 

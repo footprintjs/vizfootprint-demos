@@ -10,10 +10,10 @@
  *
  * Nothing here knows about HTTP; `server/` puts it on the wire.
  */
-import { buildDashboard, vizAsTools } from '../../../vizfootprint/src/agent/index.js';
-import { buildDashboardAsync } from '../../../vizfootprint/src/def/index.js';
-import type { Dashboard } from '../../../vizfootprint/src/def/index.js';
-import type { InteractionSession, VizToolsPort } from '../../../vizfootprint/src/agent/index.js';
+import { buildDashboard, vizAsTools } from 'vizfootprint/agent';
+import { buildDashboardAsync } from 'vizfootprint/def';
+import type { Dashboard } from 'vizfootprint/def';
+import type { InteractionSession, VizToolsPort } from 'vizfootprint/agent';
 import { nndssDef } from './def.js';
 import { loadSnapshot, type NndssTables } from './etl.js';
 

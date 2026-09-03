@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { answerWindow, windowQueryOf, WINDOW_LIMIT_MAX } from '../server/doors.js';
 import { buildNndssSurface } from '../src/nndss/surface.js';
-import type { InteractionSession, ViewQuery, ViewQueryResult } from '../../vizfootprint/src/session/index.js';
+import type { InteractionSession, ViewQuery, ViewQueryResult } from 'vizfootprint/session';
 
 const params = (qs: string): URLSearchParams => new URLSearchParams(qs);
 

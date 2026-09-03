@@ -12,7 +12,7 @@
 import { Agent, defineTool, isPaused } from 'agentfootprint';
 import { agentThinkingTrace } from 'agentfootprint/observe';
 import { browserAnthropic, mock, type LLMProvider, type LLMRequest, type LLMResponse } from 'agentfootprint/providers';
-import type { VizToolResult, VizToolsPort } from '../../../vizfootprint/src/agent/index.js';
+import type { VizToolResult, VizToolsPort } from 'vizfootprint/agent';
 import { NNDSS_ANALYSIS_IDS } from './analyses.js';
 
 // The grammar carries the intelligence — offers, sentences, refusals — so the analyst

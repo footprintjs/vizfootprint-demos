@@ -21,11 +21,10 @@
  * binding is a real date, not a week number that lies across years.
  */
 import { readFileSync } from 'node:fs';
-import { parseCSVTyped } from '../../../vizfootprint/src/data/csv.js';
-import { openSource } from '../../../vizfootprint/src/source/index.js';
-import { fileSource } from '../../../vizfootprint/src/source/file.js';
-import type { SeriesPoint } from '../../../vizfootprint/src/def/series.js';
-import type { SeriesGrain } from '../../../vizfootprint/src/def/types.js';
+import { parseCSVTyped } from 'vizfootprint/data';
+import { openSource } from 'vizfootprint/source';
+import { fileSource } from 'vizfootprint/source/file';
+import type { SeriesGrain, SeriesPoint } from 'vizfootprint/def';
 import { cellOf, type Absence } from './absence.js';
 
 export type JurisdictionKind = 'state' | 'region' | 'total';
