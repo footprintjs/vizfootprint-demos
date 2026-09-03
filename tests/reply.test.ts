@@ -242,11 +242,11 @@ describe('a real scripted turn', () => {
     const acts: ActivityStep[] = [];
     const analyst = createNndssAnalyst(port, { provider: scriptedNndssMock(), onActivity: (s) => acts.push(s) });
     const turn = await analyst.send('Focus on pertussis by area and save the moment.');
-    const known: KnownTargets = { commits: new Set(session.log.records.map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
+    const known: KnownTargets = { commits: new Set(session.commits('anywhere').map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
     const out = parseReply(turn.text, known, acts);
     expect(out.text.startsWith('I selected Pertussis')).toBe(true);
     expect(quoted(out)).toEqual(['selected Pertussis on the diseases view', 'ran casesByArea over the present cells', 'named this position "Pertussis by area"']);
-    expect(out.refs.filter((r) => r.commit !== undefined).every((r) => session.log.records.some((rec) => rec.id === r.commit))).toBe(true);
+    expect(out.refs.filter((r) => r.commit !== undefined).every((r) => session.commits('anywhere').some((rec) => rec.id === r.commit))).toBe(true);
     expect(out.refs.filter((r) => r.bookmark !== undefined).map((r) => r.bookmark)).toEqual(session.bookmarkViews().map((c) => c.id)); // the bookmark it named is citable
     expect(out.note).toBeUndefined(); // every citation the analyst offered resolved
   });

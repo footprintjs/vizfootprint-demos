@@ -22,7 +22,8 @@
  * One surface per server, single-user — the honest scope of a demo.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { DispatchAction, FilterRange } from '../../vizfootprint/src/agent/index.js';
+import { whatLanded } from '../../vizfootprint/src/agent/index.js';
+import type { DispatchAction, FilterRange, VizLanded } from '../../vizfootprint/src/agent/index.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurfaceAsync, type NndssSurface } from '../src/nndss/surface.js';
@@ -175,14 +176,34 @@ export interface TranscriptLine {
   readonly note?: string;
 }
 
+/** How many recent acts the on-screen block carries — the number the disclosure below is measured against. */
+const RECENT_ACTS = 6;
+
+/** "1 act" / "3 acts" — a count that reads as a sentence rather than a field. */
+function plural(n: number, noun: string): string {
+  return `${String(n)} ${noun}${n === 1 ? '' : 's'}`;
+}
+
 /** What is on screen now, FROM THE RECORD (never the browser): a bounded block the analyst reads as context. */
-async function onScreenNow(session: InteractionSession): Promise<string> {
+export async function onScreenNow(session: InteractionSession): Promise<string> {
   const o = await session.overview();
   const lines: string[] = ['On screen now (from the record):'];
   const selections = o.activeSelections.map((sel) => `${sel.viewId}: ${sel.field} ${sel.kind} ${JSON.stringify(sel.value)}`);
   lines.push(`- selections: ${selections.length > 0 ? selections.join('; ') : 'none'}`);
-  const recent = session.log.records.slice(-6).map((r) => `#${r.id} ${r.viewId}${r.field ? '.' + r.field : ''}${r.cause.intent ? ' — ' + r.cause.intent : ''}`);
+  // the acts THIS position saw: `commits('path')` is root->cursor, so a seek or a fork
+  // never hands the analyst six acts from a branch the dashboard is not standing on
+  const onPath = session.commits('path');
+  const recent = onPath.slice(-RECENT_ACTS).map((r) => `#${r.id} ${r.viewId}${r.field ? '.' + r.field : ''}${r.cause.intent ? ' — ' + r.cause.intent : ''}`);
   lines.push(`- last acts: ${recent.length > 0 ? recent.join('; ') : 'none yet'}`);
+  // Showing fewer acts than the block asks for, with nothing said, reads as "this
+  // dashboard has a short history" when the truth is that it has a DIFFERENT one.
+  // So when the path runs short and there are acts elsewhere in the tree, say the
+  // two numbers — and only the numbers: the other acts are not on this path, and
+  // naming them would invite the off-branch citation the library refuses.
+  const elsewhere = session.commits('anywhere').length - onPath.length;
+  if (onPath.length < RECENT_ACTS && elsewhere > 0) {
+    lines.push(`- ${plural(onPath.length, 'act')} on this path; ${String(elsewhere)} more on other paths.`);
+  }
   const shown = Object.entries(o.effectiveEncodings)
     .filter(([, enc]) => Object.keys(enc).length > 0)
     .map(([viewId, enc]) => `${viewId}(${Object.entries(enc).map(([ch, f]) => `${ch}=${f}`).join(', ')})`);
@@ -368,35 +389,22 @@ export interface KnownTargets {
   readonly bookmarks: ReadonlySet<string>;
 }
 
-/** Where one ref lands: a commit to seek, or a bookmark (a tag) to go to. */
-type RefTarget = { readonly commit: string; readonly bookmark?: undefined } | { readonly commit?: undefined; readonly bookmark: string };
-
 /**
- * What an act left behind: the commit it landed, or the TAG it named — a
- * bookmark lands no commit, and is cited by its tag.
+ * Where one ref lands: a commit to seek, or a bookmark (a tag) to go to.
  *
- * `commitId` is the chart proposal's: `propose_chart` deliberately never hands
- * back the commit RECORD (its value is the spec, and the surface does not echo
- * a spec), so it names the moment by id. Without that case a reply saying "the
- * chart I just proposed" resolved to nothing and the link was dropped as
- * unverifiable — a real act, on the trace, that the reply could not point at.
+ * `whatLanded` is the library's — this file used to walk the four result
+ * shapes itself, in two places that had already drifted (one gated on
+ * `ok === true` and the other did not). A tool result is the port's to
+ * describe, so the reader is the port's too.
  */
-function landedBy(activity: readonly ActivityStep[], act: number): RefTarget | undefined {
-  const result = activity[act - 1]?.result as { ok?: boolean; commit?: { id?: unknown }; commitId?: unknown; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } } | undefined;
-  if (result?.ok !== true) return undefined;
-  if (typeof result.commit?.id === 'string') return { commit: result.commit.id };
-  if (typeof result.commitId === 'string') return { commit: result.commitId };
-  if (typeof result.analysis?.commit?.id === 'string') return { commit: result.analysis.commit.id };
-  if (typeof result.bookmark?.id === 'string') return { bookmark: result.bookmark.id };
-  return undefined;
-}
+type RefTarget = VizLanded;
 
 /** The one target a cited ref resolves to, or nothing — a commit the log does not hold and a tag nobody named resolve to nothing, and nothing is guessed. */
 function resolveTarget(cited: { readonly commit?: unknown; readonly bookmark?: unknown; readonly act?: unknown }, known: KnownTargets, activity: readonly ActivityStep[]): RefTarget | undefined {
   if (typeof cited.commit === 'string' && known.commits.has(cited.commit)) return { commit: cited.commit };
   if (typeof cited.bookmark === 'string' && known.bookmarks.has(cited.bookmark)) return { bookmark: cited.bookmark };
   if (typeof cited.act !== 'number' || !Number.isInteger(cited.act)) return undefined;
-  const landed = landedBy(activity, cited.act);
+  const landed = whatLanded(activity[cited.act - 1]?.result);
   if (landed?.commit !== undefined && known.commits.has(landed.commit)) return landed;
   if (landed?.bookmark !== undefined && known.bookmarks.has(landed.bookmark)) return landed;
   return undefined;
@@ -405,8 +413,8 @@ function resolveTarget(cited: { readonly commit?: unknown; readonly bookmark?: u
 /** Words for a ref's anchor: the act's own framing when the target came from this turn. */
 function actLabel(activity: readonly ActivityStep[], target: RefTarget): string | undefined {
   const step = activity.find((st) => {
-    const r = st.result as { commit?: { id?: unknown }; commitId?: unknown; analysis?: { commit?: { id?: unknown } }; bookmark?: { id?: unknown } };
-    return target.commit !== undefined ? r.commit?.id === target.commit || r.commitId === target.commit || r.analysis?.commit?.id === target.commit : r.bookmark?.id === target.bookmark;
+    const landed = whatLanded(st.result);
+    return landed !== undefined && landed.commit === target.commit && landed.bookmark === target.bookmark;
   });
   if (step === undefined) return undefined;
   const args = step.args as { verb?: unknown; intent?: unknown; label?: unknown; analysisId?: unknown };
@@ -686,7 +694,7 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
   const { session, tables } = desk.surface;
   const overview = await session.overview(); // one walk per poll: the overview already counted the selection through the engine
   return {
-    records: session.log.records,
+    records: session.commits('anywhere'), // the whole tree: the rail and the branch map draw every lineage
     fdr: overview.fdr,
     analyses: overview.analyses,
     activeSelections: overview.activeSelections,
@@ -713,7 +721,7 @@ async function stateOf(desk: Desk): Promise<Record<string, unknown>> {
     cursor: overview.time.cursor,
     head: overview.time.head,
     branches: session.branches().map((b) => ({ tip: b.tip, length: b.length, actor: b.actor, active: b.active })),
-    bookmarks: session.bookmarkViews().map((c) => ({ id: c.id, label: c.label, commitId: c.commitId, at: c.at, ts: c.ts })), // the tag's id travels: a note links a tag by id, never by its name
+    bookmarks: session.bookmarkViews(), // already the WIRE's view of the bookmarks (the tag's id travels: a note links a tag by id, never by its name) — re-projecting it here made a second copy of the library's own answer
     saved: overview.saved, // the saved PICTURES, whole: their own ids, their conditions, who saved them and when — the cockpit projects this list and derives nothing
 
     cursorTests: overview.time.cursorTests,
@@ -889,7 +897,8 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         desk.transcript.push({ role: 'user', text: message, context });
         try {
           const turn = await desk.analyst.send(message, context);
-          const known = { commits: new Set(session.log.records.map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
+          // an EXISTENCE check, so the whole history: a cited id either names a commit or it does not
+          const known = { commits: new Set(session.commits('anywhere').map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
           const reply = parseReply(turn.text, known, desk.activity);
           if (reply.note !== undefined) console.warn(`  chat: ${reply.note}`); // the log hears it too; the person is handed words and the same sentence, never machinery
           const said = { text: reply.text, refs: reply.refs, ...(reply.note !== undefined ? { note: reply.note } : {}) };

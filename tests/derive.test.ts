@@ -16,7 +16,6 @@ import { describe, expect, it } from 'vitest';
 import { selectionForView, keepPredicate, type LinkEdgeView, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
 import {
   arrivesFrom,
-  bookmarkCommitId,
   capNote,
   categoryCounts,
   categorySums,
@@ -182,28 +181,6 @@ describe('columnVocabulary / capNote — defect 8: a 900-value column is not a b
 
   it('a null value is never a category', () => {
     expect(columnVocabulary(CELLS, 'kind').values).toEqual(['state', 'region']);
-  });
-});
-
-describe('bookmarkCommitId — defect 9: a note links a tag by ID, not by name', () => {
-  const CHECKPOINTS = [
-    { id: 't1', label: 'the spike week', commitId: 'c7', ts: 1 },
-    { label: 'an older bookmark', commitId: 'c3', ts: 2 }, // a wire that predates tag ids
-  ];
-
-  it('resolves the tag ID a note actually carries', () => {
-    expect(bookmarkCommitId(CHECKPOINTS, 't1')).toBe('c7');
-  });
-
-  it('still resolves a NAME, so notes written before tag ids keep working', () => {
-    expect(bookmarkCommitId(CHECKPOINTS, 'an older bookmark')).toBe('c3');
-    expect(bookmarkCommitId(CHECKPOINTS, 'the spike week')).toBe('c7');
-  });
-
-  it('an id wins over a same-named label, and an unknown ref resolves to nothing (a click that does nothing, never a wrong seek)', () => {
-    expect(bookmarkCommitId([{ id: 't2', label: 't1', commitId: 'cA', ts: 1 }, { id: 't1', label: 'x', commitId: 'cB', ts: 2 }], 't1')).toBe('cB');
-    expect(bookmarkCommitId(CHECKPOINTS, 't9')).toBe(null);
-    expect(bookmarkCommitId([{ id: 't1', label: 'floating', commitId: null, ts: 1 }], 't1')).toBe(null);
   });
 });
 

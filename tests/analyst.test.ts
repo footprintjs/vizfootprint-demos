@@ -19,7 +19,7 @@ describe('the NNDSS analyst (scripted provider)', () => {
     expect(acts.map((a) => a.tool)).toEqual(['whats_here', 'dispatch', 'declare_analysis', 'bookmark']);
     for (const a of acts) expect(JSON.stringify(a.result)).not.toMatch(/"error"/);
 
-    const records = session.log.records as readonly { readonly actor?: string; readonly cause?: { readonly requestedBy?: string } }[];
+    const records = session.commits('anywhere') as readonly { readonly actor?: string; readonly cause?: { readonly requestedBy?: string } }[];
     expect(records.length).toBeGreaterThanOrEqual(2); // select + analyze — the bookmark is a TAG beside the log, so it lands no commit
     expect(records.some((r) => r.actor === 'agent' || r.cause?.requestedBy === 'agent')).toBe(true);
     expect(session.bookmarkViews().map((c) => c.label)).toEqual(['Pertussis by area']);

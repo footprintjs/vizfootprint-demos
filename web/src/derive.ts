@@ -23,10 +23,9 @@
  *   4. `columnVocabulary` — the categories a column offers, counted once and
  *      CAPPED, because a column with 900 distinct values is not a bar chart
  *      and pretending otherwise costs ~766 ms per keystroke of interaction.
- *
- * Plus one small resolver, `bookmarkCommitId`, for a note's link to a named bookmark.
  */
-import type { BookmarkView, RenderSelection, SelectionClauseView } from 'vizfootprint-ui';
+import { filtersHere } from 'vizfootprint-ui';
+import type { RenderSelection } from 'vizfootprint-ui';
 
 /** A row of either demo table, as the wire carries it. */
 export type Row = Readonly<Record<string, string | number | null | undefined>>;
@@ -64,17 +63,6 @@ export function emitIntent(verb: string, emission: FieldEmission): string {
 }
 
 // ── 2 · what actually reaches a view ────────────────────────────────────────
-
-/**
- * Does this clause reach the consumer as a FILTER? The link graph already
- * decided whether it arrives at all (`selectionForView` drops a `none` edge
- * and an absent one); this is the same rule `keepPredicate` folds by, so a
- * value the host reads by hand narrows exactly what the predicate narrows —
- * no more, and never when the link is off.
- */
-function filtersHere(clause: SelectionClauseView | undefined): clause is SelectionClauseView {
-  return clause !== undefined && (clause.response === undefined || clause.response === 'filter');
-}
 
 /**
  * The value a source view's POINT clause carries into this consumer, or
@@ -244,20 +232,4 @@ export function noteRefs(refs: readonly ReplyRef[] | undefined): readonly NoteRe
           },
         ],
   );
-}
-
-// ── a note's link to a named bookmark ───────────────────────────────────────────
-
-/**
- * The commit a note's bookmark anchor points at.
- *
- * A note's `@[bookmark]` ref carries the tag's ID (`t1`), not its name — renaming
- * a tag must leave every note working. Older notes (and any wire that predates
- * tag ids) carry the NAME, so both are accepted: id first, then label. Returns
- * null when nothing matches, which is a click that should do nothing rather
- * than seek somewhere arbitrary.
- */
-export function bookmarkCommitId(bookmarks: readonly BookmarkView[], bookmarkRef: string): string | null {
-  const bookmark = bookmarks.find((c) => c.id === bookmarkRef) ?? bookmarks.find((c) => c.label === bookmarkRef);
-  return bookmark?.commitId ?? null;
 }

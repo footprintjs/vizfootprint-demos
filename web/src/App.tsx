@@ -37,7 +37,7 @@ import {
   Workbook,
   httpSheetData,
   type SheetColumn,
-  orderedBookmarks, currentBookmarkIndex, bookmarkTarget,
+  orderedBookmarks, currentBookmarkIndex, bookmarkTarget, bookmarkRefTarget,
   NoteCell, linkablesOf, mentionWorldOf,
   boundField,
   BranchMap,
@@ -48,7 +48,6 @@ import {
 import 'vizfootprint-ui/styles.css';
 import {
   arrivesFrom,
-  bookmarkCommitId,
   noteRefs,
   type ReplyRef,
   capNote,
@@ -284,14 +283,15 @@ export function App(): JSX.Element {
    * SEEK TO A NAMED BEAT — the ONE resolver every bookmark anchor uses (a view's
    * words, the dashboard summary, a note, the analyst's reply).
    *
-   * A note's `@[bookmark]` link carries the tag's ID (`t1`), not its name, so that
-   * renaming a tag leaves every note working. Resolving it as a name (which
-   * this demo did in three places) can never match: the click did nothing at
-   * all — no seek, no error, no sentence. `bookmarkCommitId` takes the id first
-   * and still accepts a label, so notes written before tag ids kept working.
+   * The library owns the resolver (`bookmarkRefTarget`): it takes the id a
+   * note's `@[bookmark]` link carries first — renaming a bookmark must leave
+   * every note working — and still accepts a label, so words written before
+   * bookmark ids keep working. This demo used to write its own, which reached
+   * for `commitId` and so sent an anchor to the ACT of naming while the
+   * slideshow's `bookmarkTarget` seek went to the moment NAMED.
    */
   const seekBookmark = (bookmarkRef: string): void => {
-    const commitId = bookmarkCommitId(state.bookmarks, bookmarkRef);
+    const commitId = bookmarkRefTarget(state.bookmarks, bookmarkRef);
     if (commitId !== null) void view.seek(commitId);
   };
   /** The words a commit anchor shows on hover — the same sentence everywhere. */
