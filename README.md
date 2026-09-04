@@ -24,13 +24,14 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | `data/nndss/` | 1 · data | the fetch script, the committed snapshot, and its provenance (source, date, rows, license) |
 | `data/geo/` | 1 · data | US state boundaries (Census-derived, via `us-atlas`), converted and committed with provenance |
 | `src/nndss/` | 1–5 | flags → absence, CSV → tables, the declared dashboard, the declared analyses, the surface, the scripted proposals, the analyst |
-| `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the chat and geo doors |
-| `web/` | 3, 4, 6 | the cockpit, the Grammar panel, the jump box, the Analyst panel |
+| `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors |
+| `web/` | 3, 4, 6 | the front door, the cockpit, the Grammar panel, the jump box, the Analyst panel |
 | `tests/` | — | vitest |
 
 ## What you see
 
-Six views on one screen, every one fed by the host under the session's
+The dashboard's views on one screen — coverage, diseases, kinds, the map,
+weeks, the trend and the table — every one fed by the host under the session's
 clauses (the host sums, the chart draws), and four report chips:
 
 | view | what it shows | what a click does |

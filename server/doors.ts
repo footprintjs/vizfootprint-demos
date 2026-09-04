@@ -6,6 +6,7 @@
  *
  *   GET  /api/state        everything the cockpit renders
  *   GET  /api/rows         the three tables + grain + the absence vocabulary
+ *   GET  /api/summary      the front door's figures — what this snapshot holds, counted
  *   GET  /api/window       ONE window of rows for the Sheet (the session's view-query port)
  *   GET  /api/proposals    what beat 1 already did here (survives a reload)
  *   POST /api/dispatch     a human gesture → a user-badged commit
@@ -28,7 +29,7 @@ import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurfaceAsync, type NndssSurface } from '../src/nndss/surface.js';
 import { DISPATCH_VERBS } from 'vizfootprint/def';
-import { DASHBOARD_WORDS, nndssDef } from '../src/nndss/def.js';
+import { DASHBOARD_WORDS, NNDSS_VIEWS, nndssDef } from '../src/nndss/def.js';
 import type { InteractionSession, ViewQuery } from 'vizfootprint/session';
 import type { SortSpec } from 'vizfootprint/data';
 import { openSource } from 'vizfootprint/source';
@@ -798,6 +799,38 @@ async function pathsAction(desk: Desk, body: Record<string, unknown>): Promise<u
   }
 }
 
+/**
+ * THE FRONT DOOR'S FIGURES — what the landing page (`web/src/Home.tsx`) says
+ * this desk holds, counted from the tables the dashboard actually runs on.
+ *
+ * It is its own door because neither of the two that already exist can be the
+ * one a landing page reads. `/api/state` is the cheap poll (tens of KB) and it
+ * carries the rows, the jurisdictions and the views — but not how many
+ * DISEASES or how many WEEKS the snapshot holds; the only door that carries
+ * those is `/api/rows`, and `/api/rows` is thirty megabytes because it is the
+ * whole dataset. Growing `/api/state` instead would put these counts on every
+ * poll of a session that never changes them.
+ *
+ * So: a few hundred bytes, read once, before anything is mounted. It lands no
+ * commit, touches no session state, and every number in it is a length of a
+ * real table — there is no figure here a page could have written down.
+ */
+export function summaryOf(desk: Desk): Record<string, unknown> {
+  const { cells, diseases, weeks, jurisdictions } = desk.surface.tables;
+  const snapshot = desk.provenance['snapshot.csv'];
+  return {
+    rows: cells.length,
+    diseases: diseases.length,
+    weeks: weeks.length,
+    jurisdictions: jurisdictions.length,
+    views: NNDSS_VIEWS.length, // what the DEF declares, not what happens to be mounted
+    absence: { field: ABSENCE_FIELD, states: ABSENCE_STATES },
+    words: declaredDashboardWords(), // the dashboard's own title and summary — the page borrows them rather than writing a headline
+    mode: desk.mode,
+    snapshot: snapshot === undefined ? null : { retrievedAt: snapshot.retrievedAt, rows: snapshot.rows },
+  };
+}
+
 export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (!url.pathname.startsWith(`${API_ROOT}/`)) return false;
@@ -805,6 +838,8 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
   const { session, tables } = desk.surface;
   try {
     if (req.method === 'GET' && door === 'state') return sendJson(res, 200, await stateOf(desk)), true;
+    // the landing page, before anything is mounted: the counts, and nothing that costs a walk
+    if (req.method === 'GET' && door === 'summary') return sendJson(res, 200, summaryOf(desk)), true;
     if (req.method === 'GET' && door === 'rows') {
       return sendJson(res, 200, {
         cells: tables.cells,

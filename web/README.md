@@ -1,8 +1,20 @@
 # web — the cockpit (layers 3, 4, 6)
 
 The browser side of the demo: `vizfootprint-ui`'s cockpit over the
-`/api/*` doors, plus two things the library does not ship yet and this
+`/api/*` doors, plus the things the library does not ship yet and this
 demo needed:
+
+- **`Home.tsx` + `front.ts`** — the front door: the page you land on, and the
+  rule that decides whether it may offer a way in. It reads `GET /api/summary`
+  once and prints the server's own counts (90,300 cells · 15 diseases · 86
+  weeks · 70 jurisdictions · 9 declared views, on today's snapshot) — not one
+  of those numbers is written into the page. **The door opens in exactly one of
+  its three states.** Still reading: no way in, and it says what it is waiting
+  for. Ready: the figures, and one button. Nothing answering: it says so, names
+  where the server should be, and still offers nothing, because a button into
+  an empty room is the same lie the rest of this demo exists to refuse. The
+  rule is a pure function in `front.ts` for the reason `derive.ts` is one —
+  `tests/front.test.ts` holds it to all three states.
 
 - **`GrammarPanel.tsx`** — the interaction grammar rendered from the
   declaration: verbs off the wire with the gesture that produces each here,
@@ -37,6 +49,10 @@ vouch for.
 sums over ONE kind of area (the kinds view's pick, else states) so a case is
 never counted three times, and the trend shows regions until a kind or an
 area is chosen. All of that is said in the captions, not hidden.
+
+`main.tsx` renders the front door and mounts `App` on the click — one boolean,
+no router, and deliberately not before the click, so the dashboard's own reads
+(the rows, the map shapes, the state poll) do not run behind the landing page.
 
 ```
 npm run web:dev     # http://localhost:5291 (proxies /api to :5290)
