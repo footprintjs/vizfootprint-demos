@@ -10,6 +10,7 @@
  */
 import { ProseText } from 'vizfootprint-ui';
 import { useEffect, useState } from 'react';
+import { droppedOf, whyDroppedNote } from './derive.js';
 
 export interface ActivityStep {
   readonly tool: string;
@@ -49,12 +50,31 @@ export interface FramedAct {
   readonly verb: string;
   readonly what: string;
   readonly outcome: 'landed' | 'refused' | 'read';
+  /**
+   * What this act NAMED and could not honour, in plain words — shown as one
+   * quiet line under the act, the same restraint a reply's dropped citations
+   * already get. Absent when there was nothing to disclose.
+   */
+  readonly note?: string;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : JSON.stringify(v));
 
-/** One act, framed by the grammar: the verb, what it touched, how it ended. */
+/**
+ * One act, framed by the grammar: the verb, what it touched, how it ended —
+ * and, when the answer disclosed one, what it named and could not honour.
+ *
+ * That last part is `CrossTierSlice.dropped`, and it is read off the RESULT
+ * rather than off the tool name on purpose: an answer that carries a
+ * disclosure is an answer that should say so, whichever door produced it.
+ */
 export function frameStep(step: ActivityStep): FramedAct {
+  const note = whyDroppedNote(droppedOf(step.result));
+  const framed = frameAct(step);
+  return note === undefined ? framed : { ...framed, note };
+}
+
+function frameAct(step: ActivityStep): Omit<FramedAct, 'note'> {
   const a = step.args;
   const r = step.result as { ok?: unknown; error?: unknown; gap?: unknown } | null;
   const refused = r !== null && typeof r === 'object' && (r.ok === false || r.error !== undefined || r.gap !== undefined);
@@ -200,6 +220,12 @@ export function AnalystPanel(props: {
                     <li key={String(j)}>
                       <code>{f.verb}</code> · {f.what} ·{' '}
                       <span style={{ color: OUTCOME_COLOR[f.outcome], fontWeight: 600 }}>{f.outcome}</span>
+                      {/* one quiet line, the same restraint a reply's dropped citations get — it says what was named and stops there */}
+                      {f.note === undefined ? null : (
+                        <div style={{ marginTop: 2, fontSize: 11, opacity: 0.65 }} title="commits this answer named and could not honour — dropped from its provenance, never faked">
+                          {f.note}
+                        </div>
+                      )}
                     </li>
                   );
                 })}

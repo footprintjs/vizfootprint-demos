@@ -233,3 +233,79 @@ export function noteRefs(refs: readonly ReplyRef[] | undefined): readonly NoteRe
         ],
   );
 }
+
+// ── 5 · what an answer NAMED and could not honour ───────────────────────────
+
+/**
+ * One commit a `why` answer's target named that the answer could not honour —
+ * the library's `CrossTierSlice.dropped` row, as it rides the wire.
+ */
+export interface DroppedRefView {
+  readonly id: string;
+  /** `off-branch`: the log holds it, on another branch. `unverified`: the answer could not find it at all. */
+  readonly reason: string;
+}
+
+/** Which ids in a disclosure carry this reason. */
+function idsFor(dropped: readonly DroppedRefView[], reason: string): string[] {
+  return dropped.filter((d) => d.reason === reason).map((d) => d.id);
+}
+
+/**
+ * The one quiet line under a `why` act: **what the answer named and could not
+ * honour**, in plain words.
+ *
+ * Dropping those commits is the library's law and stays — an off-branch basis
+ * is not provenance, and a ghost id is not evidence. Being SILENT about them
+ * was the defect: the answer disclosed them on the wire (`dropped`) and nothing
+ * on screen said so, which is the saved-selection scar one layer along — a door
+ * the library served and no interface called.
+ *
+ * The two reasons are **different facts and are said differently**, because a
+ * reader who confuses them goes looking in the wrong place: *on another branch*
+ * means the log really holds that commit and these words stand at a moment that
+ * never saw it; *this log does not hold it* means the answer could not find it
+ * at all.
+ *
+ * A reason NEITHER of those covers gets a third clause that says the commit was
+ * named, says the reason is one these words cannot read, and STOPS. It must not
+ * be readable as a claim about where the commit is — guessing at the reason is
+ * the failure this whole disclosure exists to prevent, and a malformed row is
+ * exactly where that guess would be cheapest to make.
+ *
+ * The line never offers to fix anything and never links the commit it names —
+ * the library refuses that citation deliberately, and a link would be the
+ * interface handing back what the answer just declined to vouch for.
+ *
+ * ```ts
+ * whyDroppedNote([{ id: 'c12', reason: 'off-branch' }, { id: 'ghost', reason: 'unverified' }]);
+ * // 'named and not honoured — c12 is on another branch; this log does not hold ghost'
+ * ```
+ *
+ * @returns the sentence, or `undefined` when the answer had nothing to disclose
+ *   (which costs a reader nothing to be told).
+ */
+export function whyDroppedNote(dropped: readonly DroppedRefView[] | undefined): string | undefined {
+  if (dropped === undefined || dropped.length === 0) return undefined;
+  const offBranch = idsFor(dropped, 'off-branch');
+  const unverified = idsFor(dropped, 'unverified');
+  const unsaid = dropped.filter((d) => d.reason !== 'off-branch' && d.reason !== 'unverified').map((d) => d.id);
+  const said: string[] = [];
+  if (offBranch.length > 0) said.push(`${offBranch.join(', ')} ${offBranch.length === 1 ? 'is' : 'are'} on another branch`);
+  if (unverified.length > 0) said.push(`this log does not hold ${unverified.join(', ')}`);
+  if (unsaid.length > 0) said.push(`${unsaid.join(', ')}, for a reason these words cannot read`);
+  return `named and not honoured — ${said.join('; ')}`;
+}
+
+/** A `why` answer's disclosure, read off an untrusted tool result — absent, or not a list of rows, is nothing to say. */
+export function droppedOf(result: unknown): readonly DroppedRefView[] | undefined {
+  const rows = (result as { dropped?: unknown } | null | undefined)?.dropped;
+  if (!Array.isArray(rows)) return undefined;
+  const kept = rows.flatMap((r) => {
+    const row = r as { id?: unknown; reason?: unknown } | null;
+    return row !== null && typeof row === 'object' && typeof row.id === 'string' && typeof row.reason === 'string'
+      ? [{ id: row.id, reason: row.reason }]
+      : [];
+  });
+  return kept.length > 0 ? kept : undefined;
+}

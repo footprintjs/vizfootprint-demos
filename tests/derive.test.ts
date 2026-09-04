@@ -6,7 +6,9 @@
  *   · a link the person switched OFF moves nothing;
  *   · the bars are counted in one pass, whatever the number of bars;
  *   · a capped axis says so, and never lies about the total;
- *   · a note's bookmark anchor resolves by tag ID (and still by name).
+ *   · a note's bookmark anchor resolves by tag ID (and still by name);
+ *   · what an answer NAMED and could not honour is said out loud, and the two
+ *     reasons are said differently.
  *
  * The selections are built with the library's own `selectionForView`, over a
  * real link graph — the same call `App.tsx` makes — so an "off" link here is
@@ -21,8 +23,10 @@ import {
   categorySums,
   columnVocabulary,
   emitIntent,
+  droppedOf,
   noteRefs,
   pickedFrom,
+  whyDroppedNote,
   type Row,
 } from '../web/src/derive.js';
 
@@ -202,5 +206,56 @@ describe('noteRefs — defect 10: a reply that cites a BEAT keeps the citation',
     expect(out).toHaveLength(1);
     expect(Object.keys(out[0]!)).toEqual(['span', 'bookmark']);
     expect(noteRefs(undefined)).toEqual([]);
+  });
+});
+
+describe('what an answer NAMED and could not honour is said, and the two reasons are DIFFERENT facts', () => {
+  it('an off-branch commit says the log holds it — somewhere these words never stood', () => {
+    expect(whyDroppedNote([{ id: 'c12', reason: 'off-branch' }])).toBe('named and not honoured — c12 is on another branch');
+    expect(whyDroppedNote([{ id: 'c12', reason: 'off-branch' }, { id: 'c13', reason: 'off-branch' }])).toBe(
+      'named and not honoured — c12, c13 are on another branch',
+    );
+  });
+
+  it('an unverified commit says the log does not hold it — a different place to look', () => {
+    expect(whyDroppedNote([{ id: 'ghost', reason: 'unverified' }])).toBe('named and not honoured — this log does not hold ghost');
+  });
+
+  it('both reasons in one answer stay TOLD APART — the whole point of the disclosure', () => {
+    const note = whyDroppedNote([
+      { id: 'c12', reason: 'off-branch' },
+      { id: 'ghost', reason: 'unverified' },
+    ]);
+    expect(note).toBe('named and not honoured — c12 is on another branch; this log does not hold ghost');
+    // and a third, unreadable reason joins them without contaminating either
+    expect(whyDroppedNote([{ id: 'c12', reason: 'off-branch' }, { id: 'ghost', reason: 'unverified' }, { id: 'c9', reason: '?' }])).toBe(
+      'named and not honoured — c12 is on another branch; this log does not hold ghost; c9, for a reason these words cannot read',
+    );
+    // and it neither offers a repair nor cites the commit it just declined to vouch for
+    expect(note).not.toMatch(/seek|bring over|fix|click/i);
+  });
+
+  it('a reason NEITHER value covers names the commit, says the reason is unreadable, and STOPS', () => {
+    const note = whyDroppedNote([{ id: 'c9', reason: 'something-new' }]);
+    expect(note).toBe('named and not honoured — c9, for a reason these words cannot read');
+    // the failure this disclosure exists to prevent is a GUESS, and a malformed
+    // row is where one would be cheapest — so the clause claims nothing about
+    // where the commit is, in either direction
+    expect(note).not.toMatch(/branch|does not hold|not in|missing/i);
+  });
+
+  it('nothing to disclose costs nothing to say', () => {
+    expect(whyDroppedNote(undefined)).toBeUndefined();
+    expect(whyDroppedNote([])).toBeUndefined();
+  });
+
+  it('reads the disclosure off an untrusted tool result, and refuses to invent one', () => {
+    expect(droppedOf({ ok: true, dropped: [{ id: 'c12', kind: 'basis', reason: 'off-branch' }] })).toEqual([{ id: 'c12', reason: 'off-branch' }]);
+    expect(droppedOf({ ok: true })).toBeUndefined(); // an answer with nothing to disclose omits the key
+    expect(droppedOf(undefined)).toBeUndefined();
+    expect(droppedOf(null)).toBeUndefined();
+    expect(droppedOf({ dropped: 'c12' })).toBeUndefined(); // not a list
+    expect(droppedOf({ dropped: [null, 7, { id: 'c12' }, { reason: 'off-branch' }] })).toBeUndefined(); // no readable row
+    expect(droppedOf({ dropped: [{ id: 'c12', reason: 'off-branch' }, { id: 7 }] })).toEqual([{ id: 'c12', reason: 'off-branch' }]);
   });
 });

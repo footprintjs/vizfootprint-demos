@@ -14,6 +14,25 @@ demo needed:
   reply is read against the commit log. `frameStep` turns each tool call
   into verb · what · outcome from the call itself, never from the prose.
 
+**A disclosure that reaches the wire and no reader is not a disclosure.** Two
+of them are rendered here, both as one quiet line and nothing more. Under a
+reply: the citations the door could not verify (`parseReply`'s `note`). Under
+an act: the commits a `why` answer NAMED and could not honour — the library's
+`CrossTierSlice.dropped`, read by `droppedOf` and put into words by
+`whyDroppedNote` (`derive.ts`, law 5). Dropping those commits is the library's
+law and stays; being silent about them was the defect, and it is the
+saved-selection scar one layer along — a door the library served and no
+interface called.
+
+Two rules govern both lines, and they are why they read the way they do. The
+reasons are **told apart**: *on another branch* means the log really holds that
+commit and these words stand at a moment that never saw it; *this log does not
+hold it* means the answer could not find it at all — a reader who confuses them
+looks in the wrong place. And the line **offers nothing**: no repair, and no
+link to the commit it names. The library refuses that citation on purpose, so
+an interface that linked it would hand back exactly what the answer declined to
+vouch for.
+
 `App.tsx` feeds every chart host-side under the session's clauses — the host
 sums over ONE kind of area (the kinds view's pick, else states) so a case is
 never counted three times, and the trend shows regions until a kind or an
