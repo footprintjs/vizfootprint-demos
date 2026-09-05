@@ -56,6 +56,7 @@ import {
   columnVocabulary,
   emitIntent,
   pickedFrom,
+  storyDroppedNote,
   type Vocabulary,
 } from './derive.js';
 import { AnalystPanel } from './AnalystPanel.js';
@@ -1074,12 +1075,21 @@ function StoryReport({ post }: { readonly post: StoryPost }): ReactNode {
       <p style={{ margin: '0 0 8px', opacity: 0.8 }}>
         <b>{post.meta.title}</b> · {post.meta.bookmarkCount} bookmark{post.meta.bookmarkCount === 1 ? '' : 's'} on {post.meta.path ?? "the head's lineage"}. Every bookmark is a section: its words as they stood, and the acts since the previous bookmark. Copy the JSON into storydeck's <code>assemblePost</code> for Read, Scroll and Watch.
       </p>
-      {post.bookmarks.map((b) => (
+      {post.bookmarks.map((b) => {
+        // one quiet line, the same restraint the analyst's dropped citations get: the post CARRIES every
+        // citation this story could not show, and a disclosure no reader ever sees is the scar all over again
+        const note = storyDroppedNote(post.sections[b.index]?.dropped);
+        return (
         <div key={b.key} style={{ marginBottom: 10 }}>
           <div style={{ fontWeight: 600 }}>
             {b.index + 1}. {b.label} <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6 }}>at #{b.at}</span>
           </div>
           {b.words.caption !== undefined ? <div style={{ opacity: 0.85 }}>{b.words.caption}</div> : null}
+          {note === undefined ? null : (
+            <div style={{ marginTop: 2, fontSize: 11, opacity: 0.65 }} title="citations these words made that this story could not show — carried on the post, never faked">
+              {note}
+            </div>
+          )}
           {b.steps.length > 0 ? (
             <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
               {b.steps.map((s) => (
@@ -1091,7 +1101,8 @@ function StoryReport({ post }: { readonly post: StoryPost }): ReactNode {
             </ul>
           ) : null}
         </div>
-      ))}
+        );
+      })}
       <button
         type="button"
         onClick={() => {

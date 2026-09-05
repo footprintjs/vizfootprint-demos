@@ -309,3 +309,75 @@ export function droppedOf(result: unknown): readonly DroppedRefView[] | undefine
   });
   return kept.length > 0 ? kept : undefined;
 }
+
+// ── 6 · what a STORY cited and could not show ───────────────────────────────
+
+/**
+ * One citation a story post carried but could not land — a row of
+ * `StorySection.dropped`, as `toStory` serves it.
+ */
+export interface StoryDroppedView {
+  /** `off-path`, `untold`, `not-held` — read as a plain string, so a reason these words do not know is still said. */
+  readonly reason: string;
+  readonly commit?: string;
+  readonly bookmark?: string;
+  readonly saved?: string;
+  /** The words the writer typed for the anchor, when the ref showed any. */
+  readonly label?: string;
+}
+
+/** How a dropped citation is NAMED: the words the writer typed and the id together, the way the describe door refuses a dead ref. */
+function citedAs(row: StoryDroppedView): string {
+  const id = row.commit ?? row.bookmark ?? row.saved ?? '';
+  return row.label !== undefined && row.label.length > 0 ? `"${row.label}" (${id})` : id;
+}
+
+/** Which rows carry this reason, named. */
+function citedFor(dropped: readonly StoryDroppedView[], reason: string): string[] {
+  return dropped.filter((d) => d.reason === reason).map(citedAs);
+}
+
+/**
+ * The one quiet line under a story section: **what its words cited and this
+ * story could not show**, in plain words.
+ *
+ * The sibling of {@link whyDroppedNote}, for the sixth layer, and it exists for
+ * the same reason: `toStory` carries every unhonourable citation on the post
+ * (`StorySection.dropped`) rather than dropping it silently, and a disclosure
+ * that reaches the wire and no reader is the saved-selection scar again — a
+ * door the library serves and no interface calls.
+ *
+ * The three reasons are **different facts and are said differently**, because a
+ * reader who confuses them goes looking in the wrong place: *on another path*
+ * means the session really holds it and this story tells a lineage it never
+ * stood on; *past the last bookmark* means it is on this very lineage, ahead of
+ * every section, so naming a bookmark there would tell it; *no longer held*
+ * means the session does not have it at all. A reason none of the three covers
+ * gets a clause that says the citation was made, says the reason is one these
+ * words cannot read, and STOPS — guessing is the failure the disclosure exists
+ * to prevent.
+ *
+ * The line never offers to fix anything and never links what it names: the
+ * post declined to vouch for that citation, and a link would hand it back.
+ *
+ * ```ts
+ * storyDroppedNote([{ reason: 'off-path', commit: '9', label: 'the detour' }]);
+ * // 'cited and not shown — "the detour" (9) is on another path'
+ * ```
+ *
+ * @returns the sentence, or `undefined` when the section cited nothing it could
+ *   not show (which costs a reader nothing to be told).
+ */
+export function storyDroppedNote(dropped: readonly StoryDroppedView[] | undefined): string | undefined {
+  if (dropped === undefined || dropped.length === 0) return undefined;
+  const offPath = citedFor(dropped, 'off-path');
+  const untold = citedFor(dropped, 'untold');
+  const gone = citedFor(dropped, 'not-held');
+  const unsaid = dropped.filter((d) => d.reason !== 'off-path' && d.reason !== 'untold' && d.reason !== 'not-held').map(citedAs);
+  const said: string[] = [];
+  if (offPath.length > 0) said.push(`${offPath.join(', ')} ${offPath.length === 1 ? 'is' : 'are'} on another path`);
+  if (untold.length > 0) said.push(`${untold.join(', ')} ${untold.length === 1 ? 'is' : 'are'} past the last bookmark`);
+  if (gone.length > 0) said.push(`this session no longer holds ${gone.join(', ')}`);
+  if (unsaid.length > 0) said.push(`${unsaid.join(', ')}, for a reason these words cannot read`);
+  return `cited and not shown — ${said.join('; ')}`;
+}

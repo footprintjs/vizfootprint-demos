@@ -8,7 +8,9 @@
  *   · a capped axis says so, and never lies about the total;
  *   · a note's bookmark anchor resolves by tag ID (and still by name);
  *   · what an answer NAMED and could not honour is said out loud, and the two
- *     reasons are said differently.
+ *     reasons are said differently;
+ *   · what a STORY SECTION cited and could not show is said the same way, with
+ *     its three reasons told apart.
  *
  * The selections are built with the library's own `selectionForView`, over a
  * real link graph — the same call `App.tsx` makes — so an "off" link here is
@@ -27,6 +29,7 @@ import {
   noteRefs,
   pickedFrom,
   whyDroppedNote,
+  storyDroppedNote,
   type Row,
 } from '../web/src/derive.js';
 
@@ -257,5 +260,53 @@ describe('what an answer NAMED and could not honour is said, and the two reasons
     expect(droppedOf({ dropped: 'c12' })).toBeUndefined(); // not a list
     expect(droppedOf({ dropped: [null, 7, { id: 'c12' }, { reason: 'off-branch' }] })).toBeUndefined(); // no readable row
     expect(droppedOf({ dropped: [{ id: 'c12', reason: 'off-branch' }, { id: 7 }] })).toEqual([{ id: 'c12', reason: 'off-branch' }]);
+  });
+});
+
+describe('what a STORY cited and could not show is said, and the three reasons are DIFFERENT facts', () => {
+  it('a citation on another path says the session holds it — on a lineage this story does not tell', () => {
+    expect(storyDroppedNote([{ reason: 'off-path', commit: '9', label: 'the detour' }])).toBe('cited and not shown — "the detour" (9) is on another path');
+    expect(storyDroppedNote([{ reason: 'off-path', commit: '9' }, { reason: 'off-path', bookmark: 'b3', label: 'Elsewhere' }])).toBe(
+      'cited and not shown — 9, "Elsewhere" (b3) are on another path',
+    );
+  });
+
+  it('a citation past the last bookmark says so — it is on THIS lineage, and a bookmark there would tell it', () => {
+    expect(storyDroppedNote([{ reason: 'untold', commit: '8', label: 'later' }])).toBe('cited and not shown — "later" (8) is past the last bookmark');
+  });
+
+  it('a citation the session no longer holds is a different place to look again', () => {
+    expect(storyDroppedNote([{ reason: 'not-held', saved: 'p9', label: 'coastal' }])).toBe('cited and not shown — this session no longer holds "coastal" (p9)');
+  });
+
+  it('all three in one section stay TOLD APART — the whole point of the disclosure', () => {
+    const note = storyDroppedNote([
+      { reason: 'off-path', commit: '9', label: 'the detour' },
+      { reason: 'untold', commit: '8' },
+      { reason: 'not-held', bookmark: 'b9', label: 'forgotten' },
+    ]);
+    expect(note).toBe('cited and not shown — "the detour" (9) is on another path; 8 is past the last bookmark; this session no longer holds "forgotten" (b9)');
+    // and it neither offers a repair nor links what it just declined to vouch for
+    expect(note).not.toMatch(/seek|bring over|fix|click|go to/i);
+  });
+
+  it('a reason NONE of the three covers names the citation, says the reason is unreadable, and STOPS', () => {
+    const note = storyDroppedNote([{ reason: 'something-new', commit: 'c9' }]);
+    expect(note).toBe('cited and not shown — c9, for a reason these words cannot read');
+    // a malformed row is where a guess would be cheapest, so the clause claims nothing about WHERE it is
+    expect(note).not.toMatch(/path|bookmark|no longer|does not hold|missing/i);
+    // and it joins the readable ones without contaminating them
+    expect(storyDroppedNote([{ reason: 'off-path', commit: '9' }, { reason: '?', commit: 'c9' }])).toBe(
+      'cited and not shown — 9 is on another path; c9, for a reason these words cannot read',
+    );
+  });
+
+  it('an empty label is the ID alone — an anchor that showed no words gets none put in its mouth', () => {
+    expect(storyDroppedNote([{ reason: 'not-held', bookmark: 'b9', label: '' }])).toBe('cited and not shown — this session no longer holds b9');
+  });
+
+  it('nothing to disclose costs nothing to say', () => {
+    expect(storyDroppedNote(undefined)).toBeUndefined();
+    expect(storyDroppedNote([])).toBeUndefined();
   });
 });
