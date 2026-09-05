@@ -1,0 +1,1072 @@
+{
+  "from": "http://localhost:5290",
+  "capturedAt": "2026-09-05T21:01:00.503Z",
+  "log": [
+    {
+      "id": "s1",
+      "parent": null,
+      "viewId": "trend",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Trend per area"
+      },
+      "kind": "interval",
+      "field": "t",
+      "value": [
+        "2025-07-26",
+        "2026-04-18"
+      ],
+      "clientViewIds": [
+        "trend"
+      ],
+      "predicateSQL": "(\"t\" BETWEEN \"2025-07-26\" AND \"2026-04-18\")",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "brush t"
+      },
+      "ts": 0,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s2",
+      "parent": "s1",
+      "viewId": "trend",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Trend per area"
+      },
+      "kind": "interval",
+      "field": "t",
+      "value": null,
+      "clientViewIds": [
+        "trend"
+      ],
+      "predicateSQL": "null",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "brush t"
+      },
+      "ts": 1,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s3",
+      "parent": "s2",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Gonorrhea",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Gonorrhea'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "pick disease"
+      },
+      "ts": 2,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s4",
+      "parent": "s3",
+      "viewId": "kinds",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Cells by area kind"
+      },
+      "kind": "point",
+      "field": "kind",
+      "value": "state",
+      "clientViewIds": [
+        "kinds"
+      ],
+      "predicateSQL": "(\"kind\" IN ('state'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "select kind"
+      },
+      "ts": 3,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s5",
+      "parent": "s4",
+      "viewId": "kinds",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Cells by area kind"
+      },
+      "kind": "point",
+      "field": "kind",
+      "value": "region",
+      "clientViewIds": [
+        "kinds"
+      ],
+      "predicateSQL": "(\"kind\" IN ('region'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "select kind"
+      },
+      "ts": 4,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s6",
+      "parent": "s5",
+      "viewId": "kinds",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Cells by area kind"
+      },
+      "kind": "point",
+      "field": "kind",
+      "value": "total",
+      "clientViewIds": [
+        "kinds"
+      ],
+      "predicateSQL": "(\"kind\" IN ('total'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "select kind"
+      },
+      "ts": 5,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s7",
+      "parent": "s6",
+      "viewId": "kinds",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Cells by area kind"
+      },
+      "kind": "point",
+      "field": "kind",
+      "clientViewIds": [
+        "kinds"
+      ],
+      "predicateSQL": "null",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "clear Cells by area kind"
+      },
+      "ts": 6,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s8",
+      "parent": "s7",
+      "viewId": "analysis:casesVsPrev52Max",
+      "actorMeta": {
+        "actor": "system"
+      },
+      "kind": "point",
+      "field": "pValue",
+      "value": 0,
+      "clientViewIds": [
+        "analysis:casesVsPrev52Max"
+      ],
+      "predicateSQL": "(\"pValue\" IN (0))",
+      "cause": {
+        "requestedBy": "agent",
+        "computedBy": "system",
+        "intent": "Check whether Gonorrhea's current week tracks its previous 52-week high across states"
+      },
+      "ts": 7,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s9",
+      "parent": "s8",
+      "viewId": "prose:note:ncaee65d0",
+      "actorMeta": {
+        "actor": "user",
+        "label": "a note"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "I confirmed it with the ledger — no need to call again.\n\nYes: I ran `casesVsPrev52Max` (`analyze`, commit **s8**) over the current selection — Gonorrhea, states, 6,020 present cells — and it came back as a genuine **discovery**. The FDR ledger (LORD++) shows 1 test / 1 discovery: correlation ≈ **0.966** between weekly cases and the previous-52-week high, p = 0, rejected at threshold α = 0.00125, wealth moving from 0.025 → 0.049.\n\nSo across the states, Gonorrhea's current weekly counts are tracking their trailing 52-week high very closely — not a degenerate fit, a real signal.",
+        "author": {
+          "kind": "agent",
+          "model": "claude-sonnet-5"
+        },
+        "basis": {
+          "atCommit": "s8",
+          "filters": {
+            "diseases": {
+              "kind": "point",
+              "field": "disease",
+              "value": "Gonorrhea"
+            }
+          }
+        }
+      },
+      "clientViewIds": [
+        "prose:note:ncaee65d0"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "add the analyst reply to the dashboard"
+      },
+      "ts": 8,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s10",
+      "parent": "s9",
+      "viewId": "prose:note:n780c9c99",
+      "actorMeta": {
+        "actor": "user",
+        "label": "a note"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "test",
+        "author": {
+          "kind": "human",
+          "by": "you"
+        }
+      },
+      "clientViewIds": [
+        "prose:note:n780c9c99"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "write note n780c9c99"
+      },
+      "ts": 9,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s11",
+      "parent": "s10",
+      "viewId": "prose:note:n780c9c99",
+      "actorMeta": {
+        "actor": "user",
+        "label": "a note"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "test @[test] ",
+        "author": {
+          "kind": "human",
+          "by": "you"
+        },
+        "refs": [
+          {
+            "span": [
+              5,
+              12
+            ],
+            "saved": "p1",
+            "label": "test"
+          }
+        ]
+      },
+      "clientViewIds": [
+        "prose:note:n780c9c99"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "write note n780c9c99"
+      },
+      "ts": 10,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s12",
+      "parent": "s11",
+      "correlationId": "saved:test#11",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Gonorrhea",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Gonorrhea'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "applied saved selection test"
+      },
+      "ts": 11,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s13",
+      "parent": "s12",
+      "correlationId": "saved:test#12",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Gonorrhea",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Gonorrhea'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "applied saved selection test"
+      },
+      "ts": 12,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s14",
+      "parent": "s13",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "null",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "clear Reported cases by disease"
+      },
+      "ts": 13,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s15",
+      "parent": "s14",
+      "correlationId": "saved:test#14",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Gonorrhea",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Gonorrhea'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "applied saved selection test"
+      },
+      "ts": 14,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s16",
+      "parent": "s15",
+      "viewId": "prose:note:ncaee65d0",
+      "actorMeta": {
+        "actor": "user",
+        "label": "a note"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "I confirmed it with the ledger — no need to call again.\n\nYes: I ran `casesVsPrev52Max` (`analyze`, commit **s8**) over the current selection — Gonorrhea, states, 6,020 present cells — and it came back as a genuine **discovery**. The FDR ledger (LORD++) shows 1 test / 1 discovery: correlation ≈ **0.966** between weekly cases and the previous-52-week high, p = 0, rejected at threshold α = 0.00125, wealth moving from 0.025 → 0.049.\n\nSo across the states, Gonorrhea's current weekly counts are tracking their trailing 52-week high very closely — not a degenerate fit, a real signal.",
+        "author": {
+          "kind": "humanEdited",
+          "by": "you",
+          "model": "claude-sonnet-5"
+        },
+        "basis": {
+          "atCommit": "s15",
+          "filters": {
+            "diseases": {
+              "kind": "point",
+              "field": "disease",
+              "value": "Gonorrhea"
+            }
+          },
+          "editedFrom": {
+            "atCommit": "s8",
+            "filters": {
+              "diseases": {
+                "kind": "point",
+                "field": "disease",
+                "value": "Gonorrhea"
+              }
+            }
+          }
+        }
+      },
+      "clientViewIds": [
+        "prose:note:ncaee65d0"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "write note ncaee65d0"
+      },
+      "ts": 15,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s17",
+      "parent": "s16",
+      "viewId": "prose:note:ncaee65d0",
+      "actorMeta": {
+        "actor": "user",
+        "label": "a note"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "I confirmed it with the ledger — no need to call again. #s15 \n\nYes: I ran `casesVsPrev52Max` (`analyze`, commit **s8**) over the current selection — Gonorrhea, states, 6,020 present cells — and it came back as a genuine **discovery**. The FDR ledger (LORD++) shows 1 test / 1 discovery: correlation ≈ **0.966** between weekly cases and the previous-52-week high, p = 0, rejected at threshold α = 0.00125, wealth moving from 0.025 → 0.049.\n\nSo across the states, Gonorrhea's current weekly counts are tracking their trailing 52-week high very closely — not a degenerate fit, a real signal.",
+        "author": {
+          "kind": "humanEdited",
+          "by": "you",
+          "model": "claude-sonnet-5"
+        },
+        "refs": [
+          {
+            "span": [
+              56,
+              60
+            ],
+            "commit": "s15",
+            "label": "disease — applied saved selection test"
+          }
+        ],
+        "basis": {
+          "atCommit": "s16",
+          "filters": {
+            "diseases": {
+              "kind": "point",
+              "field": "disease",
+              "value": "Gonorrhea"
+            }
+          },
+          "editedFrom": {
+            "atCommit": "s8",
+            "filters": {
+              "diseases": {
+                "kind": "point",
+                "field": "disease",
+                "value": "Gonorrhea"
+              }
+            }
+          }
+        }
+      },
+      "clientViewIds": [
+        "prose:note:ncaee65d0"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "write note ncaee65d0"
+      },
+      "ts": 16,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s18",
+      "parent": "s17",
+      "viewId": "prose:note:ncaee65d0",
+      "actorMeta": {
+        "actor": "user",
+        "label": "a note"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "I confirmed it with the ledger — no need to call again. \n\nYes: I ran `casesVsPrev52Max` (`analyze`, commit **s8**) over the current selection — Gonorrhea, states, 6,020 present cells — and it came back as a genuine **discovery**. The FDR ledger (LORD++) shows 1 test / 1 discovery: correlation ≈ **0.966** between weekly cases and the previous-52-week high, p = 0, rejected at threshold α = 0.00125, wealth moving from 0.025 → 0.049.\n\nSo across the states, Gonorrhea's current weekly counts are tracking their trailing 52-week high very closely — not a degenerate fit, a real signal.",
+        "author": {
+          "kind": "humanEdited",
+          "by": "you",
+          "model": "claude-sonnet-5"
+        },
+        "basis": {
+          "atCommit": "s17",
+          "filters": {
+            "diseases": {
+              "kind": "point",
+              "field": "disease",
+              "value": "Gonorrhea"
+            }
+          },
+          "editedFrom": {
+            "atCommit": "s8",
+            "filters": {
+              "diseases": {
+                "kind": "point",
+                "field": "disease",
+                "value": "Gonorrhea"
+              }
+            }
+          }
+        }
+      },
+      "clientViewIds": [
+        "prose:note:ncaee65d0"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "write note ncaee65d0"
+      },
+      "ts": 17,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s19",
+      "parent": "s18",
+      "viewId": "prose:note:ncaee65d0",
+      "actorMeta": {
+        "actor": "user",
+        "label": "a note"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "I confirmed it with the ledger — no need to call again. @[test] \n\nYes: I ran `casesVsPrev52Max` (`analyze`, commit **s8**) over the current selection — Gonorrhea, states, 6,020 present cells — and it came back as a genuine **discovery**. The FDR ledger (LORD++) shows 1 test / 1 discovery: correlation ≈ **0.966** between weekly cases and the previous-52-week high, p = 0, rejected at threshold α = 0.00125, wealth moving from 0.025 → 0.049.\n\nSo across the states, Gonorrhea's current weekly counts are tracking their trailing 52-week high very closely — not a degenerate fit, a real signal.",
+        "author": {
+          "kind": "humanEdited",
+          "by": "you",
+          "model": "claude-sonnet-5"
+        },
+        "refs": [
+          {
+            "span": [
+              56,
+              63
+            ],
+            "saved": "p1",
+            "label": "test"
+          }
+        ],
+        "basis": {
+          "atCommit": "s18",
+          "filters": {
+            "diseases": {
+              "kind": "point",
+              "field": "disease",
+              "value": "Gonorrhea"
+            }
+          },
+          "editedFrom": {
+            "atCommit": "s8",
+            "filters": {
+              "diseases": {
+                "kind": "point",
+                "field": "disease",
+                "value": "Gonorrhea"
+              }
+            }
+          }
+        }
+      },
+      "clientViewIds": [
+        "prose:note:ncaee65d0"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "write note ncaee65d0"
+      },
+      "ts": 18,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s20",
+      "parent": "s19",
+      "correlationId": "saved:test#19",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Gonorrhea",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Gonorrhea'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "applied saved selection test"
+      },
+      "ts": 19,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s21",
+      "parent": "s20",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "null",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "clear Reported cases by disease"
+      },
+      "ts": 20,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s22",
+      "parent": "s21",
+      "correlationId": "saved:test#21",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Gonorrhea",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Gonorrhea'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "applied saved selection test"
+      },
+      "ts": 21,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s23",
+      "parent": "s10",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "null",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "clear Reported cases by disease"
+      },
+      "ts": 22,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s24",
+      "parent": "s22",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Gonorrhea",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Gonorrhea'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "pick Gonorrhea"
+      },
+      "ts": 23,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s25",
+      "parent": "s24",
+      "viewId": "kinds",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Cells by area kind"
+      },
+      "kind": "point",
+      "field": "kind",
+      "value": "state",
+      "clientViewIds": [
+        "kinds"
+      ],
+      "predicateSQL": "(\"kind\" IN ('state'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "sum over the states"
+      },
+      "ts": 24,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s26",
+      "parent": "s25",
+      "viewId": "weeks",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by week"
+      },
+      "kind": "interval",
+      "field": "t",
+      "value": [
+        "2025-09-06",
+        "2025-12-27"
+      ],
+      "clientViewIds": [
+        "weeks"
+      ],
+      "predicateSQL": "(\"t\" BETWEEN \"2025-09-06\" AND \"2025-12-27\")",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "brush the autumn"
+      },
+      "ts": 25,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s27",
+      "parent": "s26",
+      "viewId": "map",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by state, on the map"
+      },
+      "kind": "point",
+      "field": "jurisdiction",
+      "value": "California",
+      "clientViewIds": [
+        "map"
+      ],
+      "predicateSQL": "(\"jurisdiction\" IN ('California'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "pick California"
+      },
+      "ts": 26,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s28",
+      "parent": "s27",
+      "viewId": "encoding:coverage",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Coverage — which silence is which"
+      },
+      "kind": "point",
+      "field": "category",
+      "value": "kind",
+      "clientViewIds": [
+        "encoding:coverage"
+      ],
+      "predicateSQL": "(\"category\" IN ('kind'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "recolour coverage by area kind"
+      },
+      "ts": 27,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s29",
+      "parent": "s28",
+      "viewId": "map",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by state, on the map"
+      },
+      "kind": "point",
+      "field": "jurisdiction",
+      "value": null,
+      "clientViewIds": [
+        "map"
+      ],
+      "predicateSQL": "(\"jurisdiction\" IS NULL)",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "let the whole country back in"
+      },
+      "ts": 28,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s30",
+      "parent": "s29",
+      "viewId": "diseases",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by disease"
+      },
+      "kind": "point",
+      "field": "disease",
+      "value": "Giardiasis",
+      "clientViewIds": [
+        "diseases"
+      ],
+      "predicateSQL": "(\"disease\" IN ('Giardiasis'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "switch to Giardiasis"
+      },
+      "ts": 29,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s31",
+      "parent": "s30",
+      "viewId": "weeks",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Reported cases by week"
+      },
+      "kind": "interval",
+      "field": "t",
+      "value": null,
+      "clientViewIds": [
+        "weeks"
+      ],
+      "predicateSQL": "null",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "widen back to the whole year"
+      },
+      "ts": 30,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    },
+    {
+      "id": "s32",
+      "parent": "s31",
+      "viewId": "prose:dashboard",
+      "actorMeta": {
+        "actor": "system",
+        "label": "the dashboard"
+      },
+      "kind": "point",
+      "field": "caption",
+      "value": {
+        "text": "California in the autumn was the peak, and the reencode changed what the coverage bar counts.",
+        "author": {
+          "kind": "human",
+          "by": "you"
+        },
+        "refs": [
+          {
+            "span": [
+              0,
+              10
+            ],
+            "commit": "s27",
+            "label": "California"
+          },
+          {
+            "span": [
+              43,
+              55
+            ],
+            "commit": "s28",
+            "label": "the reencode"
+          }
+        ]
+      },
+      "clientViewIds": [
+        "prose:dashboard"
+      ],
+      "predicateSQL": "(\"caption\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "say what this desk found"
+      },
+      "ts": 31,
+      "data": {
+        "cells": "inline:20923127-e14f5a0c"
+      }
+    }
+  ],
+  "bookmarks": [
+    {
+      "id": "b1",
+      "name": "Gonorrhea across the states",
+      "commitId": "s25",
+      "by": "user",
+      "at": "2026-09-05T21:01:00.503Z"
+    },
+    {
+      "id": "b2",
+      "name": "Autumn in California",
+      "commitId": "s27",
+      "by": "user",
+      "at": "2026-09-05T21:01:00.503Z"
+    },
+    {
+      "id": "b3",
+      "name": "What the coverage bar counts",
+      "commitId": "s28",
+      "by": "user",
+      "at": "2026-09-05T21:01:00.503Z"
+    },
+    {
+      "id": "b4",
+      "name": "Giardiasis, same weeks",
+      "commitId": "s30",
+      "by": "user",
+      "at": "2026-09-05T21:01:00.503Z"
+    },
+    {
+      "id": "b5",
+      "name": "The whole year again",
+      "commitId": "s31",
+      "by": "user",
+      "at": "2026-09-05T21:01:00.503Z"
+    },
+    {
+      "id": "b6",
+      "name": "The claim, with its citations",
+      "commitId": "s32",
+      "by": "user",
+      "at": "2026-09-05T21:01:00.503Z"
+    }
+  ],
+  "saved": [
+    {
+      "id": "p1",
+      "name": "test",
+      "conditions": [
+        {
+          "viewId": "diseases",
+          "kind": "point",
+          "field": "disease",
+          "value": "Gonorrhea"
+        }
+      ],
+      "by": "user",
+      "at": "2026-09-04T03:54:30.213Z",
+      "on": {
+        "table": "cells",
+        "version": "inline:20923127-e14f5a0c"
+      },
+      "from": [
+        "s3"
+      ]
+    }
+  ],
+  "notes": [
+    "The bookmarks travelled by name and by the moment each one names — the desk’s /api/state serves the cockpit’s view of a bookmark, which carries no author and no time — so this page stamped both at capture and vouches for neither."
+  ]
+}

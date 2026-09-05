@@ -19,11 +19,15 @@
  * MMWR weeks end on Saturday; week 1 is the week (Sun–Sat) that contains
  * January 4th. `t` is that Saturday, ISO, so the series contract's `t`→x
  * binding is a real date, not a week number that lies across years.
+ *
+ * **This module runs in a browser.** Reading the committed snapshot off disk
+ * needs node, so it lives beside this one in `snapshot.ts` — the same rule the
+ * library states in `src/source/index.ts` ("carriers that need a runtime are
+ * their own modules beside this one, so the default entry never loads node").
+ * The single-file story page runs this ETL in the browser over a CSV it
+ * carries, and one `node:fs` import at the top would have made that impossible.
  */
-import { readFileSync } from 'node:fs';
 import { parseCSVTyped } from 'vizfootprint/data';
-import { openSource } from 'vizfootprint/source';
-import { fileSource } from 'vizfootprint/source/file';
 import type { SeriesGrain, SeriesPoint } from 'vizfootprint/def';
 import { cellOf, type Absence } from './absence.js';
 
@@ -167,18 +171,4 @@ export function nndssTablesFromRows(rows: readonly Record<string, unknown>[]): N
     weeks,
     counts,
   };
-}
-
-/** The committed snapshot, parsed. */
-export function loadSnapshot(path = new URL('../../data/nndss/snapshot.csv', import.meta.url)): NndssTables {
-  return nndssTables(readFileSync(path, 'utf8'));
-}
-
-/** The snapshot through the library's source layer: a declared `{ format: 'csv', via: 'file', at }`, read by the file carrier, with the provenance it vouches for. */
-export async function loadSnapshotAsync(path = new URL('../../data/nndss/snapshot.csv', import.meta.url)): Promise<{ readonly tables: NndssTables; readonly source: { readonly format: 'csv'; readonly via: 'file'; readonly at: string; readonly version: string; readonly retrievedAt: string; readonly rows: number } }> {
-  const handle = await openSource({ format: 'csv', via: 'file', at: path.href }, 'cells', [fileSource]);
-  const snap = await handle.snapshot();
-  if ('unchanged' in snap) throw new Error('snapshot: a first read never answers unchanged');
-  await handle.close();
-  return { tables: nndssTablesFromRows(snap.rows), source: { format: 'csv', via: 'file', at: path.href, version: snap.version, retrievedAt: snap.retrievedAt, rows: snap.rows.length } };
 }

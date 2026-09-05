@@ -26,6 +26,8 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | `src/nndss/` | 1–5 | flags → absence, CSV → tables, the declared dashboard, the declared analyses, the surface, the scripted proposals, the analyst |
 | `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors |
 | `web/` | 3, 4, 6 | the front door, the cockpit, the Grammar panel, the jump box, the Analyst panel |
+| `web/story/` | 6 | the SINGLE-FILE story page: its entry, its desk, and the captured desk it carries |
+| `scripts/` | — | `story-capture.ts` — the desk's story, off a running server |
 | `tests/` | — | vitest |
 
 ## What you see
@@ -100,6 +102,32 @@ npm test
 
 `vizfootprint-ui` is a `file:` link to the sibling checkout; rebuild it
 (`cd ../vizfootprint && npm run build:ui`) after any library change.
+
+## Send the desk to somebody — one file, no server
+
+```
+npm run story:capture   # GETs /api/state from the running desk → web/story/desk.json (32 commits, 6 bookmarks)
+npm run story:page      # → dist/story/index.html — open it from file://, with the network off
+```
+
+`dist/story/index.html` is the whole thing: the definition and the engine bundled, and the log, the
+bookmarks, the saved pictures, the committed CDC snapshot and the state outlines carried inline in one
+gzip+base64 script block (8.60 MB of JSON → 984 kB gzipped → 1.28 MB in a 2.15 MB file). Scrolling it
+replays the acts on live charts; every citation seeks; and every beat has an **explore from here** door
+that forks a path of your own at that commit and opens the cockpit there, so your acts never land on
+the author's lineage.
+
+The two files that make it are the recipe, and the recipe is the documentation:
+`web/story/entry.tsx` (imports the def — a definition is data except its analyses, which are code, so
+a page has to import one rather than carry it) and `web/story.vite.config.ts`
+(`vite-plugin-singlefile`, plus one hook that writes the payload through the library's own codec).
+See [`vizfootprint-ui/story/page`](../vizfootprint/ui/src/story/page/README.md) for the ceiling — past
+ten megabytes compressed the build refuses and tells you to declare the table `via: 'http'` instead —
+and for the boot's order and its three honest states.
+
+The capture only ever GETs: a capture that dispatched would be a reader changing the thing it came to
+read. It stamps one thing it cannot read off the wire — a bookmark's author and time, which
+`/api/state` does not carry — and the page prints that admission in its own front matter.
 
 ## Rules the ETL makes (and states)
 

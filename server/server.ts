@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
 import { MODEL } from '../src/nndss/analyst.js';
-import { loadSnapshotAsync } from '../src/nndss/etl.js';
+import { loadSnapshotAsync } from '../src/nndss/snapshot.js';
 import { loadEnv } from './env.js';
 
 const PORT = Number(process.env['PORT'] ?? 5290);

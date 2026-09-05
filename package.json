@@ -14,7 +14,9 @@
     "web:build": "tsc --noEmit -p web/tsconfig.json && vite build --config web/vite.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "data:geo": "node data/geo/fetch.mjs"
+    "data:geo": "node data/geo/fetch.mjs",
+    "story:capture": "tsx scripts/story-capture.ts",
+    "story:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/story.vite.config.ts"
   },
   "dependencies": {
     "agentfootprint": "^9.82.0",
@@ -34,6 +36,7 @@
     "typescript": "^5.5.0",
     "us-atlas": "^3.0.1",
     "vite": "^7.0.0",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.0.0"
   }
 }

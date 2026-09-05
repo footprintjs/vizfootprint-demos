@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { kindOf, loadSnapshot, mmwrWeekEnd, nndssTables } from '../src/nndss/etl.js';
+import { kindOf, mmwrWeekEnd, nndssTables } from '../src/nndss/etl.js';
+import { loadSnapshot } from '../src/nndss/snapshot.js';
 
 /**
  * The ETL over CDC's own bytes: MMWR weeks become real dates, every cell

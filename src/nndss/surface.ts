@@ -15,7 +15,8 @@ import { buildDashboardAsync } from 'vizfootprint/def';
 import type { Dashboard } from 'vizfootprint/def';
 import type { InteractionSession, VizToolsPort } from 'vizfootprint/agent';
 import { nndssDef } from './def.js';
-import { loadSnapshot, type NndssTables } from './etl.js';
+import type { NndssTables } from './etl.js';
+import { loadSnapshot } from './snapshot.js';
 
 export interface NndssSurface {
   readonly session: InteractionSession;

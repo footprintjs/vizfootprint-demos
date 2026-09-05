@@ -9,7 +9,15 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": false,
     "noEmit": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src", "server", "data/nndss/*.ts", "tests"]
+  "include": [
+    "src",
+    "server",
+    "data/nndss/*.ts",
+    "tests",
+    "scripts/story-*.ts"
+  ]
 }
