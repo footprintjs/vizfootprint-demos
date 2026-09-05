@@ -80,7 +80,7 @@ export function pickedFrom(selection: RenderSelection, sourceViewId: string, fie
 export function arrivesFrom(selection: RenderSelection, sourceViewIds: readonly string[]): boolean {
   return sourceViewIds.some((id) => {
     const clause = selection.clauses.get(id);
-    return filtersHere(clause) && clause.value !== null && clause.value !== undefined;
+    return filtersHere(clause) && clause.value !== null; // `null` is the one spelling of cleared, whatever the kind
   });
 }
 

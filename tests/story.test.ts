@@ -18,46 +18,51 @@ import { parseCSVTyped } from 'vizfootprint/data';
 import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import { toStory } from 'vizfootprint-ui/story';
 import { decodeStoryPayload, encodeStoryPayload, STORY_PAYLOAD_CEILING_BYTES } from 'vizfootprint-ui/story/payload';
-import { CAPTURE_NOTE, deskStory, type NndssPageData } from '../src/nndss/story.js';
+import { deskStory, type NndssPageData } from '../src/nndss/story.js';
 import { nndssTablesFromRows } from '../src/nndss/etl.js';
 import { DASHBOARD_WORDS, nndssDef } from '../src/nndss/def.js';
 
 const WIRE = {
   records: [{ id: 's1', parent: null, viewId: 'diseases', kind: 'point', field: 'disease', value: 'Gonorrhea' }],
-  bookmarks: [{ id: 'b1', label: 'Gonorrhea across the states', commitId: 's1', at: 's1', ts: 0 }],
+  bookmarks: [{ id: 'b1', label: 'Gonorrhea across the states', commitId: 's1', at: 's1', ts: 0, by: 'agent', madeAt: '2026-09-04T03:54:30.213Z' }],
   saved: [{ id: 'p1', name: 'test', conditions: [{ viewId: 'diseases', kind: 'point', field: 'disease', value: 'Gonorrhea' }], by: 'user', at: '2026-09-04T03:54:30.213Z' }],
 };
 
 describe('deskStory — the wire, in the shapes the page boots from', () => {
-  it('turns the cockpit\'s view of a bookmark into a restorable record, and SAYS what it stamped', () => {
-    const story = deskStory(WIRE, '2026-09-05T00:00:00.000Z');
+  it('turns the cockpit\'s view of a bookmark into a restorable record — creator and creation time READ, never stamped', () => {
+    const story = deskStory(WIRE);
     expect('error' in story).toBe(false);
     if ('error' in story) return;
     expect(story.log).toHaveLength(1);
-    expect(story.bookmarks).toEqual([{ id: 'b1', name: 'Gonorrhea across the states', commitId: 's1', by: 'user', at: '2026-09-05T00:00:00.000Z' }]);
+    // `by` and `at` are the desk's own, off `bookmarkViews()`: this capture invents no provenance,
+    // so the page has nothing to confess in its front matter
+    expect(story.bookmarks).toEqual([{ id: 'b1', name: 'Gonorrhea across the states', commitId: 's1', by: 'agent', at: '2026-09-04T03:54:30.213Z' }]);
     expect(story.saved).toHaveLength(1);
-    // the one thing the wire does not carry is the one thing the page prints about itself
-    expect(story.notes).toEqual([CAPTURE_NOTE]);
   });
 
   it('takes the moment a bookmark NAMES, falling back to the bookmark commit an older log carries', () => {
-    const story = deskStory({ ...WIRE, bookmarks: [{ id: 'b1', label: 'old', commitId: 's9', at: null, ts: 0 }] }, 'now');
+    const story = deskStory({ ...WIRE, bookmarks: [{ ...WIRE.bookmarks[0], label: 'old', commitId: 's9', at: null }] });
     expect('error' in story ? [] : story.bookmarks.map((b) => b.commitId)).toEqual(['s9']);
   });
 
-  it('skips a bookmark with no name or no moment rather than inventing one', () => {
-    const story = deskStory({ ...WIRE, bookmarks: [{ label: '', commitId: 's1' }, { label: 'nameless moment' }, { id: 'b2', label: 'kept', at: 's1' }] }, 'now');
+  it('skips a bookmark with no name, no moment, or no creation stamp rather than inventing one', () => {
+    const good = WIRE.bookmarks[0]!;
+    const story = deskStory({
+      ...WIRE,
+      bookmarks: [
+        { ...good, label: '' },
+        { ...good, at: undefined, commitId: undefined },
+        { ...good, by: 'nobody' },
+        { ...good, madeAt: undefined },
+        { ...good, id: 'b2', label: 'kept' },
+      ],
+    });
     expect('error' in story ? [] : story.bookmarks.map((b) => b.name)).toEqual(['kept']);
   });
 
-  it('admits nothing when there were no bookmarks to stamp', () => {
-    const story = deskStory({ ...WIRE, bookmarks: [] }, 'now');
-    expect('error' in story ? null : story.notes).toEqual([]);
-  });
-
   it('refuses a body that is not a desk state, in words', () => {
-    expect(deskStory('not a desk', 'now')).toEqual({ error: '/api/state did not answer with an object' });
-    expect(deskStory({ bookmarks: [] }, 'now')).toEqual({ error: '/api/state answered without a `records` array — that is the log, and there is no story without it' });
+    expect(deskStory('not a desk')).toEqual({ error: '/api/state did not answer with an object' });
+    expect(deskStory({ bookmarks: [] })).toEqual({ error: '/api/state answered without a `records` array — that is the log, and there is no story without it' });
   });
 });
 

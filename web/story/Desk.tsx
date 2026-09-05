@@ -148,7 +148,7 @@ export function StoryDesk({ lens, tables, geo, as }: StoryDeskProps): JSX.Elemen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cells, state.selections, state.links, state.cleared]);
 
-  const liveViews = new Set(state.selections.filter((s) => s.value !== undefined).map((s) => s.viewId));
+  const liveViews = new Set(state.selections.filter((s) => s.value !== null).map((s) => s.viewId)); // cleared is `null`, whatever the kind
   const clearable = (id: string) => ({ active: liveViews.has(id), onClear: () => void view.clear(id, `clear ${viewLabels[id] ?? id}`) });
 
   const charts: CockpitChart[] = [

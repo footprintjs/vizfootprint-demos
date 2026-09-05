@@ -10,7 +10,9 @@
  *
  * It only ever GETs. The desk is somebody's live session; a capture that
  * dispatched, reset or seeked would be a reader changing the thing it came to
- * read.
+ * read. `capturedAt` is the one time IT records — when this capture ran — and
+ * it is never mistaken for anything the desk recorded: every stamp inside the
+ * story comes off the wire (see `../src/nndss/story.ts`).
  */
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +29,7 @@ const res = await fetch(`${API}/api/state`).catch((error: unknown) => {
 if (!res.ok) throw new Error(`${API}/api/state answered ${String(res.status)} ${res.statusText}`);
 
 const capturedAt = new Date().toISOString();
-const story = deskStory(await res.json(), capturedAt);
+const story = deskStory(await res.json());
 if ('error' in story) throw new Error(story.error);
 
 await mkdir(dirname(OUT), { recursive: true });
@@ -35,4 +37,3 @@ await writeFile(OUT, `${JSON.stringify({ from: API, capturedAt, ...story }, null
 
 console.log(`captured ${String(story.log.length)} commits, ${String(story.bookmarks.length)} bookmarks and ${String(story.saved.length)} saved pictures from ${API}`);
 console.log(`→ ${OUT}`);
-for (const note of story.notes) console.log(`   note: ${note}`);

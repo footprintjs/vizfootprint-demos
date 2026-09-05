@@ -43,7 +43,7 @@ function storyPayload(): Plugin {
   return {
     name: 'vzf-story-payload',
     async transformIndexHtml(html) {
-      const desk = JSON.parse(read('web', 'story', 'desk.json')) as { log: []; bookmarks: []; saved: []; notes?: string[]; capturedAt?: string; from?: string };
+      const desk = JSON.parse(read('web', 'story', 'desk.json')) as { log: []; bookmarks: []; saved: []; capturedAt?: string; from?: string };
       const csv = read('data', 'nndss', 'snapshot.csv');
       const geo = JSON.parse(read('data', 'geo', 'us-states.geo.json')) as unknown;
       const encoded = await encodeStoryPayload({
@@ -53,7 +53,8 @@ function storyPayload(): Plugin {
         meta: {
           builtAt: new Date().toISOString().slice(0, 10),
           data: { via: 'inline', label: `the committed CDC snapshot, ${csv.split('\n').length - 2} rows, and the state outlines` },
-          ...(desk.notes === undefined || desk.notes.length === 0 ? {} : { notes: desk.notes }),
+          // no `notes`: the front matter's slot for what a page cannot vouch for, and this capture
+          // vouches for everything it carries — every stamp came off the desk's own wire
         },
         data: { csv, geo },
       });

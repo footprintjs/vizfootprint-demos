@@ -307,7 +307,7 @@ export function App(): JSX.Element {
   // an empty altShort is a choice (a decorative chart) and stays empty; no slot at all = the chart names itself
   const altShortOf = (viewId: string): string | undefined => proseOf(viewId).find((p) => p.slot === 'altShort')?.text;
   // SET-1: which views hold a LIVE clause (the ✕ pill on the chart), and the def's labels for the chips
-  const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== undefined).map((s) => s.viewId)), [state.selections]); // null is a live IS-NULL point
+  const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== null).map((s) => s.viewId)), [state.selections]); // cleared is `null`, whatever the kind
   const viewLabels = useMemo(() => Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId])), [state.views]);
   // SAVED PICTURES — saved LOGIC, so both doors go through the library's store,
   // never through a commit. Naming lands nothing; applying lands one ordinary

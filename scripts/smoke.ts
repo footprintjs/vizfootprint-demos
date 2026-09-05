@@ -2,12 +2,20 @@
  * A no-browser smoke over the real snapshot: build the surface, read the
  * facet, select a disease, run the analyses, run the proposals, try to put
  * the absence column on an axis. Prints what happened; exits non-zero if the
- * exit criterion is not met. `npx tsx scripts/smoke.ts`
+ * exit criterion is not met. `npm run smoke`
+ *
+ * It is the one check that walks the WHOLE desk in one process and prints what
+ * it found, which is what you want when something is wrong and you do not yet
+ * know where. `npm run typecheck` covers this folder, so it cannot drift out
+ * of step with the library again without saying so — which is exactly how it
+ * broke: `declareAnalysis` stopped answering `{ ok, analysis }` and nothing
+ * compiled this file to notice.
  */
 import { runScriptedProposals } from '../src/nndss/proposals.js';
 import { buildNndssSurface } from '../src/nndss/surface.js';
 
 async function main(): Promise<void> {
+  let ranAll = true;
   const t0 = performance.now();
   const { session, tables } = buildNndssSurface();
   console.log(`surface built in ${String(Math.round(performance.now() - t0))} ms · cells ${String(tables.cells.length)} · series ${String(tables.series.length)}`);
@@ -26,8 +34,12 @@ async function main(): Promise<void> {
   console.log(`select pertussis: ok=${String(sel.ok)} → ${String((await session.selectedRows()).length)} cells in ${String(Math.round(performance.now() - t1))} ms`);
 
   for (const id of ['casesByDisease', 'casesByKind']) {
+    // `declareAnalysis` answers the AnalysisCommit itself: the typed result, plus the record it landed
+    // (absent when the result is degenerate — nothing lands). There is no `{ ok, analysis }` envelope.
     const a = await session.declareAnalysis(id);
-    console.log(`analysis ${id}: ok=${String(a.ok)}`, JSON.stringify(a.ok ? a.analysis.output : a).slice(0, 220));
+    const ran = a.result.ok;
+    console.log(`analysis ${id}: ok=${String(ran)} · commit ${a.commit?.id ?? 'none (degenerate)'}`, JSON.stringify(a.result.ok ? a.result.output : a.result).slice(0, 220));
+    if (!ran) ranAll = false;
   }
 
   const bad = await session.dispatch({ verb: 'reencode', viewId: 'weeks', channel: 'y', field: 'report_state', cause: { requestedBy: 'user', computedBy: 'user' } }, { as: 'user' });
@@ -37,7 +49,7 @@ async function main(): Promise<void> {
   for (const p of outcomes) console.log(`  ${p.admitted ? 'ADMIT ' : 'REFUSE'} ${p.id}${p.code ? ` | ${p.code} | ${(p.detail ?? '').slice(0, 80)}` : ''}`);
 
   const admitted = outcomes.filter((p) => p.admitted).length;
-  if (facet === undefined || admitted !== 2 || bad.ok) {
+  if (facet === undefined || !ranAll || admitted !== 2 || bad.ok) {
     console.error('SMOKE FAILED');
     process.exit(1);
   }

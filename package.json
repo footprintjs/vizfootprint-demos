@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "data:geo": "node data/geo/fetch.mjs",
+    "smoke": "tsx scripts/smoke.ts",
     "story:capture": "tsx scripts/story-capture.ts",
     "story:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/story.vite.config.ts"
   },

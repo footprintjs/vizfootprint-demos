@@ -11,18 +11,21 @@
  * what the desk actually answers, and so the capture script is nothing but a
  * fetch and a write.
  *
- * ## The one thing the wire does not carry
+ * ## Every field it needs, the wire carries
  *
- * `/api/state` serves `session.bookmarkViews()` — a bookmark's **id, its name
- * and the moment it names**, and not who named it or when. The store keeps
- * both; the wire's view of a bookmark has never had a reason to. So the
- * restorable record this builds STAMPS the author and the time, and says so
- * out loud in {@link CAPTURE_NOTE}, which the page prints in its own front
- * matter. Nothing here quietly invents a provenance and lets a reader take it
- * for a recorded one. (`saved` is not like this: the wire serves the store's
- * own records, whole, so the pictures travel with everything they were saved
- * with.)
+ * `/api/state` serves `session.bookmarkViews()`, and that view carries the
+ * store's own CREATION stamp: `by`, and the time under the name `madeAt` (the
+ * view spends `at` on the moment a bookmark NAMES — a commit, not a clock).
+ * So nothing here is stamped and there is nothing to confess: what the page
+ * shows about who made a beat and when is what the desk recorded. It used to
+ * carry neither, and this module invented both and printed a note saying so;
+ * the fix was the library's door, not a better note. A record that arrives
+ * without the stamp is not a row `bookmarkViews()` could have produced, so it
+ * is SKIPPED rather than guessed at — the same rule as a bookmark with no name
+ * or no moment. (`saved` was never like this: the wire serves the store's own
+ * records, whole.)
  */
+import { isActor } from 'vizfootprint/cause';
 import type { CommitRecord } from 'vizfootprint/log';
 import type { RestorableBookmark, RestorableSaved } from 'vizfootprint/session';
 
@@ -39,18 +42,7 @@ export interface DeskStory {
   readonly log: readonly CommitRecord[];
   readonly bookmarks: readonly RestorableBookmark[];
   readonly saved: readonly RestorableSaved[];
-  /** What this capture could not read off the wire and stamped instead — printed on the page. */
-  readonly notes: readonly string[];
 }
-
-/**
- * The sentence a captured page prints about its own bookmarks.
- *
- * It is here, beside the stamping, rather than in the page or the build: the
- * place that could not vouch for something is the place that should say so.
- */
-export const CAPTURE_NOTE =
-  'The bookmarks travelled by name and by the moment each one names — the desk’s /api/state serves the cockpit’s view of a bookmark, which carries no author and no time — so this page stamped both at capture and vouches for neither.';
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -61,7 +53,7 @@ const text = (v: unknown): string | null => (typeof v === 'string' && v.length >
  * body is not a desk state: a capture that guessed would produce a page whose
  * story is not the desk's.
  */
-export function deskStory(body: unknown, stampedAt: string): DeskStory | { readonly error: string } {
+export function deskStory(body: unknown): DeskStory | { readonly error: string } {
   if (!isObject(body)) return { error: '/api/state did not answer with an object' };
   const records = body['records'];
   if (!Array.isArray(records)) return { error: '/api/state answered without a `records` array — that is the log, and there is no story without it' };
@@ -74,20 +66,17 @@ export function deskStory(body: unknown, stampedAt: string): DeskStory | { reado
     // old enough to carry a `bookmark:` commit — where the two really are different moments.
     const commitId = text(raw['at']) ?? text(raw['commitId']);
     const name = text(raw['label']);
-    if (commitId === null || name === null) continue; // a bookmark with no name or no moment is not a beat
+    const by = raw['by']; // the CREATOR, recorded — never this capture's guess (`isActor` is the library's own reading of that slot)
+    const at = text(raw['madeAt']); // the CREATION time, likewise
+    if (commitId === null || name === null || !isActor(by) || at === null) continue; // not a record the store could have minted
     bookmarks.push({
       ...(text(raw['id']) === null ? {} : { id: raw['id'] as string }),
       name,
       commitId,
-      by: 'user', // STAMPED — see CAPTURE_NOTE
-      at: stampedAt, // STAMPED — see CAPTURE_NOTE
+      by,
+      at,
     });
   }
   const saved = (Array.isArray(body['saved']) ? body['saved'] : []).filter(isObject) as unknown as RestorableSaved[];
-  return {
-    log: records as readonly CommitRecord[],
-    bookmarks,
-    saved,
-    notes: bookmarks.length === 0 ? [] : [CAPTURE_NOTE], // nothing was stamped, so nothing to admit
-  };
+  return { log: records as readonly CommitRecord[], bookmarks, saved };
 }

@@ -603,6 +603,9 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
         const exclude = body['exclude'] === true;
         return { verb: 'select', viewId, field, values: values as readonly unknown[] | null, ...(exclude ? { exclude: true } : {}), cause };
       }
+      // the POINT form: the value, or `null` to clear (the one spelling of cleared, whatever the kind).
+      // A body with no `value` at all is passed through as-is and the library refuses it in a sentence —
+      // this door never guesses that an absent value meant a clear.
       return { verb: 'select', viewId, field, value: body['value'] as string | number | null, cause };
     }
     case 'analyze': {

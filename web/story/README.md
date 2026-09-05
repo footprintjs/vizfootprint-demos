@@ -22,10 +22,16 @@ from `file://`, and most of it would be beside the point there. A story page is 
 So `Desk.tsx` is four charts plus the log and the paths, built from the same library components and
 the same host-side aggregation helpers `App.tsx` uses (`../src/derive.ts`).
 
-## The one thing this capture stamps
+## This capture stamps nothing
 
-`/api/state` serves `session.bookmarkViews()` — a bookmark's id, its name and the moment it names, and
-not who named it or when. So `deskStory` (`src/nndss/story.ts`) stamps the author and the time and
-says so in `CAPTURE_NOTE`, which the page prints in its own front matter. Nothing here quietly invents
-a provenance and lets a reader take it for a recorded one. (The saved pictures are not like this: the
-wire serves the store's own records, whole.)
+`/api/state` serves `session.bookmarkViews()`, and that view carries a bookmark's id, its name, the
+moment it names AND the store's creation stamp — `by`, and the time under the name `madeAt` (the view
+already spends `at` on the moment a bookmark names, which is a commit and not a clock). So `deskStory`
+(`src/nndss/story.ts`) reads every field it hands `restoreBookmarks`, and the page's front matter has
+nothing to confess.
+
+It did, once. The wire carried neither the author nor the time, so this module invented both and
+printed a note saying it vouched for neither — honest, and the wrong repair. A consumer stamping a
+fact the library already held is a projection that discarded its own answer
+([`ui/src/adapter/README.md`](../../../vizfootprint/ui/src/adapter/README.md), law 3), and the fix was
+the door. The saved pictures never had the problem: the wire serves the store's records whole.
