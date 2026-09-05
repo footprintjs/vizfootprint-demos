@@ -13,15 +13,20 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
 const API = process.env['DEMO_API'] ?? 'http://localhost:5290';
+// storydeck is the third `file:` sibling (the Story tab's scroll lens ships as JSX source).
+const STORYDECK = path.resolve(REPO, '..', 'storydeck');
 
 export default defineConfig({
   root: HERE,
   plugins: [react()],
+  // Every `file:` sibling keeps its own React for its own tests, and storydeck's components run
+  // inside ours. Two copies of React is the classic hook crash, so one copy is the contract.
+  resolve: { dedupe: ['react', 'react-dom'] },
   server: {
     port: 5291,
     strictPort: true,
     proxy: { '/api': API },
-    fs: { allow: [REPO, path.resolve(REPO, '..', 'vizfootprint')] },
+    fs: { allow: [REPO, path.resolve(REPO, '..', 'vizfootprint'), STORYDECK] },
   },
   build: { outDir: path.join(HERE, 'dist'), emptyOutDir: true },
 });

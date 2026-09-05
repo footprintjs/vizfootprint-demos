@@ -44,8 +44,13 @@ import {
   BranchPill,
   PathsModal,
   ForkToast,
+  ChartFrame,
+  type CockpitChart,
 } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
+// the sixth layer's renderer: storydeck's scroll lens, over this desk's live session
+import { StoryStage } from 'vizfootprint-ui/story/stage';
+import 'storydeck/storydeck.css';
 import {
   arrivesFrom,
   noteRefs,
@@ -56,7 +61,6 @@ import {
   columnVocabulary,
   emitIntent,
   pickedFrom,
-  storyDroppedNote,
   type Vocabulary,
 } from './derive.js';
 import { AnalystPanel } from './AnalystPanel.js';
@@ -64,7 +68,6 @@ import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
 import { JumpBox } from './JumpBox.js';
 import { ChartEditor } from 'vizfootprint-ui/editor';
 import { toStory } from 'vizfootprint-ui/story';
-import type { StoryPost } from 'vizfootprint-ui/story';
 
 interface CellRow {
   readonly jurisdiction: string;
@@ -553,7 +556,9 @@ export function App(): JSX.Element {
         ))}
       </div>
     );
-  // The STORY layer: the named bookmarks along the head's lineage as a storydeck post (figures are the host's — none here yet).
+  // The STORY layer: the named bookmarks along the head's lineage as a storydeck post. No `figure`
+  // option — the post's HTML slides stay empty on purpose, because the Story tab mounts the LIVE
+  // stage below and a still of the same beat would only be a second, staler answer.
   // The fallback words are the def's DECLARED ones, never the live caption — the live words would misdate every earlier bookmark.
   const declaredWords = rows?.declared?.dashboard;
   const story = useMemo(() => toStory(state, { declared: declaredWords ?? {}, author: 'the desk', date: new Date().toISOString().slice(0, 10) }), [state, declaredWords]);
@@ -661,6 +666,131 @@ export function App(): JSX.Element {
       })
       .catch((e: unknown) => setProblem(`the reset did not run: ${e instanceof Error ? e.message : String(e)}`));
   };
+  // THE CHART CELLS, once. The cockpit mounts them in its band and the STORY STAGE mounts the
+  // same render functions over the same session — one dashboard, two places a reader can meet it.
+  const chartCells: CockpitChart[] = [
+    {
+      id: 'coverage',
+      onEdit: () => editChart('coverage'),
+      weight: 2,
+      ...clearable('coverage'),
+      caption: `Coverage — ${String(keptCount)} of ${String(cells.length)} cells in view · ${coverageField === absenceField ? 'which silence is which' : `cells by ${noun(coverageField)}`} (click to select)${coverageField === absenceField ? '' : capWords(coverageField, coverageData.length)}`,
+      render: ({ width, height }) => (
+        <VizBar viewId="coverage" data={coverageData} field={coverageField} colorOf={colorOfState} selection={selFor('coverage')} columns={columns} fits={fitsOf('coverage')} encoding={shown['coverage'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('coverage', e, emitIntent('select', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+      ),
+    },
+    {
+      id: 'diseases',
+      onEdit: () => editChart('diseases'),
+      weight: 4,
+      ...clearable('diseases'),
+      caption: `Reported cases by ${noun(diseasesField)}, summed over kept ${kindFor('diseases')}s (a ${noun(diseasesField)} with no present cell has no bar) — click one to drive the trend, the week line and the table wherever the links carry it (now: ${diseaseFor('diseases')})${diseasesField === 'disease' ? '' : capWords(diseasesField, diseaseData.length)}`,
+      render: ({ width, height }) => (
+        <VizBar viewId="diseases" data={diseaseData} highlight={diseaseHighlight} field={diseasesField} selection={selFor('diseases')} columns={columns} fits={fitsOf('diseases')} encoding={shown['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, emitIntent('pick', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+      ),
+    },
+    {
+      id: 'kinds',
+      onEdit: () => editChart('kinds'),
+      weight: 1.5,
+      ...clearable('kinds'),
+      caption: `Cells by ${kindsField === 'kind' ? 'area kind — states, regions, roll-ups' : noun(kindsField)} (click to select)${kindsField === 'kind' ? '' : capWords(kindsField, kindData.length)}`,
+      render: ({ width, height }) => (
+        <VizBar viewId="kinds" data={kindData} field={kindsField} selection={selFor('kinds')} columns={columns} fits={fitsOf('kinds')} encoding={shown['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, emitIntent('select', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+      ),
+    },
+    {
+      id: 'map',
+      onEdit: () => editChart('map'),
+      weight: 4,
+      ...clearable('map'),
+      caption: (
+        <>
+          {`${diseaseFor('map')} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`}
+          {words('map')}
+        </>
+      ),
+      render: ({ width, height }) =>
+        geo === null ? (
+          <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+            the map shapes have not arrived yet
+          </div>
+        ) : (
+          <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" ariaLabel={altShortOf('map')} selection={selFor('map')} width={width} height={height} onEmit={(e) => void view.emit('map', e, emitIntent('select', e))} />
+        ),
+    },
+    {
+      id: 'weeks',
+      onEdit: () => editChart('weeks'),
+      weight: 3,
+      ...clearable('weeks'),
+      caption: (
+        <>
+          {`${noun(weeksY)} per ${weeksX === 't' ? (grain?.bucket ?? 'week') : noun(weeksX)}, summed over kept ${kindFor('weeks')}s · ${grain?.note ?? ''}`}
+          {words('weeks')}
+        </>
+      ),
+      render: ({ width, height }) => (
+        <VizLine viewId="weeks" data={weekData} dateField={weeksX} valueField={weeksY} ariaLabel={altShortOf('weeks')} columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, emitIntent('brush', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
+      ),
+    },
+    {
+      id: 'trend',
+      onEdit: () => editChart('trend'),
+      weight: 3,
+      ...clearable('trend'),
+      caption: `${diseaseFor('trend')} — ${noun(trendY)} per ${areaChosenIn('trend') ? 'kept area' : 'region (the default until you pick a kind or an area)'}, by ${trendX === 't' ? (grain?.bucket ?? 'week') : noun(trendX)} — a missing point is a silence, never a zero`,
+      render: ({ width, height }) => (
+        <VizLine
+          viewId="trend"
+          data={trendData}
+          dateField={trendX}
+          valueField={trendY}
+          colorOf={colorOfArea}
+          columns={columns}
+          fits={fitsOf('trend')}
+          encoding={shown['trend'] ?? {}}
+          xDomain={navigateDomain(selFor('trend'))?.range as readonly [string | null, string | null] | undefined}
+          width={width}
+          height={height}
+          onEmit={(e) => void view.emit('trend', e, emitIntent('brush', e))}
+          onReencode={(v, c, f) => void view.reencode(v, c, f)}
+        />
+      ),
+    },
+    {
+      id: 'table',
+      onEdit: () => editChart('table'),
+      weight: 3,
+      ...clearable('table'),
+      caption: `${diseaseFor('table')}, week ending ${latestWeek} — the cells as CDC printed them, with their flag (click a row to select)`,
+      render: ({ width, height }) => (
+        <VizTable viewId="table" data={tableRows} columns={['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max']} idField="jurisdiction" selection={selFor('table')} width={width} height={height} onEmit={(e) => void view.emit('table', e, emitIntent('select', e))} />
+      ),
+    },
+  ];
+
+  /**
+   * THE STORY STAGE'S FIGURE — this desk's own charts, at the size the story column gives them.
+   * The same `render` functions the cockpit band mounts, bound to the same session, so the beats
+   * move THESE. Four of the seven: the story column is half a screen wide, and a reader following
+   * a narrative wants the charts the narrative is about, not the whole instrument panel.
+   */
+  const storyFigure = (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: 8 }}>
+      {['diseases', 'map', 'trend', 'weeks'].map((id) => {
+        const cell = chartCells.find((c) => c.id === id);
+        return cell === undefined ? null : (
+          // `display: flex` because `.vzf-chart-frame` is `flex: 1` — a block parent gives it
+          // a zero height, ChartFrame measures nothing, and the cell draws nothing at all
+          <div key={id} style={{ height: 190, minWidth: 0, display: 'flex' }}>
+            <ChartFrame>{cell.render}</ChartFrame>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   const menuItems = [
     { id: 'analyst', label: `Analyst${analystTurns > 0 ? ` (${analystTurns})` : ''}`, icon: '🧭', onSelect: () => { setAsideTab('analyst'); setAsideOpen(true); } },
     { id: 'edit', label: 'Edit a chart', icon: '✎', onSelect: () => editChart(editing ?? state.views.find((v) => v.viewId === 'weeks')?.viewId ?? 'weeks'), hint: 'or hover a chart and press its ✎' },
@@ -803,109 +933,8 @@ export function App(): JSX.Element {
           />
         </>
       }
-      charts={[
-        {
-          id: 'coverage',
-          onEdit: () => editChart('coverage'),
-          weight: 2,
-          ...clearable('coverage'),
-          caption: `Coverage — ${String(keptCount)} of ${String(cells.length)} cells in view · ${coverageField === absenceField ? 'which silence is which' : `cells by ${noun(coverageField)}`} (click to select)${coverageField === absenceField ? '' : capWords(coverageField, coverageData.length)}`,
-          render: ({ width, height }) => (
-            <VizBar viewId="coverage" data={coverageData} field={coverageField} colorOf={colorOfState} selection={selFor('coverage')} columns={columns} fits={fitsOf('coverage')} encoding={shown['coverage'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('coverage', e, emitIntent('select', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
-          ),
-        },
-        {
-          id: 'diseases',
-          onEdit: () => editChart('diseases'),
-          weight: 4,
-          ...clearable('diseases'),
-          caption: `Reported cases by ${noun(diseasesField)}, summed over kept ${kindFor('diseases')}s (a ${noun(diseasesField)} with no present cell has no bar) — click one to drive the trend, the week line and the table wherever the links carry it (now: ${diseaseFor('diseases')})${diseasesField === 'disease' ? '' : capWords(diseasesField, diseaseData.length)}`,
-          render: ({ width, height }) => (
-            <VizBar viewId="diseases" data={diseaseData} highlight={diseaseHighlight} field={diseasesField} selection={selFor('diseases')} columns={columns} fits={fitsOf('diseases')} encoding={shown['diseases'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('diseases', e, emitIntent('pick', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
-          ),
-        },
-        {
-          id: 'kinds',
-          onEdit: () => editChart('kinds'),
-          weight: 1.5,
-          ...clearable('kinds'),
-          caption: `Cells by ${kindsField === 'kind' ? 'area kind — states, regions, roll-ups' : noun(kindsField)} (click to select)${kindsField === 'kind' ? '' : capWords(kindsField, kindData.length)}`,
-          render: ({ width, height }) => (
-            <VizBar viewId="kinds" data={kindData} field={kindsField} selection={selFor('kinds')} columns={columns} fits={fitsOf('kinds')} encoding={shown['kinds'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('kinds', e, emitIntent('select', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
-          ),
-        },
-        {
-          id: 'map',
-          onEdit: () => editChart('map'),
-          weight: 4,
-          ...clearable('map'),
-          caption: (
-            <>
-              {`${diseaseFor('map')} — reported cases per state, summed over kept weeks · a hatched state has no present cell (a silence, never a zero)${noShape.length > 0 ? ` · no shape here, see the table: ${noShape.join(', ')}` : ''}`}
-              {words('map')}
-            </>
-          ),
-          render: ({ width, height }) =>
-            geo === null ? (
-              <div role="status" style={{ padding: 12, opacity: 0.7 }}>
-                the map shapes have not arrived yet
-              </div>
-            ) : (
-              <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" ariaLabel={altShortOf('map')} selection={selFor('map')} width={width} height={height} onEmit={(e) => void view.emit('map', e, emitIntent('select', e))} />
-            ),
-        },
-        {
-          id: 'weeks',
-          onEdit: () => editChart('weeks'),
-          weight: 3,
-          ...clearable('weeks'),
-          caption: (
-            <>
-              {`${noun(weeksY)} per ${weeksX === 't' ? (grain?.bucket ?? 'week') : noun(weeksX)}, summed over kept ${kindFor('weeks')}s · ${grain?.note ?? ''}`}
-              {words('weeks')}
-            </>
-          ),
-          render: ({ width, height }) => (
-            <VizLine viewId="weeks" data={weekData} dateField={weeksX} valueField={weeksY} ariaLabel={altShortOf('weeks')} columns={columns} fits={fitsOf('weeks')} encoding={shown['weeks'] ?? {}} width={width} height={height} onEmit={(e) => void view.emit('weeks', e, emitIntent('brush', e))} onReencode={(v, c, f) => void view.reencode(v, c, f)} />
-          ),
-        },
-        {
-          id: 'trend',
-          onEdit: () => editChart('trend'),
-          weight: 3,
-          ...clearable('trend'),
-          caption: `${diseaseFor('trend')} — ${noun(trendY)} per ${areaChosenIn('trend') ? 'kept area' : 'region (the default until you pick a kind or an area)'}, by ${trendX === 't' ? (grain?.bucket ?? 'week') : noun(trendX)} — a missing point is a silence, never a zero`,
-          render: ({ width, height }) => (
-            <VizLine
-              viewId="trend"
-              data={trendData}
-              dateField={trendX}
-              valueField={trendY}
-              colorOf={colorOfArea}
-              columns={columns}
-              fits={fitsOf('trend')}
-              encoding={shown['trend'] ?? {}}
-              xDomain={navigateDomain(selFor('trend'))?.range as readonly [string | null, string | null] | undefined}
-              width={width}
-              height={height}
-              onEmit={(e) => void view.emit('trend', e, emitIntent('brush', e))}
-              onReencode={(v, c, f) => void view.reencode(v, c, f)}
-            />
-          ),
-        },
-        {
-          id: 'table',
-          onEdit: () => editChart('table'),
-          weight: 3,
-          ...clearable('table'),
-          caption: `${diseaseFor('table')}, week ending ${latestWeek} — the cells as CDC printed them, with their flag (click a row to select)`,
-          render: ({ width, height }) => (
-            <VizTable viewId="table" data={tableRows} columns={['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max']} idField="jurisdiction" selection={selFor('table')} width={width} height={height} onEmit={(e) => void view.emit('table', e, emitIntent('select', e))} />
-          ),
-        },
-        // notes join after the charts — the same place a saved arrangement puts anything it has not seen (orderCharts puts unknown ids last), so a new note lands in one place either way
-        ...noteCells,
-      ]}
+      // notes join after the charts — the same place a saved arrangement puts anything it has not seen (orderCharts puts unknown ids last), so a new note lands in one place either way
+      charts={[...chartCells, ...noteCells]}
       reports={[
         {
           id: 'grammar',
@@ -1051,71 +1080,22 @@ export function App(): JSX.Element {
           ),
         },
         {
+          // THE SCROLL LENS. Not a report about the story — the story, told over the live desk:
+          // storydeck pins the charts and the reader's scroll moves the session from beat to beat.
           id: 'story',
           title: 'Story',
           icon: '📖',
           badge: story.meta.bookmarkCount,
-          content: <StoryReport post={story} />,
+          content: (
+            <StoryStage post={story} session={view} emptyNote="No bookmarks named on this lineage yet — name a bookmark in the time strip and it becomes a section here.">
+              {storyFigure}
+            </StoryStage>
+          ),
         },
       ]}
     />
 
     </>
-  );
-}
-
-/** The Story report: one section per named bookmark along the lineage, its words and the steps since the previous bookmark, plus the post as JSON for storydeck. */
-function StoryReport({ post }: { readonly post: StoryPost }): ReactNode {
-  const [copied, setCopied] = useState(false);
-  if (post.sections.length === 0) {
-    return <p style={{ margin: 0, fontSize: 13, opacity: 0.8 }}>No bookmarks named on this lineage yet — name a bookmark in the time strip and it becomes a section here.</p>;
-  }
-  return (
-    <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-      <p style={{ margin: '0 0 8px', opacity: 0.8 }}>
-        <b>{post.meta.title}</b> · {post.meta.bookmarkCount} bookmark{post.meta.bookmarkCount === 1 ? '' : 's'} on {post.meta.path ?? "the head's lineage"}. Every bookmark is a section: its words as they stood, and the acts since the previous bookmark. Copy the JSON into storydeck's <code>assemblePost</code> for Read, Scroll and Watch.
-      </p>
-      {post.bookmarks.map((b) => {
-        // one quiet line, the same restraint the analyst's dropped citations get: the post CARRIES every
-        // citation this story could not show, and a disclosure no reader ever sees is the scar all over again
-        const note = storyDroppedNote(post.sections[b.index]?.dropped);
-        return (
-        <div key={b.key} style={{ marginBottom: 10 }}>
-          <div style={{ fontWeight: 600 }}>
-            {b.index + 1}. {b.label} <span style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, opacity: 0.6 }}>at #{b.at}</span>
-          </div>
-          {b.words.caption !== undefined ? <div style={{ opacity: 0.85 }}>{b.words.caption}</div> : null}
-          {note === undefined ? null : (
-            <div style={{ marginTop: 2, fontSize: 11, opacity: 0.65 }} title="citations these words made that this story could not show — carried on the post, never faked">
-              {note}
-            </div>
-          )}
-          {b.steps.length > 0 ? (
-            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-              {b.steps.map((s) => (
-                <li key={s.commitId}>
-                  {s.sentence}
-                  {s.actor !== 'user' ? <span style={{ opacity: 0.6 }}> ({s.actor})</span> : null}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-        );
-      })}
-      <button
-        type="button"
-        onClick={() => {
-          navigator.clipboard
-            .writeText(JSON.stringify(post, null, 2))
-            .then(() => setCopied(true))
-            .catch(() => setCopied(false)); // a denied clipboard stays honest: the button never claims a copy
-        }}
-        style={{ font: 'inherit', fontSize: 12.5, cursor: 'pointer' }}
-      >
-        {copied ? 'Copied the post JSON' : 'Copy the post JSON for storydeck'}
-      </button>
-    </div>
   );
 }
 

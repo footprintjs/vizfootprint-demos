@@ -18,6 +18,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { selectionForView, keepPredicate, type LinkEdgeView, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
+// The story's dropped-citation line ships with the story bridge now, not here — this suite keeps
+// exercising it from the OUTSIDE, which is what makes it a witness that the door is really open.
+import { storyDroppedNote } from 'vizfootprint-ui/story';
 import {
   arrivesFrom,
   capNote,
@@ -29,7 +32,6 @@ import {
   noteRefs,
   pickedFrom,
   whyDroppedNote,
-  storyDroppedNote,
   type Row,
 } from '../web/src/derive.js';
 
