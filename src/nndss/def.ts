@@ -22,7 +22,7 @@
  * a matrix a person can read.
  */
 import type { DashboardDef } from 'vizfootprint/agent';
-import type { ActorMeta } from 'vizfootprint/mosaic';
+import type { ActorMeta } from 'vizfootprint/selection';
 import { NNDSS_ANALYSES } from './analyses.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from './absence.js';
 import type { NndssTables } from './etl.js';
