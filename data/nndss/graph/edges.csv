@@ -1,0 +1,106 @@
+source,target,weight,jurisdictions
+"Arboviral diseases, West Nile virus disease","Candida auris, clinical",49,8
+"Arboviral diseases, West Nile virus disease","Carbapenemase-Producing Organisms (CPO), Total",27,4
+"Arboviral diseases, West Nile virus disease",Cryptosporidiosis,84,12
+"Arboviral diseases, West Nile virus disease",Giardiasis,68,11
+"Arboviral diseases, West Nile virus disease",Gonorrhea,81,16
+"Arboviral diseases, West Nile virus disease","Hepatitis A, Confirmed",17,6
+"Arboviral diseases, West Nile virus disease","Hepatitis B, chronic, Confirmed",55,8
+"Arboviral diseases, West Nile virus disease","Hepatitis C, acute, Confirmed",26,7
+"Arboviral diseases, West Nile virus disease",Legionellosis,77,12
+"Arboviral diseases, West Nile virus disease","Measles, Imported",3,1
+"Arboviral diseases, West Nile virus disease","Measles, Indigenous",12,5
+"Arboviral diseases, West Nile virus disease",Mumps,4,4
+"Arboviral diseases, West Nile virus disease",Pertussis,75,14
+"Arboviral diseases, West Nile virus disease",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),90,15
+"Candida auris, clinical","Carbapenemase-Producing Organisms (CPO), Total",356,12
+"Candida auris, clinical",Cryptosporidiosis,474,18
+"Candida auris, clinical",Giardiasis,437,15
+"Candida auris, clinical",Gonorrhea,660,23
+"Candida auris, clinical","Hepatitis A, Confirmed",120,12
+"Candida auris, clinical","Hepatitis B, chronic, Confirmed",408,13
+"Candida auris, clinical","Hepatitis C, acute, Confirmed",175,13
+"Candida auris, clinical",Legionellosis,408,15
+"Candida auris, clinical","Measles, Imported",17,5
+"Candida auris, clinical","Measles, Indigenous",110,13
+"Candida auris, clinical",Mumps,57,9
+"Candida auris, clinical",Pertussis,490,17
+"Candida auris, clinical",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),627,21
+"Carbapenemase-Producing Organisms (CPO), Total",Cryptosporidiosis,443,18
+"Carbapenemase-Producing Organisms (CPO), Total",Giardiasis,439,16
+"Carbapenemase-Producing Organisms (CPO), Total",Gonorrhea,523,23
+"Carbapenemase-Producing Organisms (CPO), Total","Hepatitis A, Confirmed",118,8
+"Carbapenemase-Producing Organisms (CPO), Total","Hepatitis B, chronic, Confirmed",362,13
+"Carbapenemase-Producing Organisms (CPO), Total","Hepatitis C, acute, Confirmed",157,13
+"Carbapenemase-Producing Organisms (CPO), Total",Legionellosis,369,15
+"Carbapenemase-Producing Organisms (CPO), Total","Measles, Imported",19,6
+"Carbapenemase-Producing Organisms (CPO), Total","Measles, Indigenous",110,12
+"Carbapenemase-Producing Organisms (CPO), Total",Mumps,53,6
+"Carbapenemase-Producing Organisms (CPO), Total",Pertussis,434,18
+"Carbapenemase-Producing Organisms (CPO), Total",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),508,23
+Cryptosporidiosis,Giardiasis,1226,38
+Cryptosporidiosis,Gonorrhea,1546,46
+Cryptosporidiosis,"Hepatitis A, Confirmed",265,21
+Cryptosporidiosis,"Hepatitis B, chronic, Confirmed",873,30
+Cryptosporidiosis,"Hepatitis C, acute, Confirmed",418,29
+Cryptosporidiosis,Legionellosis,910,37
+Cryptosporidiosis,"Measles, Imported",35,10
+Cryptosporidiosis,"Measles, Indigenous",195,20
+Cryptosporidiosis,Mumps,100,14
+Cryptosporidiosis,Pertussis,1101,34
+Cryptosporidiosis,Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),1662,46
+Giardiasis,Gonorrhea,1393,40
+Giardiasis,"Hepatitis A, Confirmed",305,20
+Giardiasis,"Hepatitis B, chronic, Confirmed",886,27
+Giardiasis,"Hepatitis C, acute, Confirmed",437,26
+Giardiasis,Legionellosis,900,36
+Giardiasis,"Measles, Imported",36,9
+Giardiasis,"Measles, Indigenous",179,19
+Giardiasis,Mumps,100,14
+Giardiasis,Pertussis,1027,32
+Giardiasis,Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),1516,41
+Gonorrhea,"Hepatitis A, Confirmed",324,30
+Gonorrhea,"Hepatitis B, chronic, Confirmed",1164,36
+Gonorrhea,"Hepatitis C, acute, Confirmed",561,33
+Gonorrhea,Legionellosis,1110,45
+Gonorrhea,"Measles, Imported",45,17
+Gonorrhea,"Measles, Indigenous",252,27
+Gonorrhea,Mumps,98,17
+Gonorrhea,Pertussis,1495,42
+Gonorrhea,Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),2135,47
+"Hepatitis A, Confirmed","Hepatitis B, chronic, Confirmed",251,17
+"Hepatitis A, Confirmed","Hepatitis C, acute, Confirmed",151,15
+"Hepatitis A, Confirmed",Legionellosis,258,18
+"Hepatitis A, Confirmed","Measles, Imported",18,6
+"Hepatitis A, Confirmed","Measles, Indigenous",46,10
+"Hepatitis A, Confirmed",Mumps,33,7
+"Hepatitis A, Confirmed",Pertussis,264,23
+"Hepatitis A, Confirmed",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),343,25
+"Hepatitis B, chronic, Confirmed","Hepatitis C, acute, Confirmed",385,24
+"Hepatitis B, chronic, Confirmed",Legionellosis,708,30
+"Hepatitis B, chronic, Confirmed","Measles, Imported",30,9
+"Hepatitis B, chronic, Confirmed","Measles, Indigenous",143,18
+"Hepatitis B, chronic, Confirmed",Mumps,82,11
+"Hepatitis B, chronic, Confirmed",Pertussis,864,30
+"Hepatitis B, chronic, Confirmed",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),1146,32
+"Hepatitis C, acute, Confirmed",Legionellosis,381,23
+"Hepatitis C, acute, Confirmed","Measles, Imported",18,5
+"Hepatitis C, acute, Confirmed","Measles, Indigenous",89,13
+"Hepatitis C, acute, Confirmed",Mumps,57,11
+"Hepatitis C, acute, Confirmed",Pertussis,456,27
+"Hepatitis C, acute, Confirmed",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),492,30
+Legionellosis,"Measles, Imported",38,11
+Legionellosis,"Measles, Indigenous",160,16
+Legionellosis,Mumps,86,13
+Legionellosis,Pertussis,838,33
+Legionellosis,Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),1102,41
+"Measles, Imported","Measles, Indigenous",12,6
+"Measles, Imported",Mumps,4,3
+"Measles, Imported",Pertussis,38,11
+"Measles, Imported",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),37,10
+"Measles, Indigenous",Mumps,12,8
+"Measles, Indigenous",Pertussis,194,21
+"Measles, Indigenous",Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),244,24
+Mumps,Pertussis,105,16
+Mumps,Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),104,13
+Pertussis,Salmonellosis (excluding Salmonella Typhi infection and Salmonella Paratyphi infection),1430,40

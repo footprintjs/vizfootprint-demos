@@ -5,7 +5,7 @@
  * demo, so the same cockpit code drives both.
  *
  *   GET  /api/state        everything the cockpit renders
- *   GET  /api/rows         the three tables + grain + the absence vocabulary
+ *   GET  /api/rows         the five tables (three ETL'd, the graph's two) + grain + the absence vocabulary
  *   GET  /api/summary      the front door's figures — what this snapshot holds, counted
  *   GET  /api/window       ONE window of rows for the Sheet (the session's view-query port)
  *   GET  /api/proposals    what beat 1 already did here (survives a reload)
@@ -36,6 +36,7 @@ import { openSource } from 'vizfootprint/source';
 import { fileSource } from 'vizfootprint/source/file';
 import { MODEL, createNndssAnalyst, liveProvider, scriptedNndssMock, type ActivityStep, type NndssAnalyst } from '../src/nndss/analyst.js';
 import type { NndssTables } from '../src/nndss/etl.js';
+import type { NndssGraph } from '../src/nndss/graph.js';
 
 export const API_ROOT = '/api';
 
@@ -523,8 +524,8 @@ export const SUGGESTIONS = [
 
 const hasKey = (): boolean => (process.env['ANTHROPIC_API_KEY'] ?? '') !== '';
 
-export async function createDesk(tables?: NndssTables, activity: ActivityStep[] = [], provenance: Desk['provenance'] = {}): Promise<Desk> {
-  const surface = await buildNndssSurfaceAsync(tables);
+export async function createDesk(tables?: NndssTables, activity: ActivityStep[] = [], provenance: Desk['provenance'] = {}, graph?: NndssGraph): Promise<Desk> {
+  const surface = await buildNndssSurfaceAsync(tables, graph);
   const analyst = createNndssAnalyst(surface.port, {
     provider: hasKey() ? liveProvider(process.env['ANTHROPIC_API_KEY']!) : scriptedNndssMock(),
     onActivity: (step) => activity.push(step),
@@ -851,7 +852,7 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (!url.pathname.startsWith(`${API_ROOT}/`)) return false;
   const door = url.pathname.slice(API_ROOT.length + 1);
-  const { session, tables } = desk.surface;
+  const { session, tables, graph } = desk.surface;
   try {
     if (req.method === 'GET' && door === 'state') return sendJson(res, 200, await stateOf(desk)), true;
     // the landing page, before anything is mounted: the counts, and nothing that costs a walk
@@ -861,6 +862,9 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         cells: tables.cells,
         jurisdictions: tables.jurisdictions,
         series: tables.series,
+        // the graph's two tables, as the def declares them and the desk's relations join them
+        nodes: graph.nodes,
+        edges: graph.edges,
         grain: tables.grain,
         diseases: tables.diseases,
         weeks: tables.weeks,
@@ -966,7 +970,7 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
       case 'reset': {
         if (desk.turnActive) return sendJson(res, 409, { error: 'a turn is in flight — wait for it to land before starting fresh' }), true; // a reset mid-turn would leave the turn writing into a desk that no longer exists
         desk.activity.length = 0;
-        const fresh = await createDesk(desk.surface.tables, desk.activity, desk.provenance); // the carrier's facts about the snapshot survive a reset
+        const fresh = await createDesk(desk.surface.tables, desk.activity, desk.provenance, desk.surface.graph); // the carrier's facts about the snapshot survive a reset
         desk.surface = fresh.surface;
         desk.proposals = [];
         desk.analyst = fresh.analyst;

@@ -3,10 +3,20 @@
  * library reads at build, at dispatch, and in the picker — one sentence each.
  */
 import { describe, expect, it } from 'vitest';
-import { buildDashboard, validateDashboardDef } from 'vizfootprint/def';
+import { buildDashboard, parseDashboardDef, validateDashboardDef } from 'vizfootprint/def';
 import type { Cause } from 'vizfootprint/cause';
-import { nndssDef } from '../src/nndss/def.js';
+import { GRAPH_RELATIONS, nndssDef } from '../src/nndss/def.js';
 import type { NndssTables } from '../src/nndss/etl.js';
+import type { NndssGraph } from '../src/nndss/graph.js';
+
+/** A graph small enough to read: two nodes, one edge — the def declares the tables, not the rows' truth. */
+const graph: NndssGraph = {
+  nodes: [
+    { disease: 'Measles', cases_total: 3, jurisdictions_reporting: 1, weeks_reporting: 1 },
+    { disease: 'Mumps', cases_total: 1, jurisdictions_reporting: 1, weeks_reporting: 1 },
+  ],
+  edges: [{ source: 'Measles', target: 'Mumps', weight: 1, jurisdictions: 1 }],
+};
 
 const tables = {
   cells: [
@@ -61,6 +71,37 @@ describe('the def carries the encoding plane', () => {
     expect(swap.ok).toBe(true);
     if (swap.ok) expect(swap.commit).toMatchObject({ viewId: 'encoding:weeks', field: '*' });
     expect(s.viewEncodings('weeks')).toEqual({ x: 'week_index', y: 'cases' });
+  });
+  it('with the graph: five tables, nodes keyed by disease, and the two relations echoed on the overview with their kind written out', async () => {
+    const def = nndssDef(tables, graph);
+    const parsed = parseDashboardDef(def);
+    expect(parsed).toMatchObject({ ok: true });
+    expect(validateDashboardDef(def)).toEqual([]);
+    const o = await buildDashboard(def).createSession().overview();
+    expect(o.tables.map((t) => t.name)).toEqual(['cells', 'jurisdictions', 'series', 'nodes', 'edges']);
+    expect(o.tables.find((t) => t.name === 'nodes')).toMatchObject({ key: 'disease', declaredColumns: 4, source: { inline: 'rows', rows: 2 } });
+    expect(o.tables.find((t) => t.name === 'edges')).toMatchObject({ declaredColumns: 4, source: { inline: 'rows', rows: 1 } });
+    // projected, never re-derived: the runtime wrote the default kind out; the def's own array is untouched
+    expect(o.relations).toEqual(GRAPH_RELATIONS.map((r) => ({ ...r, kind: 'many-to-one' })));
+    expect(GRAPH_RELATIONS.every((r) => r.kind === undefined)).toBe(true);
+    expect(o.columns['nodes']!.find((c) => c.field === 'disease')).toMatchObject({ role: 'identifier' });
+    expect(o.columns['edges']!.find((c) => c.field === 'weight')).toMatchObject({ role: 'measure', label: 'jurisdiction-weeks where both report' });
+  });
+  it('without the graph (the story page\'s browser build): three tables and no relations — never two empty tables', async () => {
+    const def = nndssDef(tables);
+    expect(validateDashboardDef(def)).toEqual([]);
+    expect('relations' in def).toBe(false);
+    const o = await buildDashboard(def).createSession().overview();
+    expect(o.tables.map((t) => t.name)).toEqual(['cells', 'jurisdictions', 'series']);
+    expect(o.relations).toEqual([]);
+  });
+  it('a relation must point at an identity — drop the nodes key and the library refuses the def in its sentence', () => {
+    const def = nndssDef(tables, graph);
+    const { key: _dropped, ...nodes } = def.data['nodes']!;
+    expect(validateDashboardDef({ ...def, data: { ...def.data, nodes } })).toEqual([
+      'relations[0].to "nodes.disease" — declare data["nodes"].key first; a relation points at an identity',
+      'relations[1].to "nodes.disease" — declare data["nodes"].key first; a relation points at an identity',
+    ]);
   });
   it('a def that starts against a house rule is refused at build with the sentence', () => {
     const def = nndssDef(tables);

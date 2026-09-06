@@ -2,9 +2,11 @@
  * THE DASHBOARD DEFINITION — layers 2–4 as data.
  *
  * Everything the agent and the cockpit will ever know about this dashboard
- * is declared here: the three tables and which column carries each one's
- * absence state, the views and who drives each, the visual channels a view
- * may rebind, the analyses that may run, the multiple-comparison budget.
+ * is declared here: the three ETL'd tables and which column carries the
+ * cells' absence state — and, when the committed graph is handed in, the
+ * `nodes` / `edges` tables and the two relations that join them — the views
+ * and who drives each, the visual channels a view may rebind, the analyses
+ * that may run, the multiple-comparison budget.
  * vizfootprint's validator refuses what it cannot enforce.
  *
  * ── Why `cells` is the default table ────────────────────────────────────────
@@ -21,11 +23,12 @@
  * named as such in the Grammar panel; when declared links land it becomes
  * a matrix a person can read.
  */
-import type { DashboardDef } from 'vizfootprint/agent';
+import type { DashboardDef, DataSourceDef, RelationDecl } from 'vizfootprint/agent';
 import type { ActorMeta } from 'vizfootprint/selection';
 import { NNDSS_ANALYSES } from './analyses.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from './absence.js';
 import type { NndssTables } from './etl.js';
+import type { NndssGraph } from './graph.js';
 
 const ALPHA = 0.05;
 
@@ -49,7 +52,53 @@ export const DASHBOARD_WORDS = {
   caption: "Reported cases by disease, area and week from the CDC's NNDSS tables, with every silence kept as a silence.",
 } as const;
 
-export function nndssDef(tables: NndssTables): DashboardDef {
+/**
+ * The graph's two edges on the MAP: each end of an edge row points at a disease — the
+ * `nodes` table's declared key (the library's law: a relation points at an identity).
+ * Two distinct edges (source → disease, target → disease), `kind` left to the default
+ * the runtime writes out. Data the overview echoes; nothing in the session acts on it yet.
+ */
+export const GRAPH_RELATIONS: readonly RelationDecl[] = [
+  { from: { table: 'edges', column: 'source' }, to: { table: 'nodes', column: 'disease' }, label: 'one end of the pair' },
+  { from: { table: 'edges', column: 'target' }, to: { table: 'nodes', column: 'disease' }, label: 'the other end of the pair' },
+];
+
+/** The graph's two tables as the def declares them — inline rows the node half read off the committed CSVs, with their facets. */
+function graphTables(graph: NndssGraph): Readonly<Record<'nodes' | 'edges', DataSourceDef>> {
+  return {
+    nodes: {
+      rows: graph.nodes,
+      key: 'disease', // the row identity a relation may point at
+      columns: {
+        disease: { role: 'identifier' },
+        // the figures are over the LEAF reporting areas only (graph.ts `GRAPH_KINDS`): a region or total row is CDC's sum of these, never added again
+        cases_total: { role: 'measure', label: 'cases, every week, leaf areas only' },
+        jurisdictions_reporting: { role: 'measure', label: 'leaf areas reporting cases' },
+        weeks_reporting: { role: 'measure', label: 'weeks with cases' },
+      },
+    },
+    edges: {
+      rows: graph.edges,
+      columns: {
+        source: { role: 'dimension', label: 'disease' },
+        target: { role: 'dimension', label: 'the other disease' },
+        weight: { role: 'measure', label: 'jurisdiction-weeks where both report' },
+        jurisdictions: { role: 'measure', label: 'leaf areas where both report' },
+      },
+    },
+  };
+}
+
+/**
+ * The def over the three ETL'd tables — and, when the committed graph is handed in, over
+ * the graph's two as well, joined by `GRAPH_RELATIONS`.
+ *
+ * WHY optional: the story page builds this def in a browser over the ONE CSV it carries
+ * (`web/story/entry.tsx`), and the graph is a second committed artefact it does not carry
+ * yet; a def with no graph declares three tables and no relations rather than two tables
+ * with no rows. The server and every node consumer load the graph beside the snapshot.
+ */
+export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef {
   const absence = { field: ABSENCE_FIELD, states: [...ABSENCE_STATES] };
   return {
     meta: { title: 'NNDSS weekly — vizfootprint on CDC data' },
@@ -78,7 +127,10 @@ export function nndssDef(tables: NndssTables): DashboardDef {
         grain: tables.grain,
         columns: { t: { role: 'dimension', type: 'date' }, entity: { role: 'dimension' }, metric: { role: 'dimension' }, value: { role: 'measure' }, entity_kind: { role: 'dimension' } },
       },
+      // the disease co-occurrence graph (data/nndss/graph): nodes keyed by disease, edges pointing at them
+      ...(graph === undefined ? {} : graphTables(graph)),
     },
+    ...(graph === undefined ? {} : { relations: GRAPH_RELATIONS }),
     actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, sheet: SHEET, analyst: ANALYST },
     encodings: [
       { viewId: 'coverage', chartKind: 'bar', channels: ['category'], initial: { category: ABSENCE_FIELD } },

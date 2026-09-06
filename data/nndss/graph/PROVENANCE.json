@@ -1,0 +1,44 @@
+{
+  "derivedFrom": {
+    "file": "data/nndss/snapshot.csv",
+    "source": "NNDSS Weekly Data — data.cdc.gov",
+    "dataset": "x9gk-5huc",
+    "url": "https://data.cdc.gov/NNDSS/NNDSS-Weekly-Data/x9gk-5huc",
+    "attribution": "Office of Public Health Data, Surveillance, and Technology, Centers for Disease Control and Prevention",
+    "license": "Work of the United States Government — public domain (17 U.S.C. § 105)",
+    "retrievedAt": "2026-09-02T00:18:16.479Z",
+    "rows": 90300,
+    "sha256": "c0084017bb6d5b9fb84c5ae9975dc978e9b7a38fdc459daa5843246bdbbb81cc"
+  },
+  "kinds": [
+    "state"
+  ],
+  "rule": "over the leaf reporting areas only (kind = state — CDC's region and total rows are its sums of these rows and are not walked): one edge per unordered pair of diseases that reported cases > 0 in the same jurisdiction-week at least once; weight = the number of such jurisdiction-weeks, jurisdictions = the distinct reporting areas among them; a pair with no such jurisdiction-week is no edge",
+  "order": "nodes in lexical disease order; on every edge source < target lexically; edges in (source, target) order — lexical is JavaScript string order (UTF-16 code units)",
+  "columns": {
+    "nodes": [
+      "disease",
+      "cases_total",
+      "jurisdictions_reporting",
+      "weeks_reporting"
+    ],
+    "edges": [
+      "source",
+      "target",
+      "weight",
+      "jurisdictions"
+    ]
+  },
+  "counts": {
+    "nodes": 15,
+    "edges": 105,
+    "cellsRead": 90300,
+    "cellsSetAside": 16770,
+    "cellsWalked": 73530,
+    "cellsRepeated": 0,
+    "cellsReporting": 16484
+  },
+  "generator": "scripts/graph-generate.ts",
+  "regenerate": "npm run graph:generate",
+  "note": "Derived data: no wall-clock stamp, so two runs over the same snapshot write the same bytes. Regenerate after data:fetch; never edit by hand."
+}

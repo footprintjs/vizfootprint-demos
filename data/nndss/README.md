@@ -3,8 +3,9 @@
 | file | what |
 |---|---|
 | `fetch.mjs` | downloads the slice from data.cdc.gov (dataset `x9gk-5huc`, SODA API) and writes the two files below; the query is in the script, the labels are exact NNDSS labels |
-| `snapshot.csv` | the slice: 11 diseases × every reporting area × MMWR 2025–2026 (one row per area × week × disease; count columns each with their flag column; `lon`/`lat` from CDC's geocode when a row has one) |
+| `snapshot.csv` | the slice: 15 NNDSS labels (11, plus the four whose current-week cells carry `U` — the list is in `fetch.mjs`) × every reporting area × MMWR 2025–2026 (one row per area × week × disease; count columns each with their flag column; `lon`/`lat` from CDC's geocode when a row has one) |
 | `PROVENANCE.json` | source, dataset id, the exact query, retrieval time, row count, licence — written by the script, never by hand |
+| `graph/` | the disease co-occurrence graph DERIVED from the snapshot (`nodes.csv`, `edges.csv`, its own `PROVENANCE.json`) by `npm run graph:generate` — the rule and the byte-stability promise are in [`graph/README.md`](graph/README.md) |
 
 The snapshot is **provisional** data: CDC revises weekly counts, so a
 re-fetch will differ. That is why the provenance carries the retrieval

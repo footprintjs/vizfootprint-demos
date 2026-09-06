@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
 import { MODEL } from '../src/nndss/analyst.js';
-import { loadSnapshotAsync } from '../src/nndss/snapshot.js';
+import { loadGraphAsync, loadSnapshotAsync } from '../src/nndss/snapshot.js';
 import { loadEnv } from './env.js';
 
 const PORT = Number(process.env['PORT'] ?? 5290);
@@ -22,8 +22,11 @@ const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.j
 loadEnv(); // the repo's own .env, if any — names only ever reach the log, never values
 // the CDC snapshot through the library's source layer: a declared file source, with the provenance the file system vouches for
 const snapshot = await loadSnapshotAsync();
-const desk = await createDesk(snapshot.tables, [], { 'snapshot.csv': snapshot.source }); // what the carrier vouched for, beside the library's own per-table provenance
+// the graph the generator derived from that snapshot, through the same carrier — two more files the desk can vouch for by version
+const graph = await loadGraphAsync();
+const desk = await createDesk(snapshot.tables, [], { 'snapshot.csv': snapshot.source, ...graph.sources }, graph.graph); // what the carrier vouched for, beside the library's own per-table provenance
 console.log(`  source: snapshot.csv via file — ${String(snapshot.source.rows)} rows, ${snapshot.source.version}, read ${snapshot.source.retrievedAt}`);
+console.log(`  graph: nodes ${String(graph.graph.nodes.length)} · edges ${String(graph.graph.edges.length)} — ${graph.sources['graph/nodes.csv'].version}, ${graph.sources['graph/edges.csv'].version}`);
 
 function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
   const url = (req.url ?? '/').split('?')[0] ?? '/';
