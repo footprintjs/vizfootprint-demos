@@ -25,6 +25,7 @@
     "react-dom": "^18.3.1",
     "storydeck": "file:../storydeck",
     "vizfootprint": "file:../vizfootprint",
+    "vizfootprint-studio": "file:../vizfootprint/studio",
     "vizfootprint-ui": "file:../vizfootprint/ui"
   },
   "devDependencies": {
