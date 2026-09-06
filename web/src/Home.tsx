@@ -53,6 +53,25 @@ const card: CSSProperties = { marginTop: 28, background: PAPER, border: `1px sol
 const small: CSSProperties = { fontSize: 12.5, lineHeight: 1.6, color: MUTED };
 const mono: CSSProperties = { fontFamily: 'ui-monospace, Menlo, monospace' };
 
+/**
+ * THE QUIETER DOOR — the wizard, beside the dashboard.
+ *
+ * A link and not a button, because it goes to another page rather than mounting
+ * this one; and quiet, because most people arriving here came for the CDC desk.
+ * Offered in every state (see `MAKE_DOOR` in `front.ts`): it needs no server.
+ */
+function MakeDoor({ make }: { readonly make: { readonly label: string; readonly href: string; readonly because: string } }): JSX.Element {
+  return (
+    <a
+      href={make.href}
+      title={make.because}
+      style={{ font: 'inherit', fontSize: 14.5, color: INK, border: `1px solid ${RULE}`, background: PAPER, borderRadius: 8, padding: '10px 16px', textDecoration: 'none' }}
+    >
+      {make.label} →
+    </a>
+  );
+}
+
 /** The dashboard's public front door — one click, and `App` mounts. */
 export function Home({ onEnter }: { readonly onEnter: () => void }): JSX.Element {
   const [reading, setReading] = useState<Reading>({ status: 'reading' });
@@ -123,7 +142,10 @@ export function Home({ onEnter }: { readonly onEnter: () => void }): JSX.Element
             <p style={{ ...small, margin: '8px 0 0' }}>{door.advice}</p>
             <p style={{ ...small, margin: '8px 0 0' }}>
               There is no way in from here: the dashboard reads the same server, so a button would only take you to an empty
-              room.
+              room. The wizard below is a different matter — it reads a file you bring and asks the server nothing.
+            </p>
+            <p style={{ margin: '12px 0 0' }}>
+              <MakeDoor make={door.make} />
             </p>
           </div>
         ) : null}
@@ -172,6 +194,7 @@ export function Home({ onEnter }: { readonly onEnter: () => void }): JSX.Element
               >
                 {door.enter.label} →
               </button>
+              <MakeDoor make={door.make} />
               <span style={small}>{door.figures[0]?.shown ?? ''} cells, live in the browser — it takes a moment to load.</span>
             </div>
 

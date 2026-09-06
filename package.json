@@ -17,7 +17,8 @@
     "data:geo": "node data/geo/fetch.mjs",
     "smoke": "tsx scripts/smoke.ts",
     "story:capture": "tsx scripts/story-capture.ts",
-    "story:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/story.vite.config.ts"
+    "story:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/story.vite.config.ts",
+    "make:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/make.vite.config.ts"
   },
   "dependencies": {
     "agentfootprint": "^9.82.0",

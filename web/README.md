@@ -16,6 +16,14 @@ demo needed:
   rule is a pure function in `front.ts` for the reason `derive.ts` is one —
   `tests/front.test.ts` holds it to all three states.
 
+  Beside the dashboard's own button there is a second, quieter door: **Make
+  your own**, into `web/make/` — the studio's wizard (`vizfootprint-studio/make`)
+  over a file the reader brings. It is offered in **all three** states, and that
+  is the point rather than an oversight: the dashboard's door depends on the
+  server because the dashboard reads it, and the wizard depends on nothing at
+  all. A page that hid it while the server was down would be withholding the one
+  thing that still worked.
+
 - **`GrammarPanel.tsx`** — the interaction grammar rendered from the
   declaration: verbs off the wire with the gesture that produces each here,
   per-view driver / emits / channels → bound now / drives, the wiring word,
@@ -54,7 +62,22 @@ area is chosen. All of that is said in the captions, not hidden.
 no router, and deliberately not before the click, so the dashboard's own reads
 (the rows, the map shapes, the state poll) do not run behind the landing page.
 
+- **`make/`** — the wizard's page, and nothing else: `<Make />`, with no
+  configuration, because `vizfootprint-studio/make` needs nothing from this
+  demo. The entry has two roles and does not choose between them — a page
+  carrying a payload block is a desk somebody PUBLISHED, so it opens that; a
+  page carrying none is the wizard. That is what makes publishing work: the
+  file the wizard hands over is a copy of the page it is running in.
+
+  Which is why its real artifact is `npm run make:page` — one file, everything
+  inlined. `web:build` builds the same entry as an ordinary multi-file page so
+  the front door's link resolves in a built app, and publishing from THAT page
+  is refused in a sentence naming the assets it found. That refusal is the
+  honest answer, not a fault: a copy of a page whose code lives beside it would
+  open blank.
+
 ```
-npm run web:dev     # http://localhost:5291 (proxies /api to :5290)
-npm run web:build   # web/dist, served by `npm run serve`
+npm run web:dev     # http://localhost:5291 (proxies /api to :5290); /make/index.html is the wizard
+npm run web:build   # web/dist — the dashboard and the wizard, two pages
+npm run make:page   # dist/make/index.html — the wizard as ONE file, the one it can publish from
 ```

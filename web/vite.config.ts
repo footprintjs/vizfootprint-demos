@@ -28,5 +28,15 @@ export default defineConfig({
     proxy: { '/api': API },
     fs: { allow: [REPO, path.resolve(REPO, '..', 'vizfootprint'), STORYDECK] },
   },
-  build: { outDir: path.join(HERE, 'dist'), emptyOutDir: true },
+  // TWO pages: the dashboard, and the wizard beside it (`web/make/`), so the
+  // front door's "Make your own" link resolves in a built app as it does in dev.
+  // The PUBLISHABLE wizard is a different build — `npm run make:page`, one file —
+  // because the wizard publishes copies of the page it is running in, and this
+  // one's code lives in a hashed asset beside it. It says so there rather than
+  // handing anybody a file that opens blank; see `../make.vite.config.ts`.
+  build: {
+    outDir: path.join(HERE, 'dist'),
+    emptyOutDir: true,
+    rollupOptions: { input: { main: path.join(HERE, 'index.html'), make: path.join(HERE, 'make', 'index.html') } },
+  },
 });

@@ -32,6 +32,23 @@ export const API_ORIGIN = 'http://localhost:5290';
 /** The door the figures come from — named on the page, so a reader can check them. */
 export const SUMMARY_DOOR = '/api/summary';
 
+/**
+ * THE SECOND, QUIETER DOOR: the wizard that helps a person write a definition
+ * of their own (`vizfootprint-studio/make`), rather than drive this one.
+ *
+ * It is offered in ALL THREE states, and that is the interesting part rather
+ * than an oversight. The dashboard's door depends on the server, because the
+ * dashboard reads it — so when nothing answers, there is no way in and the page
+ * says so. The wizard depends on nothing: it reads a file the person brings and
+ * answers every question in the browser. A page that hid it while the server
+ * was down would be withholding the one thing that still worked.
+ */
+export const MAKE_DOOR = {
+  label: 'Make your own',
+  href: './make/index.html',
+  because: 'bring a CSV of your own — the wizard runs entirely in this browser and asks the server nothing',
+} as const;
+
 /** What the page has heard from {@link SUMMARY_DOOR} so far. */
 export type Reading =
   | { readonly status: 'reading' }
@@ -54,7 +71,7 @@ export interface Figure {
 
 /** The page, in one of exactly three states. `enter: null` is a state with NO way in. */
 export type FrontDoor =
-  | { readonly state: 'reading'; readonly waitingFor: string; readonly enter: null }
+  | { readonly state: 'reading'; readonly waitingFor: string; readonly enter: null; readonly make: typeof MAKE_DOOR }
   | {
       readonly state: 'ready';
       /** The dashboard's own declared title, off the wire — not a headline written here. */
@@ -69,6 +86,7 @@ export type FrontDoor =
       /** When the snapshot was read, as the source layer vouched for it. */
       readonly snapshotRead: string | null;
       readonly enter: { readonly label: string };
+      readonly make: typeof MAKE_DOOR;
     }
   | {
       readonly state: 'unreachable';
@@ -78,6 +96,8 @@ export type FrontDoor =
       /** What to do about it — and the two faults do not get the same advice. */
       readonly advice: string;
       readonly enter: null;
+      /** Still offered: the wizard needs no server, so a page that hid it here would be withholding the one thing that works. */
+      readonly make: typeof MAKE_DOOR;
     };
 
 /** The figures the page prints, each named by the payload field it is read from. */
@@ -122,6 +142,7 @@ const shut = (because: string, answered: boolean): FrontDoor => ({
     ? `Something is listening on ${API_ORIGIN}, but it did not serve ${SUMMARY_DOOR} — most likely an older build of this demo. Restart it with “npm run serve” and reload this page.`
     : `It should be listening on ${API_ORIGIN} — start it with “npm run serve” in the repo, then reload this page.`,
   enter: null,
+  make: MAKE_DOOR,
 });
 
 /** English for a list, so a refusal reads as a sentence and not as a dump. */
@@ -136,7 +157,7 @@ const andList = (parts: readonly string[]): string =>
  */
 export function frontDoor(reading: Reading): FrontDoor {
   if (reading.status === 'reading') {
-    return { state: 'reading', waitingFor: `asking the demo server what this snapshot holds (${SUMMARY_DOOR})`, enter: null };
+    return { state: 'reading', waitingFor: `asking the demo server what this snapshot holds (${SUMMARY_DOOR})`, enter: null, make: MAKE_DOOR };
   }
   if (reading.status === 'unreachable') return shut(reading.because, reading.answered === true);
   const body = reading.body;
@@ -183,5 +204,6 @@ export function frontDoor(reading: Reading): FrontDoor {
     analyst,
     snapshotRead: readAt === null ? null : readableInstant(readAt),
     enter: { label: 'Open the dashboard' },
+    make: MAKE_DOOR,
   };
 }

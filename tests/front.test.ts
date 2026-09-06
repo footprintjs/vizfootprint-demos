@@ -13,7 +13,7 @@
  * exists).
  */
 import { describe, expect, it } from 'vitest';
-import { API_ORIGIN, SUMMARY_DOOR, frontDoor, readableInstant } from '../web/src/front.js';
+import { API_ORIGIN, MAKE_DOOR, SUMMARY_DOOR, frontDoor, readableInstant } from '../web/src/front.js';
 import { summaryOf } from '../server/doors.js';
 import type { Desk } from '../server/doors.js';
 import { DASHBOARD_WORDS, NNDSS_VIEWS } from '../src/nndss/def.js';
@@ -182,5 +182,20 @@ describe('GET /api/summary — the figures are lengths of the real tables', () =
     const door = frontDoor({ status: 'answered', body: summaryOf(deskWith({ cells: 90_300, diseases: 12, weeks: 86, jurisdictions: 70 })) });
     expect(door.state).toBe('ready');
     expect(door.enter).not.toBeNull();
+  });
+});
+
+describe('the second, quieter door — the wizard', () => {
+  it('is offered in ALL THREE states, because it needs no server at all', () => {
+    const reading = frontDoor({ status: 'reading' });
+    const ready = frontDoor({ status: 'answered', body: answer() });
+    const shut = frontDoor({ status: 'unreachable', because: 'nothing answered' });
+
+    for (const door of [reading, ready, shut]) expect(door.make).toBe(MAKE_DOOR);
+    // …and it is the one thing still open when the dashboard's own door is not:
+    // the dashboard reads the server, the wizard reads a file you bring
+    expect(shut.enter).toBeNull();
+    expect(shut.make.href).toBe('./make/index.html');
+    expect(shut.make.because).toContain('asks the server nothing');
   });
 });
