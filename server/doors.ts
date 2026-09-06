@@ -582,7 +582,7 @@ function declaredDashboardWords(): { readonly title: string; readonly caption: s
 }
 
 /** A human gesture from the cockpit → a validated dispatch action, or a plain refusal. */
-function userAction(body: Record<string, unknown>): DispatchAction | { readonly error: string } {
+export function userAction(body: Record<string, unknown>): DispatchAction | { readonly error: string } {
   const verb = body['verb'];
   const str = (k: string): string | undefined => (typeof body[k] === 'string' ? (body[k] as string) : undefined);
   const cause = userCause(str('intent') ?? `${String(verb)} ${str('field') ?? str('analysisId') ?? ''}`.trim());
@@ -611,7 +611,20 @@ function userAction(body: Record<string, unknown>): DispatchAction | { readonly 
     case 'analyze': {
       const analysisId = str('analysisId');
       if (analysisId === undefined) return { error: 'analyze needs analysisId' };
-      return { verb: 'analyze', analysisId, cause };
+      // An act may bring its own DECLARATION — a builtin record, which is data,
+      // and is what lets the desk's "add a column" reach a session over a wire.
+      // This door checks only that it is an object; WHAT it declares is the
+      // library's to judge, and the library's sentence is what comes back.
+      const def = body['def'];
+      if (def !== undefined && !isObject(def)) return { error: 'analyze.def must be a record naming a builtin analysis' };
+      const table = str('table');
+      return {
+        verb: 'analyze',
+        analysisId,
+        ...(def !== undefined ? { def: def as never } : {}),
+        ...(table !== undefined ? { table } : {}),
+        cause,
+      };
     }
     case 'reencode': {
       // the encoding plane: one channel, or a binding SET (several channels in one act — a swap is one commit)
