@@ -32,6 +32,10 @@ import { KeyGate } from '../../src/KeyGate.js';
 export function BrowserAnalyst({ surface, desk }: { readonly surface: NndssSurface; readonly desk: DeskProjection }): JSX.Element {
   const [store] = useState(() => keyStore());
   const [key, setKey] = useState<string | undefined>(() => store.read());
+  // asked ONCE: `remembers()` writes a probe and takes it away again, and a
+  // page that probed the visitor's storage on every render would be answering
+  // a question nobody asked over and over
+  const [remembers] = useState(() => store.remembers());
   const [problem, setProblem] = useState<string | undefined>(undefined);
   // a fresh number per driver change — React remounts the panel, and the new
   // desk's empty conversation is what the person sees
@@ -63,7 +67,7 @@ export function BrowserAnalyst({ surface, desk }: { readonly surface: NndssSurfa
       key={generation}
       host={host}
       readOnly={desk.readOnly}
-      beside={<KeyGate mode={key === undefined ? 'mock' : 'live'} model={analyst.wire().model} held={key !== undefined} remembers={store.remembers()} problem={problem} onUse={use} onClear={forget} />}
+      beside={<KeyGate mode={key === undefined ? 'mock' : 'live'} model={analyst.wire().model} held={key !== undefined} remembers={remembers} problem={problem} onUse={use} onClear={forget} />}
       onTurn={() => void desk.view.refresh()}
       onScreen={{ selections: desk.state.selections.map((sel) => `${desk.label(sel.viewId)}: ${chipWords(sel)}`), cursor: desk.state.cursor }}
       describeCommit={desk.describeCommit}
