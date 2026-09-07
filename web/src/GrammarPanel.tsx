@@ -12,6 +12,7 @@
  */
 import type { ColumnView, LinkEdit, LinkGraphView, RuleLineView, ViewView } from 'vizfootprint-ui';
 import { LinkMatrix } from 'vizfootprint-ui/links';
+import { NNDSS_GESTURES } from '../../src/nndss/cards.js';
 
 export interface GrammarWire {
   readonly verbs: readonly string[];
@@ -20,18 +21,17 @@ export interface GrammarWire {
   readonly linksMeaning: string;
 }
 
-/** How a person produces each verb in THIS cockpit — the gesture side of the grammar. */
-const GESTURE: Record<string, string> = {
-  select: 'click a mark (again to clear); shift-click adds a mark to the set; drag across bars for a run; a chip flips keep ⇄ exclude, its ✕ clears',
-  filter: 'drag across an axis',
-  reencode: 'click an axis label and pick a column',
-  bookmark: 'press ⚑ and name this moment',
-  fork: 'act while viewing the past',
-  analyze: 'ask the analyst — it runs a declared analysis',
-  annotate: 'no gesture in this build (a declared verb, unwired here)',
-  navigate: 'switch the layout (Flow / Grid / Focus)',
-  link: 'change a cell in the matrix below — what one view does with another\'s pick — a commit like any act',
-};
+/**
+ * How a person produces each verb in THIS cockpit — the gesture side of the
+ * grammar, and the ONE hand-written thing on this panel.
+ *
+ * The table itself lives in `src/nndss/cards.ts`, because the demo's feature
+ * card needs the same answer and two hand-written copies of an underivable fact
+ * are two facts. `gesture: null` there is a verb this build declares and wires
+ * nothing to; the sentence for it is this panel's phrasing of that null.
+ */
+const UNWIRED = 'no gesture in this build (a declared verb, unwired here)';
+const GESTURE: Readonly<Record<string, string>> = Object.fromEntries(NNDSS_GESTURES.map((note) => [note.verb, note.gesture ?? UNWIRED]));
 
 /** What a view's selection drives — read off the wiring word, never hand-written per view. */
 function drivesOf(links: string, actor: string): string {
