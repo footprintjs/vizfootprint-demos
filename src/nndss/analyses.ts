@@ -25,7 +25,11 @@ export function presentOnly<O extends AnalysisOutput>(module: AnalysisModule<Row
   const notes = [base.honesty?.notes, `over PRESENT cells only — a silence (no ${measure}) is dropped, never a zero`].filter((n) => n !== undefined).join('; ');
   const def = {
     ...base,
-    toRunInput: (rows: Rows) => base.toRunInput(present(rows)),
+    // WHY the second argument is forwarded: `toRunInput(input, related)` carries
+    // the rows of every table the analysis `reads` (packet 3). Dropping it here
+    // would hand a wrapped analysis an empty related set and silently change
+    // what it computed — this wrapper narrows the OWN rows, nothing else.
+    toRunInput: (rows: Rows, related: Parameters<typeof base.toRunInput>[1]) => base.toRunInput(present(rows), related),
     precheck: base.precheck ? (rows: Rows) => base.precheck!(present(rows)) : undefined,
     honesty: { ...base.honesty, notes },
   };
