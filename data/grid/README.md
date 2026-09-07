@@ -20,10 +20,15 @@ Administration**.
 <https://www.eia.gov/electricity/gridmonitor/dashboard/electric_overview/US48/US48>
 
 The data is a work of the United States Government: **public domain**
-(17 U.S.C. § 105). EIA asks for an acknowledgement, which this repo gives in
-exactly the form EIA asks for:
+(17 U.S.C. § 105). EIA asks for an acknowledgement that names the agency and the
+publication date, which this repo gives:
 
-> Source: U.S. Energy Information Administration (September 2026)
+> Source: U.S. Energy Information Administration, Hourly Electric Grid Monitor, six-month file for January–June 2025 (retrieved September 2026)
+
+Two dates, because they are two different facts: the data is EIA's
+January–June 2025 six-month file, and September 2026 is when this repo
+downloaded it. The slice inside it is three weeks of May and June 2025 —
+nothing here is 2026 data.
 
 EIA's logo and seal are **trademarks** and are not reproduced anywhere in this
 repo — the sentence above is the only credit used. Terms:

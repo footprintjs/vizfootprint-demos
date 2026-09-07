@@ -1,0 +1,32 @@
+# The notice that travels with `us-states.geo.json`
+
+`us-states.geo.json` in this folder was produced from `states-albers-10m.json`
+in the **us-atlas** package (version 3.0.1), which is licensed ISC. The ISC
+licence requires its copyright notice to appear in all copies, so it appears
+here, beside the file it applies to:
+
+    Copyright 2013-2019 Michael Bostock
+
+    Permission to use, copy, modify, and/or distribute this software for any purpose
+    with or without fee is hereby granted, provided that the above copyright notice
+    and this permission notice appear in all copies.
+
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+    REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+    FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+    INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+    OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+    TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+    THIS SOFTWARE.
+
+## Two things, and they are not the same thing
+
+The **geometry** is the U.S. Census Bureau's cartographic boundary files at
+1:10,000,000 — a work of the United States Government, and therefore in the
+public domain. Nobody licenses it to anybody.
+
+The **package** that simplified, projected and packaged that geometry is
+Michael Bostock's us-atlas, and it is ISC. The notice above is what that
+licence asks for, and it is why this file exists rather than a line in a
+provenance record: a notice that must travel with the file is kept next to
+the file.

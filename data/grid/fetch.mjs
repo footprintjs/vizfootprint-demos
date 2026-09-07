@@ -102,7 +102,10 @@ const provenance = {
   page: 'https://www.eia.gov/electricity/gridmonitor/dashboard/electric_overview/US48/US48',
   period: PERIOD.replace(/_/g, ' '),
   license: 'Public domain — a work of the United States Government (17 U.S.C. § 105).',
-  acknowledgement: 'Source: U.S. Energy Information Administration (September 2026)',
+  // WHY both dates: the acknowledgement EIA asks for names the publication, and this
+  // slice's bytes are the January–June 2025 file. A credit carrying only the month it
+  // was downloaded would read as though the data were from 2026, which it is not.
+  acknowledgement: 'Source: U.S. Energy Information Administration, Hourly Electric Grid Monitor, six-month file for January–June 2025 (retrieved September 2026)',
   trademark: "EIA's logo and seal are trademarks and are NOT reproduced here; the acknowledgement above is the only credit used.",
   reuseTerms: 'https://www.eia.gov/about/copyrights_reuse.php',
   files,

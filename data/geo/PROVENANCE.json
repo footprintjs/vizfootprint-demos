@@ -4,9 +4,11 @@
     "name": "us-atlas",
     "version": "3.0.1",
     "license": "ISC",
-    "file": "states-albers-10m.json"
+    "file": "states-albers-10m.json",
+    "copyright": "Copyright 2013-2019 Michael Bostock",
+    "notice": "ISC \u2014 the copyright notice travels with this file; see data/geo/LICENSE-us-atlas"
   },
-  "projection": "Albers USA, pre-projected by us-atlas (screen coordinates, y downward, ~975×610 frame; Alaska and Hawaii as insets)",
+  "projection": "Albers USA, pre-projected by us-atlas (screen coordinates, y downward, ~975\u00d7610 frame; Alaska and Hawaii as insets)",
   "features": 51,
   "noShape": "Places that report to NNDSS but have no shape in this file (Puerto Rico, Guam, American Samoa, the Northern Mariana Islands, the U.S. Virgin Islands, New York City) ride the table; the cockpit derives that list from the data at run time.",
   "names": [
@@ -62,6 +64,6 @@
     "Wisconsin",
     "Wyoming"
   ],
-  "license": "The boundary data is a work of the United States Government — public domain.",
+  "license": "The boundary data is a work of the United States Government \u2014 public domain.",
   "generatedAt": "2026-09-02T00:56:20.782Z"
 }

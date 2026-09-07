@@ -34,7 +34,17 @@ writeFileSync(
   JSON.stringify(
     {
       source: 'U.S. Census Bureau cartographic boundary files (1:10,000,000), via the us-atlas package',
-      package: { name: 'us-atlas', version: pkg.version, license: pkg.license, file: 'states-albers-10m.json' },
+      // WHY the copyright line is written here and not left to a human: the ISC licence
+      // asks that its notice travel with every copy, so a regenerated provenance must
+      // carry it too — see data/geo/LICENSE-us-atlas, which is the notice itself.
+      package: {
+        name: 'us-atlas',
+        version: pkg.version,
+        license: pkg.license,
+        file: 'states-albers-10m.json',
+        copyright: 'Copyright 2013-2019 Michael Bostock',
+        notice: 'ISC — the copyright notice travels with this file; see data/geo/LICENSE-us-atlas',
+      },
       projection: 'Albers USA, pre-projected by us-atlas (screen coordinates, y downward, ~975×610 frame; Alaska and Hawaii as insets)',
       features: out.features.length,
       noShape: 'Places that report to NNDSS but have no shape in this file (Puerto Rico, Guam, American Samoa, the Northern Mariana Islands, the U.S. Virgin Islands, New York City) ride the table; the cockpit derives that list from the data at run time.',
