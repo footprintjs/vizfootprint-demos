@@ -23,7 +23,8 @@
  * named as such in the Grammar panel; when declared links land it becomes
  * a matrix a person can read.
  */
-import type { DashboardDef, DataSourceDef, RelationDecl } from 'vizfootprint/agent';
+import type { AnalysisSlot, DashboardDef, DataSourceDef, RelationDecl, ViewEncodingDecl } from 'vizfootprint/agent';
+import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
 import { NNDSS_ANALYSES } from './analyses.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from './absence.js';
@@ -39,12 +40,15 @@ const WEEKS: ActorMeta = { actor: 'user', label: 'Reported cases by week', does:
 const TREND: ActorMeta = { actor: 'user', label: 'Trend per area', does: 'follow one area\'s weekly trend' };
 const MAP: ActorMeta = { actor: 'user', label: 'Reported cases by state, on the map', does: 'click a state on the map to select it, shift-click for several' };
 const TABLE: ActorMeta = { actor: 'user', label: 'The cells, as CDC printed them', does: 'pick one row of the table: a jurisdiction and its cells' };
+const NET: ActorMeta = { actor: 'user', label: 'Which diseases report together', does: 'hover a disease to light its ties, click it to select, shift-click for several' };
 // The SHEET (the data layer's second tab): every row the charts see, read through the same link
 // graph as any chart — its own clause excluded, the others' applied. Grain [] : one mark per row.
 const SHEET: ActorMeta = { actor: 'user', label: 'Sheet', does: 'scroll every row the charts see, and read the window it is showing' };
 const ANALYST: ActorMeta = { actor: 'agent', label: 'Analyst' };
 
-export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'sheet', 'analyst'] as const;
+// every view this def CAN declare — `net` only when a graph is handed in (see
+// `nndssDef`), so the story page's graph-less def declares the other nine.
+export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'sheet', 'net', 'analyst'] as const;
 
 /** The dashboard's DECLARED words (title + summary) — the def's prose entry and the story's fallback read the same constant. */
 export const DASHBOARD_WORDS = {
@@ -62,6 +66,103 @@ export const GRAPH_RELATIONS: readonly RelationDecl[] = [
   { from: { table: 'edges', column: 'source' }, to: { table: 'nodes', column: 'disease' }, label: 'one end of the pair' },
   { from: { table: 'edges', column: 'target' }, to: { table: 'nodes', column: 'disease' }, label: 'the other end of the pair' },
 ];
+
+// ── the network view: two tables on one frame ────────────────────────────────
+
+/** The node-link's view id, and the two layers under it — one address each (`net~nodes`, `net~edges`). */
+export const NETWORK_VIEW = 'net';
+export const NETWORK_NODES_LAYER = 'nodes';
+export const NETWORK_EDGES_LAYER = 'edges';
+
+/**
+ * The layout's SEED and its pass count — data, never a clock. The same seed over
+ * the same rows gives byte-identical positions, which is what makes the picture
+ * on screen a thing a replay can promise.
+ */
+export const GRAPH_LAYOUT_SEED = 7;
+// 60 passes is the library's default (30) doubled. Nobody has measured where
+// THIS graph settles, so treat it as a knob and not a floor: if a pass count is
+// ever claimed to be a minimum, it needs a bench that says so.
+export const GRAPH_LAYOUT_ITERATIONS = 60;
+
+/**
+ * The two acts that put the graph on a frame, DECLARED — so the record of what
+ * was done to the positions is in the definition, not in a script.
+ *
+ * `graphLayout` is a seeded stress layout over the nodes table, reading the
+ * ties off `edges` (the permission is `GRAPH_RELATIONS` — a relation is what
+ * lets one analysis read a second table). It writes `x` and `y` onto the nodes
+ * table at the act's own slot. `graphEndpoints` then brings those two columns
+ * ACROSS the same relations onto the edges table, as `source_x` / `source_y` /
+ * `target_x` / `target_y`, so a link knows where both its ends are without a
+ * lookup at draw time.
+ *
+ * WHY they are declared here and dispatched by the surface rather than computed
+ * in the page: a position that is not on the trace is a position a replay
+ * cannot promise. Both land as ordinary `analyze` commits, at the top of the
+ * log, with the seed they used — a reader can see where every coordinate on
+ * screen came from, and a replay rebuilds them from the record's bytes.
+ */
+export const GRAPH_ANALYSES: Readonly<Record<string, AnalysisSlot>> = {
+  graphLayout: { builtin: 'layout', algo: 'stress', table: 'nodes', edges: 'edges', key: 'disease', from: 'source', to: 'target', seed: GRAPH_LAYOUT_SEED, iterations: GRAPH_LAYOUT_ITERATIONS },
+  graphEndpoints: { builtin: 'bringOver', table: 'edges', from: 'nodes', columns: ['x', 'y'] },
+};
+
+/**
+ * ONE frame, TWO tables. The edges layer draws under the nodes layer, each over
+ * its own table, both against the one pair of scales the chart computes over
+ * the union of their positions.
+ *
+ * WHY the node key needs a channel of its own: `x` and `y` refuse role
+ * `identifier` everywhere (one mark per row on an axis is a list, not a chart),
+ * and a node's identity IS an identifier — so the `network` kind names a `key`
+ * channel of its own — one that refuses only the roles that are evidence AGAINST
+ * an identity (a measure, the silence). The edge layer binds the four columns
+ * `graphEndpoints` wrote, plus the two endpoint names a hover reads.
+ */
+const NET_ENCODING: ViewEncodingDecl = {
+  viewId: NETWORK_VIEW,
+  chartKind: 'network',
+  channels: ['x', 'y'],
+  layers: [
+    { layerId: NETWORK_EDGES_LAYER, table: 'edges', chartKind: 'network', channels: ['source', 'target', 'sourceX', 'sourceY', 'targetX', 'targetY'], initial: { source: 'source', target: 'target', sourceX: 'source_x', sourceY: 'source_y', targetX: 'target_x', targetY: 'target_y' }, label: 'Co-occurrences' },
+    { layerId: NETWORK_NODES_LAYER, table: 'nodes', chartKind: 'network', channels: ['x', 'y', 'key'], initial: { x: 'x', y: 'y', key: 'disease' }, label: 'Diseases' },
+  ],
+};
+
+/**
+ * The network's words, as a function of the GRAPH the def was handed — the way
+ * `graphTables(graph)` already is.
+ *
+ * WHY not a constant: the long description states a fact about the rows ("every
+ * pair co-occurs"), and `nndssDef` accepts any graph. A constant would tell a
+ * screen-reader user the graph is complete over a graph that is not, and the
+ * caption beside it COUNTS the same density (web/src/cells.tsx) — so the sighted
+ * reader would get the counted truth and the blind reader a hard-coded claim.
+ *
+ * The basis names `disease` and nothing else: a prose basis is judged against
+ * the DEFAULT table, and `source`, `target` and `weight` live on `edges`.
+ */
+function netProse(graph: NndssGraph): ProseDecl {
+  const possible = (graph.nodes.length * (graph.nodes.length - 1)) / 2;
+  const density =
+    graph.edges.length === possible
+      ? 'Every pair in this snapshot co-occurs at least once, so the graph is complete and the drawing is a hairball: the weights are legible as a matrix (source by target, shaded by jurisdiction-weeks) and not as lines.'
+      : `${String(graph.edges.length)} of the ${String(possible)} possible ties are drawn; the weights are also legible as a matrix (source by target, shaded by jurisdiction-weeks).`;
+  return {
+    viewId: NETWORK_VIEW,
+    slots: {
+      title: { text: 'Which diseases report together', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+      altShort: { text: 'A node-link diagram of the diseases, joined where both reported cases in the same state and week.', author: { kind: 'human' }, levels: ['construction'] },
+      altLong: {
+        text: `Every disease is a circle, placed by a seeded stress layout over the co-occurrence ties; a line joins two diseases that both reported cases in at least one state-week. ${density} Hover a disease to keep it and its ties bright.`,
+        author: { kind: 'human' },
+        levels: ['construction'],
+        basis: { columns: ['disease'] },
+      },
+    },
+  };
+}
 
 /** The graph's two tables as the def declares them — inline rows the node half read off the committed CSVs, with their facets. */
 function graphTables(graph: NndssGraph): Readonly<Record<'nodes' | 'edges', DataSourceDef>> {
@@ -131,15 +232,20 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       ...(graph === undefined ? {} : graphTables(graph)),
     },
     ...(graph === undefined ? {} : { relations: GRAPH_RELATIONS }),
-    actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, sheet: SHEET, analyst: ANALYST },
+    // WHY the network's four declarations are all gated on the graph: its layers
+    // read `nodes` and `edges`, and a layer over a table this def did not declare
+    // is exactly what the def door refuses. No graph, no view — never a view with
+    // nothing under it.
+    actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, sheet: SHEET, ...(graph === undefined ? {} : { net: NET }), analyst: ANALYST },
     encodings: [
       { viewId: 'coverage', chartKind: 'bar', channels: ['category'], initial: { category: ABSENCE_FIELD } },
       { viewId: 'diseases', chartKind: 'bar', channels: ['category'], initial: { category: 'disease' } },
       { viewId: 'kinds', chartKind: 'bar', channels: ['category'], initial: { category: 'kind' } },
       { viewId: 'weeks', chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 't', y: 'cases' } },
       { viewId: 'trend', chartKind: 'line', channels: ['x', 'y', 'color', 'facet'], initial: { x: 't', y: 'value', color: 'entity' } },
+      ...(graph === undefined ? [] : [NET_ENCODING]),
     ],
-    analyses: NNDSS_ANALYSES,
+    analyses: { ...NNDSS_ANALYSES, ...(graph === undefined ? {} : GRAPH_ANALYSES) },
     // Layer 4 — each view's GRAIN: the group keys its marks stand for ([] = one mark per row). An edge whose
     // source emits over one grain and whose target shows another CROSSES grains and must state its fold,
     // or the def door refuses it with the sentence; the default rule's crossing edges carry `crossfilter`.
@@ -153,10 +259,24 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       { viewId: 'table', keys: ['jurisdiction'] },
       // the sheet stands for ROWS, not groups: grain [] is one mark per row of `cells`
       { viewId: 'sheet', keys: [] },
+      // the network's marks stand for DISEASES — one circle per node row — so an
+      // edge from a per-cell view into it crosses grains and names its fold.
+      // Gated with the actor: `validateGrains` refuses a grain on a view the def
+      // did not declare, and the frame's grain is not a layer's (the library
+      // gives a layer none: a grain is a VIEW's, judged there).
+      ...(graph === undefined ? [] : [{ viewId: NETWORK_VIEW, keys: ['disease'] }]),
     ],
     // The sheet's honest capability envelope: it can emit a point (a row) and a match
     // (a header filter, when that lands) — never an interval, and never the compound cell.
-    capabilities: [{ viewId: 'sheet', canProbe: true, encodings: ['point', 'match'] }],
+    // …and the network's: a node-link speaks a point (a node) and a match
+    // (shift-click, SET-1) and nothing else — it cannot brush an interval and has
+    // no compound cell to emit. Undeclared, R14's default gives it every kind,
+    // and the Grammar matrix offers editable rows for gestures no circle can
+    // make. A capability on the FRAME narrows its layers, so one entry is enough.
+    capabilities: [
+      { viewId: 'sheet', canProbe: true, encodings: ['point', 'match'] },
+      ...(graph === undefined ? [] : [{ viewId: NETWORK_VIEW, canProbe: true, encodings: ['point', 'match'] as const }]),
+    ],
     // Layer 4 — the LINKS between views, declared. Everything not listed here is the default
     // rule (every view filters every other, self excluded), written out by the library so the
     // matrix shows it. These four are the demo's story: the map LIGHTS the disease bar instead of
@@ -233,6 +353,7 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
           howToRead: { author: { kind: 'derived' } },
         },
       },
+      ...(graph === undefined ? [] : [netProse(graph)]),
     ],
     fdr: { procedure: 'LORD++', alpha: ALPHA },
     defaultTable: 'cells',

@@ -67,6 +67,22 @@ describe('windowQueryOf', () => {
     expect(windowQueryOf(params(`limit=${String(WINDOW_LIMIT_MAX)}`))).toEqual({ limit: WINDOW_LIMIT_MAX }); // the cap itself is fine
   });
 
+  it('refuses everything `Number` would silently reinterpret — the refusal quotes what arrived', () => {
+    // `Number('')` is 0, so an empty offset would quietly become a default window
+    // — the one thing this door promises never to do, and the very next check
+    // (`table=`) refuses for exactly that reason
+    expect(windowQueryOf(params('offset='))).toEqual({ error: 'offset= is not a whole number of rows' });
+    expect(windowQueryOf(params('limit='))).toEqual({ error: 'limit= is not a whole number of rows' });
+    // and the limit refusals below can no longer quote back a number nobody sent
+    expect(windowQueryOf(params('limit=0x400'))).toEqual({ error: 'limit=0x400 is not a whole number of rows' });
+    expect(windowQueryOf(params('limit=1e3'))).toEqual({ error: 'limit=1e3 is not a whole number of rows' });
+    expect(windowQueryOf(params('offset= 5 '))).toEqual({ error: 'offset= 5  is not a whole number of rows' });
+    expect(windowQueryOf(params('limit=%2B5'))).toEqual({ error: 'limit=+5 is not a whole number of rows' });
+    expect(windowQueryOf(params('offset=99999999999999999999'))).toEqual({ error: 'offset=99999999999999999999 is not a whole number of rows' });
+    // …and the plain whole numbers still pass
+    expect(windowQueryOf(params('offset=0&limit=12'))).toEqual({ offset: 0, limit: 12 });
+  });
+
   it('a column whose name holds a comma survives the door — which a joined list could never promise', () => {
     expect(windowQueryOf(params(`columns=${encodeURIComponent('["a,b","c"]')}`))).toEqual({ columns: ['a,b', 'c'] });
   });

@@ -1,6 +1,6 @@
 /**
- * THE NNDSS DESK — this definition's own arithmetic, and the seven cells it
- * draws with it.
+ * THE NNDSS DESK — this definition's own arithmetic, and the cells it draws
+ * with it: seven, and an eighth where the surface carries the graph.
  *
  * `vizfootprint-studio/desk` brings the dashboard: the time strip, the band, the
  * editor, the notes, the panels, the story. It brings no rows and no opinion
@@ -8,7 +8,7 @@
  * CDC's weekly table rather than about dashboards — and it is deliberately ONE
  * file, because it used to be two:
  *
- *   · `web/src/App.tsx` declared seven cells for the cockpit;
+ *   · `web/src/App.tsx` declared the cockpit's cells;
  *   · `web/story/Desk.tsx` re-declared five of them for the story page, with
  *     the palette and the defaults copied and the captions slightly different.
  *
@@ -30,11 +30,15 @@ import {
   VizBar,
   VizLine,
   VizMap,
+  VizNetwork,
   VizTable,
   brightPredicate,
   keepPredicate,
+  layerAddress,
   navigateDomain,
   type GeoFeatureCollection,
+  type NetworkEdge,
+  type NetworkNode,
 } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection, DeskSilence } from 'vizfootprint-studio/desk';
 import { arrivesFrom, capNote, categoryCounts, categorySums, columnVocabulary, emitIntent, pickedFrom, type Vocabulary } from './derive.js';
@@ -45,6 +49,13 @@ import { arrivesFrom, capNote, categoryCounts, categorySums, columnVocabulary, e
 
 /** The disease every view shows until one is picked. */
 export const DEFAULT_DISEASE = 'Pertussis';
+/**
+ * How many nodes a complete graph needs before "read it as a matrix instead" is
+ * advice rather than nonsense. Ghoniem/Fekete/Castagliola's crossover sits in
+ * the low tens of nodes at high density; below that a node-link is the easier
+ * read whatever the density says, and this demo's committed graph carries 15.
+ */
+const HAIRBALL_NODES = 8;
 /** The one area kind every sum is over until the kinds view says otherwise. */
 export const DEFAULT_KIND = 'state';
 /** The absence vocabulary's colours — CDC's silences, kept apart by sight as well as by name. */
@@ -60,11 +71,24 @@ export const colorOfArea = (name: string | undefined): string => {
 /** The columns the table cell prints — CDC's cells as CDC printed them. */
 const TABLE_COLUMNS = (absenceField: string): readonly string[] => ['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max'];
 /**
- * WHICH CELLS THE STORY FIGURE SHOWS. Four of the seven: a story column is half
+ * WHICH CELLS THE STORY FIGURE SHOWS. Four of them: a story column is half
  * a screen wide, and a reader following a narrative wants the charts the
  * narrative is about, not the whole instrument panel.
  */
 export const STORY_FIGURE = ['diseases', 'map', 'trend', 'weeks'] as const;
+
+/**
+ * The network view, and the ADDRESS its marks speak under. Every circle on that
+ * frame belongs to the nodes LAYER, so a click there is an act on `net~nodes` —
+ * and the clause it lands is the one that view must read back, never `net`.
+ *
+ * Both halves come from the DEF, which declares them: a page that re-spelled
+ * 'nodes' here would keep selecting under an address the def no longer owns the
+ * moment the layer is renamed, and nothing would typecheck differently.
+ */
+import { NETWORK_VIEW, NETWORK_NODES_LAYER } from '../../src/nndss/def.js';
+export { NETWORK_VIEW };
+export const NETWORK_NODES = layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER);
 
 // ── the rows this desk is drawn over ────────────────────────────────────────
 
@@ -75,6 +99,29 @@ export interface NndssCellRow {
   readonly t: string;
   readonly cases: number | null;
   readonly [k: string]: string | number | null;
+}
+/**
+ * One row of the graph's `nodes` table AT THE CURSOR: the committed columns plus
+ * the `x` / `y` the layout act wrote. Both positions are optional in the TYPE
+ * because they are optional in the WORLD — a surface that carries the graph but
+ * has not run the act has the rows and no coordinates, and the cell says so
+ * rather than inventing a circle's home.
+ */
+export interface NndssNodeRow {
+  readonly disease: string;
+  readonly x?: number | null;
+  readonly y?: number | null;
+  readonly [k: string]: string | number | null | undefined;
+}
+/** One row of the `edges` table at the cursor: the pair, plus the four positions `bringOver` carried across the relations. */
+export interface NndssEdgeRow {
+  readonly source: string;
+  readonly target: string;
+  readonly source_x?: number | null;
+  readonly source_y?: number | null;
+  readonly target_x?: number | null;
+  readonly target_y?: number | null;
+  readonly [k: string]: string | number | null | undefined;
 }
 export interface NndssSeriesRow {
   readonly t: string;
@@ -92,6 +139,15 @@ export interface NndssSeriesRow {
 export interface NndssDeskData {
   readonly cells: readonly NndssCellRow[];
   readonly series: readonly NndssSeriesRow[];
+  /**
+   * The graph's two tables, when this surface carries them. Absent is a real
+   * answer — the story page builds its def over the one CSV it was sent — and an
+   * absent graph draws NO network cell rather than an empty frame.
+   */
+  readonly nodes?: readonly NndssNodeRow[];
+  readonly edges?: readonly NndssEdgeRow[];
+  /** The sentence the session refused the graph's windows with, when it did. */
+  readonly netRefused?: string | null;
   readonly diseases: readonly string[];
   readonly weeks: readonly string[];
   /** The declared absence column and its vocabulary. */
@@ -125,7 +181,7 @@ export function useSilences(data: NndssDeskData): readonly DeskSilence[] {
   );
 }
 
-// ── the seven cells ─────────────────────────────────────────────────────────
+// ── the cells ─────────────────────────────────────────────────────────
 
 /**
  * The cells, over the desk's projection.
@@ -199,7 +255,15 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
    * the disease column too — re-encode that bar to jurisdictions and its clause
    * names a STATE, and reading that as a disease puts "California" everywhere.
    */
-  const diseaseFor = (viewId: string): string => pickedFrom(selFor(viewId), 'diseases', 'disease', DEFAULT_DISEASE);
+  const diseaseFor = (viewId: string): string => {
+    const arrived = selFor(viewId);
+    // TWO sources for one column: the bar and the network both pick a disease, and
+    // the network's clause lands under its LAYER's address. Read the bar alone and
+    // a click on a circle narrows every fold to that disease while the captions
+    // stay pinned to another — the map and the trend intersect to nothing under a
+    // caption naming a disease nobody chose. The bar wins when it has a pick.
+    return pickedFrom(arrived, 'diseases', 'disease', pickedFrom(arrived, NETWORK_NODES, 'disease', DEFAULT_DISEASE));
+  };
   /** The kind a view SUMS over — else states (summing states + regions + roll-ups would count every case three times). */
   const kindFor = (viewId: string): string => pickedFrom(selFor(viewId), 'kinds', 'kind', DEFAULT_KIND);
   /** "Has an area been chosen?" is the same question as any other: what reaches this view through the link graph. */
@@ -328,6 +392,67 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
     // eslint-disable-next-line react-hooks/exhaustive-deps -- diseaseFor reads the slices already listed
   }, [cells, latestWeek, ...sel]);
 
+  /** A coordinate is a coordinate only when it is a real number — a null, a NaN or a missing column is a position nobody wrote. */
+  const placed = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+  /**
+   * The node marks: one per row that HAS a position. A row with none is not
+   * drawn — the layout act is what puts a disease somewhere, and a circle at the
+   * origin would be this file guessing on its behalf.
+   */
+  const netNodes = useMemo<readonly NetworkNode[]>(
+    () =>
+      (data.nodes ?? []).flatMap((r) => {
+        const { x, y } = r;
+        if (!placed(x) || !placed(y)) return [];
+        return [{ id: String(r.disease), x, y, row: r }];
+      }),
+    [data.nodes],
+  );
+
+  /**
+   * The links, with BOTH ends already placed — the four columns `bringOver`
+   * carried across the declared relations. Nothing here looks a position up by
+   * id: that lookup is exactly what the act exists to have already done.
+   */
+  const netEdges = useMemo<readonly NetworkEdge[]>(
+    () =>
+      (data.edges ?? []).flatMap((r) => {
+        const { source_x: sx, source_y: sy, target_x: tx, target_y: ty } = r;
+        // an edge missing ANY of its four is not half-drawn: a line to a place nobody wrote is a lie about where its far end is
+        if (!placed(sx) || !placed(sy) || !placed(tx) || !placed(ty)) return [];
+        return [{ source: String(r.source), target: String(r.target), sx, sy, tx, ty }];
+      }),
+    [data.edges],
+  );
+
+  /**
+   * How dense this graph is, in the words the papers use. It is COUNTED, never
+   * asserted: a node-link is only a reading while the ties are sparse enough to
+   * follow, and at full density the honest advice is to read the matrix.
+   */
+  const possibleTies = (netNodes.length * (netNodes.length - 1)) / 2;
+  /** Every row the surface carried, drawn — so a completeness claim is about the GRAPH and not about the subset that had positions. */
+  const wholeGraphDrawn = netNodes.length === (data.nodes ?? []).length && netEdges.length === (data.edges ?? []).length;
+  const percent = possibleTies === 0 ? 0 : (netEdges.length / possibleTies) * 100;
+  const densityWords =
+    possibleTies === 0
+      ? ''
+      : // the hairball advice belongs to a graph big enough for the drawing to
+        // actually fail: two circles and one line is complete and perfectly
+        // readable, and telling that reader to switch to a matrix is nonsense
+        wholeGraphDrawn && netEdges.length === possibleTies && netNodes.length >= HAIRBALL_NODES
+        ? ' · EVERY pair co-occurs, so this is a complete graph and the drawing is a hairball — the weights read as a matrix (source × target, shaded by jurisdiction-weeks), never as lines'
+        : // never rounded to an absolute: 19,850 of 19,900 ties is not 100% (and
+          // would withhold the hairball reading exactly where it is needed), and
+          // 20 of 4,950 is not 0% with twenty lines on screen
+          ` · ${percent < 0.5 ? 'under 1' : percent > 99.5 ? 'over 99' : String(Math.round(percent))}% of the possible ties`;
+  /** What the surface carried and the layout act never placed — said on screen, because the counts above are of the DRAWN marks. */
+  const unplacedWords =
+    (data.nodes ?? []).length - netNodes.length + ((data.edges ?? []).length - netEdges.length) === 0
+      ? ''
+      : ` · ${String((data.nodes ?? []).length - netNodes.length)} diseases and ${String((data.edges ?? []).length - netEdges.length)} ties carry no position and are not drawn`;
+
   const keptCount = useMemo(() => {
     const keepAll = keepPredicate(selFor(null));
     return cells.filter((r) => keepAll(r)).length;
@@ -415,6 +540,49 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
         />
       ),
     },
+    // The NETWORK: two tables on ONE frame, drawn only where this surface carries
+    // the graph. Absent is a real answer (the story page builds its def over the
+    // one CSV it was sent), and no cell is honester than an empty one.
+    ...(data.nodes === undefined
+      ? []
+      : [
+          {
+            id: NETWORK_VIEW,
+            // the marks belong to the nodes LAYER, so the desk's ✕ and its clear
+            // follow that address and not the frame's id
+            clauseId: NETWORK_NODES,
+            weight: 4,
+            caption: (
+              <>
+                {netNodes.length === 0
+                  ? // the body below is about to say nothing landed; a caption
+                    // promising a commit and a hover over it would be two
+                    // answers to one question, and the wrong one is the louder
+                    `${String((data.nodes ?? []).length)} diseases carried, none placed — no position has landed on this session, so there is nothing to hover`
+                  : `${String(netNodes.length)} diseases · ${String(netEdges.length)} of ${String(possibleTies)} possible ties${densityWords}${unplacedWords} · positions from a seeded stress layout landed as a commit, and each link's two ends brought over the declared relations — hover a disease to keep it and its ties bright, click to select`}
+                {desk.words(NETWORK_VIEW)}
+              </>
+            ),
+            render: ({ width, height }: { width: number; height: number }): ReactNode =>
+              netNodes.length === 0 ? (
+                <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+                  {data.netRefused ?? 'the layout act has not landed on this session — the nodes carry no x and y yet, so there is nowhere honest to draw them'}
+                </div>
+              ) : (
+                <VizNetwork
+                  viewId={NETWORK_VIEW}
+                  nodes={netNodes}
+                  edges={netEdges}
+                  keyField="disease"
+                  ariaLabel={desk.altShort(NETWORK_VIEW)}
+                  selection={selFor(NETWORK_NODES)}
+                  width={width}
+                  height={height}
+                  onEmit={emit(NETWORK_NODES, 'select')}
+                />
+              ),
+          },
+        ]),
     {
       id: 'table',
       weight: 3,

@@ -29,7 +29,7 @@ import 'vizfootprint-ui/styles.css';
 import 'storydeck/storydeck.css';
 import { Desk, type DeskProjection, type DeskProposal } from 'vizfootprint-studio/desk';
 import { createSessionView, pollingSource } from 'vizfootprint-ui';
-import { STORY_FIGURE, colorOfState, useNndssCells, useSilences, type NndssCellRow, type NndssDeskData, type NndssSeriesRow } from './cells.js';
+import { STORY_FIGURE, colorOfState, useNndssCells, useSilences, type NndssCellRow, type NndssDeskData, type NndssEdgeRow, type NndssNodeRow, type NndssSeriesRow } from './cells.js';
 import { noteRefs, type ReplyRef } from './derive.js';
 import { AnalystPanel } from './AnalystPanel.js';
 import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
@@ -38,6 +38,11 @@ import { Home } from './Home.js';
 interface RowsPayload {
   readonly cells: readonly NndssCellRow[];
   readonly series: readonly NndssSeriesRow[];
+  /** The graph's two tables AT THE CURSOR — the committed rows plus the columns the layout and bring-over acts wrote. */
+  readonly nodes: readonly NndssNodeRow[];
+  readonly edges: readonly NndssEdgeRow[];
+  /** The sentence the session refused those windows with, when it did. */
+  readonly netRefused: string | null;
   readonly grain: { readonly bucket?: string; readonly reducer?: string; readonly note?: string };
   readonly diseases: readonly string[];
   readonly weeks: readonly string[];
@@ -101,7 +106,7 @@ export function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one read per entry
   }, [entered]);
 
-  const data = useMemo<NndssDeskData>(() => (rows === null ? { ...NO_ROWS, geo } : { cells: rows.cells, series: rows.series, diseases: rows.diseases, weeks: rows.weeks, absence: rows.absence, grain: rows.grain, geo }), [rows, geo]);
+  const data = useMemo<NndssDeskData>(() => (rows === null ? { ...NO_ROWS, geo } : { cells: rows.cells, series: rows.series, nodes: rows.nodes, edges: rows.edges, netRefused: rows.netRefused, diseases: rows.diseases, weeks: rows.weeks, absence: rows.absence, grain: rows.grain, geo }), [rows, geo]);
   const silences = useSilences(data);
   const declaredWords = rows?.declared?.dashboard;
 

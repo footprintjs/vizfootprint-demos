@@ -34,8 +34,8 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 ## What you see
 
 The dashboard's views on one screen — coverage, diseases, kinds, the map,
-weeks, the trend and the table — every one fed by the host under the session's
-clauses (the host sums, the chart draws), and four report chips:
+weeks, the trend, the network and the table — every one fed by the host under
+the session's clauses (the host sums, the chart draws), and four report chips:
 
 | view | what it shows | what a click does |
 |---|---|---|
@@ -45,7 +45,49 @@ clauses (the host sums, the chart draws), and four report chips:
 | **weeks** (line) | reported cases per MMWR week, summed over the same one kind | brush = a `filter` on `t` |
 | **map** (choropleth) | the picked disease per state, summed over kept weeks; a hatched state has no present cell; places without a shape are named in the caption | selects a state |
 | **trend** (line) | the picked disease per region until a kind or an area is chosen, then per kept area — a missing point is a silence, never a zero | brush = a `filter` on `t` |
+| **net** (node-link, two layers) | the disease co-occurrence graph: one circle per disease, one line per pair that both reported cases in the same state-week | hover lights a disease and its ties; click selects it, shift-click adds |
 | **table** | the picked disease at the latest week, the cells as CDC printed them, with their flag | selects an area |
+
+### Where the network's positions come from
+
+Nowhere on the page. Two acts land on the session before the first request is
+served, and both are ordinary `analyze` commits at the top of the log:
+
+```ts
+// src/nndss/def.ts — the acts, DECLARED, so the record says what was done
+graphLayout:    { builtin: 'layout',    algo: 'stress', table: 'nodes', edges: 'edges', key: 'disease', from: 'source', to: 'target', seed: 7, iterations: 60 }
+graphEndpoints: { builtin: 'bringOver', table: 'edges', from: 'nodes', columns: ['x', 'y'] }
+```
+
+The first writes `x` and `y` onto the `nodes` table; the second carries those
+two columns ACROSS the two declared relations (`edges.source → nodes.disease`,
+`edges.target → nodes.disease`) onto the `edges` table as `source_x`,
+`source_y`, `target_x`, `target_y`. Both are plain derived columns afterwards:
+filterable, visible at the cursor, carrying the act that made them.
+
+**Why not a script that writes the coordinates into the CSV**: a position that
+is not on the trace is a position a replay cannot promise. The seed is data, so
+the same rows give the same picture; `tests/network.test.ts` replays the log
+into a fresh session and gets every coordinate back.
+
+**What the picture says, honestly**: 15 diseases and 105 ties — and 105 is
+exactly 15 × 14 / 2, so every pair co-occurs at least once. The graph is
+COMPLETE, which makes the node-link a hairball; the caption on the cell says so
+and points at the reading that survives at this density — the weights as a
+matrix, source × target, shaded by jurisdiction-weeks. Every word of that is
+COUNTED and not asserted: the density is measured off the drawn marks, the
+declared `altLong` is a function of the graph the def was handed (hand a
+partial one in and it names the ties it has instead), the caption says what the
+layout act never placed, and with nothing placed at all the caption says THAT
+rather than promising a commit the frame below it is refusing.
+
+**And the graph is read ONCE, where no clause exists.** A view's clause reaches
+every table, and the graph's two share almost no column with the other three —
+so a per-request read would answer a reload-after-a-selection either with a
+refusal about a column nobody asked for or with a node-link whose links point at
+nodes that are not there. `buildNndssSurfaceAsync` reads both windows straight
+after the two acts and carries the answer on the surface; the desk narrows in
+the browser afterwards, the way every other cell does.
 
 - **Analyst** — an agent on the same dashboard (layer 5). It drives the views
   through the same verbs, never computes a number itself (every statistic is

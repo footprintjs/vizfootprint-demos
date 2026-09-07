@@ -5,7 +5,10 @@
  * demo, so the same cockpit code drives both.
  *
  *   GET  /api/state        everything the cockpit renders
- *   GET  /api/rows         the five tables (three ETL'd, the graph's two) + grain + the absence vocabulary
+ *   GET  /api/rows         the five tables (three ETL'd; the graph's two with the
+ *                         positions the layout and bring-over acts landed, or the
+ *                         library's refusal sentence in `netRefused`) + grain +
+ *                         the absence vocabulary
  *   GET  /api/summary      the front door's figures — what this snapshot holds, counted
  *   GET  /api/window       ONE window of rows for the Sheet (the session's view-query port)
  *   GET  /api/proposals    what beat 1 already did here (survives a reload)
@@ -28,8 +31,9 @@ import type { DispatchAction, FilterRange, VizLanded } from 'vizfootprint/agent'
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurfaceAsync, type NndssSurface } from '../src/nndss/surface.js';
-import { DISPATCH_VERBS } from 'vizfootprint/def';
-import { DASHBOARD_WORDS, NNDSS_VIEWS, nndssDef } from '../src/nndss/def.js';
+import { DISPATCH_VERBS, LINK_KINDS, LINK_ON_CLEAR, responsesFor } from 'vizfootprint/def';
+import type { LinkKind } from 'vizfootprint/def';
+import { DASHBOARD_WORDS, NNDSS_VIEWS } from '../src/nndss/def.js';
 import type { InteractionSession, ViewQuery } from 'vizfootprint/session';
 import type { SortSpec } from 'vizfootprint/data';
 import { openSource } from 'vizfootprint/source';
@@ -49,10 +53,18 @@ function isSortSpec(value: unknown): value is SortSpec {
   return typeof spec.field === 'string' && spec.field !== '' && (spec.dir === 'asc' || spec.dir === 'desc') && (spec.absent === undefined || spec.absent === 'first' || spec.absent === 'last');
 }
 
-/** A whole number of rows, or the sentence saying what arrived instead. */
+/**
+ * A whole number of rows, or the sentence saying what arrived instead.
+ *
+ * WHY the characters and not `Number`: `Number('')` is 0, `Number('0x400')` is
+ * 1024 and `Number('1e3')` is 1000 — so an empty `?offset=` would quietly become
+ * a default window (the one thing this door promises never to do), and the limit
+ * refusals below would quote back a number the caller never wrote.
+ */
 function rowCount(name: string, raw: string): number | { readonly error: string } {
+  if (!/^\d+$/.test(raw)) return { error: `${name}=${raw} is not a whole number of rows` };
   const n = Number(raw);
-  if (!Number.isInteger(n) || n < 0) return { error: `${name}=${raw} is not a whole number of rows` };
+  if (!Number.isSafeInteger(n)) return { error: `${name}=${raw} is not a whole number of rows` };
   return n;
 }
 
@@ -648,14 +660,16 @@ export function userAction(body: Record<string, unknown>): DispatchAction | { re
       const kind = str('kind');
       const response = body['response'];
       if (source === undefined || target === undefined || kind === undefined) return { error: 'link needs source, kind, and target' };
-      if (!['point', 'interval', 'cell', 'match', 'encoding'].includes(kind)) return { error: 'link.kind must be point | interval | cell | match | encoding' };
+      // the library's own vocabularies, never a copy: a kind this demo spelled by
+      // hand would refuse tomorrow's selection kind in a sentence blaming the caller
+      if (!(LINK_KINDS as readonly string[]).includes(kind)) return { error: `link.kind must be ${LINK_KINDS.join(' | ')}` };
       // an encoding edge answers with follow | none; a selection edge with the rest — the session refuses the rest with its own sentence
-      const allowed = kind === 'encoding' ? ['follow', 'none'] : ['filter', 'highlight', 'navigate', 'mirror', 'none'];
+      const allowed: readonly string[] = responsesFor(kind as LinkKind);
       if (response !== null && !allowed.includes(String(response))) return { error: `link.response must be ${allowed.join(' | ')}, or null` };
       const mapping = Array.isArray(body['mapping']) ? (body['mapping'] as readonly { from: string; to: string }[]) : undefined;
       const channels = Array.isArray(body['channels']) ? (body['channels'] as readonly { from: string; to: string }[]) : undefined;
       const onClear = str('onClear');
-      if (onClear !== undefined && !['leave', 'showAll', 'excludeAll'].includes(onClear)) return { error: 'link.onClear must be leave | showAll | excludeAll' };
+      if (onClear !== undefined && !(LINK_ON_CLEAR as readonly string[]).includes(onClear)) return { error: `link.onClear must be ${LINK_ON_CLEAR.join(' | ')}` };
       const fold = str('fold');
       return {
         verb: 'link',
@@ -848,23 +862,35 @@ export function summaryOf(desk: Desk): Record<string, unknown> {
   };
 }
 
+/** The doors that answer a POST — data, so the method check can tell a wrong VERB from a wrong DOOR. */
+const POST_DOORS: ReadonlySet<string> = new Set(['refresh', 'dispatch', 'seek', 'bookmark', 'paths', 'saved', 'compare', 'bring-over', 'undo', 'proposals', 'chat', 'reset']);
+
 export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (!url.pathname.startsWith(`${API_ROOT}/`)) return false;
   const door = url.pathname.slice(API_ROOT.length + 1);
-  const { session, tables, graph } = desk.surface;
+  const { session, tables } = desk.surface;
   try {
     if (req.method === 'GET' && door === 'state') return sendJson(res, 200, await stateOf(desk)), true;
     // the landing page, before anything is mounted: the counts, and nothing that costs a walk
     if (req.method === 'GET' && door === 'summary') return sendJson(res, 200, summaryOf(desk)), true;
     if (req.method === 'GET' && door === 'rows') {
+      // the graph's two tables AT THE CURSOR — the committed rows plus the columns
+      // the layout and bring-over acts wrote onto them. Not the CSVs: the positions
+      // are two commits' output, and a door that read the files would serve a graph
+      // with nowhere to put anything. Read ONCE at build, where no clause exists:
+      // a whole-dashboard window applies every live clause, so re-reading here
+      // would hand a reload-after-a-selection either a refusal about a column
+      // nobody asked for or a graph whose links point at absent nodes.
+      const net = desk.surface.graphRows;
       return sendJson(res, 200, {
         cells: tables.cells,
         jurisdictions: tables.jurisdictions,
         series: tables.series,
-        // the graph's two tables, as the def declares them and the desk's relations join them
-        nodes: graph.nodes,
-        edges: graph.edges,
+        nodes: net.nodes,
+        edges: net.edges,
+        // null when both windows answered; the library's own sentence when one did not
+        netRefused: net.refused,
         grain: tables.grain,
         diseases: tables.diseases,
         weeks: tables.weeks,
@@ -877,7 +903,12 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         declared: { dashboard: declaredDashboardWords() },
         grammar: {
           verbs: DISPATCH_VERBS,
-          encodings: nndssDef(tables).encodings ?? [],
+          // the graph rides along: the network view IS one of the encodings, and a panel that showed the other five would be a second, shorter answer to "what does this dashboard declare?"
+          // PROJECTED, never re-derived: the validated, frozen def the session
+          // actually runs on is in hand, and rebuilding it here would copy every
+          // series row per request to read one field — and could drift from what
+          // the session runs the next time `nndssDef` grows an argument.
+          encodings: desk.surface.dashboard.def.encodings ?? [],
           links: 'implicit-crossfilter',
           linksMeaning: 'every view\'s selection filters every other view; a view never filters itself',
         },
@@ -908,17 +939,24 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
       res.end(geo.text);
       return true;
     }
-    if (req.method !== 'POST') return sendJson(res, 405, { error: `${door} is POST` }), true;
+    // a GET that matched no door above is a door that does not exist — telling
+    // its caller to change its verb would send them after the wrong bug
+    if (req.method !== 'POST') {
+      return POST_DOORS.has(door) ? (sendJson(res, 405, { error: `${door} is POST` }), true) : (sendJson(res, 404, { error: `no door "${door}"` }), true);
+    }
     const body = await readJson(req);
     switch (door) {
       case 'refresh': {
         // a dashboard-level act: re-read the named sources (every source when none is named) with the version held; journaled by the library
-        const tables = Array.isArray(body['tables']) ? (body['tables'] as unknown[]).map(String) : undefined;
+        // `named`, not `tables`: the desk's own tables are bound at the top of
+        // this function, and a second `tables` here would be a different thing
+        // under one name — the NAMES the caller asked to re-read
+        const named = Array.isArray(body['tables']) ? (body['tables'] as unknown[]).map(String) : undefined;
         // a dashboard-level act on an open door: only declared tables may be named, so no invented name reaches the shared journal
         const declared = new Set(Object.keys(desk.surface.dashboard.def.data));
-        const unknown = (tables ?? []).filter((t) => !declared.has(t));
+        const unknown = (named ?? []).filter((t) => !declared.has(t));
         if (unknown.length > 0) return sendJson(res, 400, { error: `no table ${unknown.map((t) => `"${t}"`).join(', ')} is declared — the tables are ${[...declared].join(', ')}` }), true;
-        return sendJson(res, 200, await desk.surface.dashboard.refresh(tables)), true;
+        return sendJson(res, 200, await desk.surface.dashboard.refresh(named)), true;
       }
       case 'dispatch': {
         const action = userAction(body);
@@ -946,11 +984,15 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         const message = String(body['message'] ?? '').trim();
         if (message === '') return sendJson(res, 400, { error: 'chat needs a message' }), true;
         if (desk.turnActive) return sendJson(res, 409, { error: 'the analyst is mid-turn — wait for it' }), true;
-        desk.activity.length = 0;
-        desk.turnActive = true;
-        const context = await onScreenNow(session);
-        desk.transcript.push({ role: 'user', text: message, context });
+        // the flag is raised INSIDE the try whose finally lowers it: `onScreenNow`
+        // walks the whole session, and a throw before the try would leave
+        // `turnActive` standing forever — closing chat, DELETE /api/analyst and
+        // the one door that could recover the desk, /api/reset.
         try {
+          desk.activity.length = 0;
+          desk.turnActive = true;
+          const context = await onScreenNow(session);
+          desk.transcript.push({ role: 'user', text: message, context });
           const turn = await desk.analyst.send(message, context);
           // an EXISTENCE check, so the whole history: a cited id either names a commit or it does not
           const known = { commits: new Set(session.commits('anywhere').map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
