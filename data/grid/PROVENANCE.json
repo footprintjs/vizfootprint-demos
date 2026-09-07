@@ -1,0 +1,149 @@
+{
+  "source": "Hourly Electric Grid Monitor — six-month bulk files",
+  "agency": "U.S. Energy Information Administration (EIA)",
+  "page": "https://www.eia.gov/electricity/gridmonitor/dashboard/electric_overview/US48/US48",
+  "period": "2025 Jan Jun",
+  "license": {
+    "statement": "Public domain — a work of the United States Government (17 U.S.C. § 105).",
+    "acknowledgement": "Source: U.S. Energy Information Administration (September 2026)",
+    "trademark": "EIA's logo and seal are trademarks and are NOT reproduced here; the acknowledgement above is the only credit used.",
+    "terms": "https://www.eia.gov/about/copyrights_reuse.php"
+  },
+  "derivedFrom": {
+    "retrievedAt": "2026-09-07T19:27:02.454Z",
+    "files": [
+      {
+        "table": "interchange",
+        "url": "https://www.eia.gov/electricity/gridmonitor/sixMonthFiles/EIA930_INTERCHANGE_2025_Jan_Jun.csv",
+        "bytes": 101202449,
+        "lastModified": "Mon, 07 Sep 2026 14:37:41 GMT",
+        "sha256": "26346191ea9b738a166f75eeb3291b16d2863c74c51986c7779e71f194a2c32d",
+        "retrievedAt": "2026-09-07T19:26:53.624Z"
+      },
+      {
+        "table": "balance",
+        "url": "https://www.eia.gov/electricity/gridmonitor/sixMonthFiles/EIA930_BALANCE_2025_Jan_Jun.csv",
+        "bytes": 47565054,
+        "lastModified": "Mon, 07 Sep 2026 14:37:40 GMT",
+        "sha256": "fac4bb991dfa1dab3b4b35300ccab54ac99be13a40ce91954db8ddafb2816242",
+        "retrievedAt": "2026-09-07T19:27:02.454Z"
+      }
+    ]
+  },
+  "slice": {
+    "window": {
+      "from": "2025-05-19T00:00Z",
+      "to": "2025-06-08T23:00Z",
+      "hours": 504
+    },
+    "rule": "every row of both EIA bulk files whose UTC hour-ending stamp falls in [2025-05-19T00:00Z, 2025-06-08T23:00Z] inclusive, keeping the named columns and dropping the rest; EIA's header text and cell text are copied unchanged, so every committed line appears verbatim in the bulk file it came from; no authority, no link and no silence is filtered out",
+    "order": "EIA's own row order, preserved — the cut never sorts, so the same bulk file always cuts to the same bytes",
+    "columns": {
+      "balance": [
+        "Balancing Authority",
+        "Local Time at End of Hour",
+        "UTC Time at End of Hour",
+        "Demand Forecast (MW)",
+        "Demand (MW)",
+        "Net Generation (MW)",
+        "Total Interchange (MW)",
+        "Sum(Valid DIBAs) (MW)",
+        "Demand (MW) (Imputed)",
+        "Net Generation (MW) (Imputed)",
+        "Total Interchange (MW) (Imputed)",
+        "Demand (MW) (Adjusted)",
+        "Net Generation (MW) (Adjusted)",
+        "Total Interchange (MW) (Adjusted)",
+        "Region"
+      ],
+      "interchange": [
+        "Balancing Authority",
+        "Directly Interconnected Balancing Authority",
+        "Interchange (MW)",
+        "UTC Time at End of Hour",
+        "DIBA_Region"
+      ]
+    },
+    "dropped": [
+      {
+        "file": "balance",
+        "columns": "48 generation-mix columns — every \"Net Generation (MW) from <fuel>\" and its (Imputed) and (Adjusted) twins",
+        "why": "they are 18%–100% empty, and an empty one does not distinguish \"this authority has no wind at all\" from \"this authority did not report its wind this hour\". EIA publishes no capacity list in these files that would separate the two, so keeping them would force this demo to guess at exactly the distinction it exists to refuse. The fetcher keeps the whole file; a fuel-mix demo regenerates it."
+      },
+      {
+        "file": "interchange",
+        "columns": "\"Data Date\", \"Hour Number\", \"Local Time at End of Hour\", \"Region\"",
+        "why": "all four are repeated on every one of the ~300 flow rows an hour carries, and all four are already known: the first three from the UTC stamp plus the authority's own local clock in the balance file, the fourth from the balance file's Region column, which covers all 62 reporting authorities. \"DIBA_Region\" is kept precisely because it is NOT derivable — it is the only place the eight Canadian and Mexican interties are ever described."
+      }
+    ],
+    "loses": "three weeks instead of six months: no winter peak, no summer peak, no seasonal shape, and no answer to \"is this hour unusual for the year?\" — the window is late-spring shoulder season throughout. Also gone: the March 9 daylight-saving hour, the other 1,916 empty interchange cells and every imputation outside the window, and the generation mix. Nothing structural is lost — all 70 authorities, all 303 directed links, both authorities that arrive or leave, and every class of silence are inside the window."
+  },
+  "rows": {
+    "balance.csv": {
+      "read": 264934,
+      "kept": 30746
+    },
+    "interchange.csv": {
+      "read": 1285614,
+      "kept": 149848
+    }
+  },
+  "counts": {
+    "demand": {
+      "present": 26659,
+      "estimated": 50,
+      "replaced": 3,
+      "not-configured": 4034,
+      "unavailable": 0,
+      "unknown": 0
+    },
+    "generation": {
+      "present": 30612,
+      "estimated": 66,
+      "replaced": 27,
+      "not-configured": 0,
+      "unavailable": 41,
+      "unknown": 0
+    },
+    "interchange": {
+      "present": 30638,
+      "estimated": 0,
+      "replaced": 1,
+      "not-configured": 0,
+      "unavailable": 107,
+      "unknown": 0
+    },
+    "flows": {
+      "present": 148989,
+      "estimated": 0,
+      "replaced": 0,
+      "not-configured": 0,
+      "unavailable": 859,
+      "unknown": 0
+    },
+    "measuredZeroFlows": 5971,
+    "linksNeverReported": 2,
+    "interchangeGaps": 3090,
+    "hours": 504,
+    "authorities": 70,
+    "externalAuthorities": 8,
+    "links": 303
+  },
+  "absence": {
+    "states": [
+      "present",
+      "estimated",
+      "replaced",
+      "not-configured",
+      "unavailable",
+      "unknown"
+    ],
+    "field": "demand_state",
+    "rule": "a figure with a reported value and no imputed one is present; with an imputed value and no reported one, estimated; with both, replaced (EIA published the imputed number, never the reported one); with neither, not-configured when the authority filed that figure in NO hour of the slice and unavailable when it filed it in some other hour — the last split is inferred from the data, not published by EIA"
+  },
+  "names": "EIA's published list of Form EIA-930 respondents and Hourly Electric Grid Monitor regions — a separate document from the bulk CSVs, which carry codes only; a code with no entry is left unnamed, never guessed",
+  "generator": "scripts/grid-generate.ts",
+  "regenerate": "npm run data:grid && npm run grid:generate",
+  "whole": "The full six months are not committed (149 MB). `npm run data:grid` downloads both bulk files into data/grid/raw/ (git-ignored); point the same ETL at them — gridTables(balanceCsv, interchangeCsv) reads EIA's shape directly — for the large-scale demo.",
+  "note": "Derived data: no wall-clock stamp, so two runs over the same download write the same bytes. Regenerate after npm run data:grid; never edit by hand."
+}
