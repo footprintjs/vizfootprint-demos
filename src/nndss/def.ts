@@ -23,6 +23,8 @@
  * named as such in the Grammar panel; when declared links land it becomes
  * a matrix a person can read.
  */
+import { layerAddress } from 'vizfootprint/def';
+import type { LinkDecl } from 'vizfootprint/def';
 import type { AnalysisSlot, DashboardDef, DataSourceDef, RelationDecl, ViewEncodingDecl } from 'vizfootprint/agent';
 import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
@@ -40,7 +42,7 @@ const WEEKS: ActorMeta = { actor: 'user', label: 'Reported cases by week', does:
 const TREND: ActorMeta = { actor: 'user', label: 'Trend per area', does: 'follow one area\'s weekly trend' };
 const MAP: ActorMeta = { actor: 'user', label: 'Reported cases by state, on the map', does: 'click a state on the map to select it, shift-click for several' };
 const TABLE: ActorMeta = { actor: 'user', label: 'The cells, as CDC printed them', does: 'pick one row of the table: a jurisdiction and its cells' };
-const NET: ActorMeta = { actor: 'user', label: 'Which diseases report together', does: 'hover a disease to light its ties, click it to select, shift-click for several' };
+const NET: ActorMeta = { actor: 'user', label: 'Which diseases report together', does: 'hover a disease to light its ties, click it to select, shift-click for several, alt-click to select it and everything it reports with' };
 // The SHEET (the data layer's second tab): every row the charts see, read through the same link
 // graph as any chart — its own clause excluded, the others' applied. Grain [] : one mark per row.
 const SHEET: ActorMeta = { actor: 'user', label: 'Sheet', does: 'scroll every row the charts see, and read the window it is showing' };
@@ -129,6 +131,32 @@ const NET_ENCODING: ViewEncodingDecl = {
     { layerId: NETWORK_NODES_LAYER, table: 'nodes', chartKind: 'network', channels: ['x', 'y', 'key'], initial: { x: 'x', y: 'y', key: 'disease' }, label: 'Diseases' },
   ],
 };
+
+/**
+ * Where a WALK reaches, and where it deliberately does not.
+ *
+ * The walk is spoken on the edges layer (its clause is over that table: either
+ * endpoint in the walked set), and the two things that must be said about it are
+ * both routing: the nodes layer MIRRORS it — that is the ego net on screen — and
+ * every other view is out of its reach, because a clause naming `source` and
+ * `target` has nothing to say about a table of CDC cells. The layers of one
+ * frame get no default edge between them (`vizfootprint/links`, `sharesFrame`),
+ * so the mirror has to be declared; the rest have one, so it has to be cut.
+ */
+function walkLinks(): readonly LinkDecl[] {
+  const source = layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER);
+  const kind = 'neighbourhood' as const;
+  return [
+    { source, kind, target: layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER), response: 'mirror', label: 'the walked neighbourhood, lit on the nodes' },
+    ...NNDSS_VIEWS.filter((viewId) => viewId !== NETWORK_VIEW).map((target) => ({
+      source,
+      kind,
+      target,
+      response: 'none' as const,
+      label: 'a walk is about the ties, and says nothing about the cells',
+    })),
+  ];
+}
 
 /**
  * The network's words, as a function of the GRAPH the def was handed — the way
@@ -268,14 +296,17 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
     ],
     // The sheet's honest capability envelope: it can emit a point (a row) and a match
     // (a header filter, when that lands) — never an interval, and never the compound cell.
-    // …and the network's: a node-link speaks a point (a node) and a match
-    // (shift-click, SET-1) and nothing else — it cannot brush an interval and has
-    // no compound cell to emit. Undeclared, R14's default gives it every kind,
-    // and the Grammar matrix offers editable rows for gestures no circle can
-    // make. A capability on the FRAME narrows its layers, so one entry is enough.
+    // …and the network's: a node-link speaks a point (a node), a match
+    // (shift-click, SET-1) and a NEIGHBOURHOOD (alt-click: the node and
+    // everything it links to) and nothing else — it cannot brush an interval and
+    // has no compound cell to emit. Undeclared, R14's default gives it every kind
+    // BUT the walk, which is never assumed (`vizfootprint/links`, voice.ts):
+    // nothing about an undeclared view says it has an edge to walk, so a
+    // node-link that does must say so. A capability on the FRAME narrows its
+    // layers, so one entry is enough.
     capabilities: [
       { viewId: 'sheet', canProbe: true, encodings: ['point', 'match'] },
-      ...(graph === undefined ? [] : [{ viewId: NETWORK_VIEW, canProbe: true, encodings: ['point', 'match'] as const }]),
+      ...(graph === undefined ? [] : [{ viewId: NETWORK_VIEW, canProbe: true, encodings: ['point', 'match', 'neighbourhood'] as const }]),
     ],
     // Layer 4 — the LINKS between views, declared. Everything not listed here is the default
     // rule (every view filters every other, self excluded), written out by the library so the
@@ -305,6 +336,15 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
         ],
         label: 'the trend follows the weekly line\'s hue — as a facet, and (refused) as its color',
       },
+      // THE WALK'S ROUTING, declared because the default rule cannot know it. A
+      // neighbourhood clause names the EDGES table's two endpoint columns
+      // (`source`, `target`) — columns no other table here has — so the default
+      // "every view filters every other" would send it at the cells views and
+      // every one of their windows would be refused for a column that was never
+      // theirs. It reaches exactly one place, and it MIRRORS there: the nodes
+      // layer lights the ego net the walk recorded (the answer is on the commit,
+      // so time travel shows the set that walk found, not today's).
+      ...(graph === undefined ? [] : walkLinks()),
     ],
     // The encoding plane's HOUSE RULES, as data — the same sentences refuse a bad initial binding
     // at build, a bad rebind at dispatch (human picker or analyst tool), and grey the picker.

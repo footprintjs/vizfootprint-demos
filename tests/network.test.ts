@@ -307,3 +307,67 @@ describe('what the def says ABOUT the network, and not just about its rows', () 
     expect(await complete.lintProse()).toEqual([]);
   }, 60_000);
 });
+
+// ── the walk: one gesture on a node, one commit, the ids recorded ────────────
+
+describe('one gesture on a node selects that node and what it touches', () => {
+  const cause = { requestedBy: 'user' as const, computedBy: 'user' as const, intent: 'alt-click Mumps' };
+  const EDGES = layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER);
+  const NODES = layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER);
+
+  it('lands ONE commit on the EDGES address, carrying the question and the answer', async () => {
+    const session = await tinySession();
+    const before = session.commits('anywhere').length;
+    const res = await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Mumps', cause });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(session.commits('anywhere')).toHaveLength(before + 1);
+    expect([res.commit!.viewId, res.commit!.kind, res.commit!.fields]).toEqual([EDGES, 'neighbourhood', ['source', 'target']]);
+    // Mumps ties to Measles and Rubella in TINY — the seed rides in its own set
+    expect(res.commit!.value).toEqual({ seed: 'Mumps', derivation: 'ego', hops: 1, ids: ['Mumps', 'Measles', 'Rubella'] });
+    // the ANSWER is what the predicate is made of: either endpoint in the walked set
+    expect(res.commit!.predicateSQL).toContain('"source" IN (\'Mumps\', \'Measles\', \'Rubella\')');
+  });
+
+  it('is REFUSED on a column that is not an endpoint of any declared relation, in a sentence', async () => {
+    const session = await tinySession();
+    const res = await session.dispatch({ verb: 'select', viewId: EDGES, field: 'weight', seed: 'Mumps', cause });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.rejection.detail).toContain('weight');
+  });
+
+  it('a live selection elsewhere does not stop the walk — a clause about `disease` is not a claim about the ties', async () => {
+    const session = await tinySession();
+    await session.dispatch({ verb: 'select', viewId: 'diseases', field: 'disease', value: 'Measles', cause });
+    const res = await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Mumps', cause });
+    expect(res.ok && (res.commit!.value as { ids: unknown[] }).ids).toEqual(['Mumps', 'Measles', 'Rubella']);
+  });
+
+  it('reaches the NODES layer and nothing else: the def routes the walk, the default rule does not', async () => {
+    const session = await tinySession();
+    await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Mumps', cause });
+    const reaching = (viewId: string): readonly string[] => session.clausesFor(viewId).filter((c) => c.clause.kind === 'neighbourhood').map((c) => c.response);
+    expect(reaching(NODES)).toEqual(['mirror']); // the ego net, lit on the circles
+    for (const other of ['diseases', 'coverage', 'kinds', 'map', 'weeks', 'trend', 'table', 'sheet']) expect(reaching(other)).toEqual([]);
+    // …so every other view's window still reads: a clause naming `source` would refuse a table that has no such column
+    const window = await session.viewQuery({ viewId: 'diseases' });
+    expect(window.ok).toBe(true);
+  });
+
+  it('the live selection carries the WIRE BODY, so the nodes layer can read the set back', async () => {
+    const session = await tinySession();
+    await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Mumps', cause });
+    const live = (await session.overview()).activeSelections.find((s) => s.viewId === EDGES)!;
+    expect([live.kind, live.fields]).toEqual(['neighbourhood', ['source', 'target']]);
+    expect(live.value).toEqual({ seed: 'Mumps', derivation: 'ego', hops: 1, ids: ['Mumps', 'Measles', 'Rubella'] });
+  });
+
+  it('alt-clicking the SAME node again clears the walk — the point\'s own rule', async () => {
+    const session = await tinySession();
+    await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Mumps', cause });
+    const cleared = await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: null, cause });
+    expect(cleared.ok && cleared.commit!.value).toBeNull();
+    expect((await session.overview()).activeSelections.some((s) => s.viewId === EDGES)).toBe(false);
+  });
+});

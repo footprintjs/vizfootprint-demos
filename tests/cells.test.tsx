@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { graphReadingFor } from 'vizfootprint/def';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { DEFAULT_DISEASE, NETWORK_NODES, useNndssCells, type NndssDeskData, type NndssEdgeRow, type NndssNodeRow } from '../web/src/cells.js';
 import { buildNndssSurface, graphRowsAt, layOutGraph } from '../src/nndss/surface.js';
@@ -88,12 +89,24 @@ describe('the network cell over the committed CDC graph', () => {
     expect(html.indexOf('vzf-net-links')).toBeLessThan(html.indexOf('vzf-net-nodes'));
   }, 60_000);
 
-  it('counts the density on screen and names the matrix reading, rather than asserting either', async () => {
+  it('hands the chart the WALK door, so an alt-click has somewhere to go: the frame says so out loud', async () => {
+    const html = renderToStaticMarkup(<>{cellsOf(await realGraphData()).find((c) => c.id === 'net')!.render({ width: 640, height: 420 })}</>);
+    // `<desc>` carries the gesture only when the walk door was passed — the chart
+    // never advertises an act it has nowhere to send (VizNetwork, the `walk` prop)
+    expect(html).toContain('alt-click (or alt+Enter) a node to select it and everything it links to');
+  }, 60_000);
+
+  it('counts the density on screen and QUOTES the library\'s reading rule, rather than asserting either', async () => {
     const caption = textOf(cellsOf(await realGraphData()).find((c) => c.id === 'net')!.caption);
     expect(caption).toContain('15 diseases · 105 of 105 possible ties');
     expect(caption).toContain('EVERY pair co-occurs');
-    expect(caption).toContain('the weights read as a matrix (source × target, shaded by jurisdiction-weeks)');
+    // the RULE fires here (15 nodes, every pair tied = density 1), and the caption says so in the
+    // rule's own words — including the study, so a reader can go and check it
+    expect(caption).toContain('prefer the MATRIX (source × target, shaded by jurisdiction-weeks)');
+    expect(caption).toContain('Ghoniem, Fekete and Castagliola (2004)');
+    expect(caption).toContain(graphReadingFor({ nodes: 15, edges: 105, interaction: true }).reason);
     expect(caption).toContain('positions from a seeded stress layout landed as a commit');
+    expect(caption).toContain('alt-click to select it and everything it reports with');
   }, 60_000);
 });
 

@@ -40,6 +40,9 @@ import {
   type NetworkEdge,
   type NetworkNode,
 } from 'vizfootprint-ui';
+// the reading rule (matrix or node-link) is the LIBRARY's, with its studies named
+// in its own reason — this desk counts the marks and quotes the answer
+import { graphReadingFor } from 'vizfootprint/def';
 import type { DeskChart, DeskProjection, DeskSilence } from 'vizfootprint-studio/desk';
 import { arrivesFrom, capNote, categoryCounts, categorySums, columnVocabulary, emitIntent, pickedFrom, type Vocabulary } from './derive.js';
 
@@ -86,9 +89,11 @@ export const STORY_FIGURE = ['diseases', 'map', 'trend', 'weeks'] as const;
  * 'nodes' here would keep selecting under an address the def no longer owns the
  * moment the layer is renamed, and nothing would typecheck differently.
  */
-import { NETWORK_VIEW, NETWORK_NODES_LAYER } from '../../src/nndss/def.js';
+import { NETWORK_VIEW, NETWORK_NODES_LAYER, NETWORK_EDGES_LAYER } from '../../src/nndss/def.js';
 export { NETWORK_VIEW };
 export const NETWORK_NODES = layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER);
+/** The EDGES layer's address — where a WALK is spoken, because its clause is over that table (either endpoint in the walked set). */
+export const NETWORK_EDGES = layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER);
 
 // ── the rows this desk is drawn over ────────────────────────────────────────
 
@@ -438,15 +443,31 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
   const densityWords =
     possibleTies === 0
       ? ''
-      : // the hairball advice belongs to a graph big enough for the drawing to
-        // actually fail: two circles and one line is complete and perfectly
-        // readable, and telling that reader to switch to a matrix is nonsense
-        wholeGraphDrawn && netEdges.length === possibleTies && netNodes.length >= HAIRBALL_NODES
-        ? ' · EVERY pair co-occurs, so this is a complete graph and the drawing is a hairball — the weights read as a matrix (source × target, shaded by jurisdiction-weeks), never as lines'
+      : wholeGraphDrawn && netEdges.length === possibleTies
+        ? ' · EVERY pair co-occurs, so this is a complete graph'
         : // never rounded to an absolute: 19,850 of 19,900 ties is not 100% (and
           // would withhold the hairball reading exactly where it is needed), and
           // 20 of 4,950 is not 0% with twenty lines on screen
           ` · ${percent < 0.5 ? 'under 1' : percent > 99.5 ? 'over 99' : String(Math.round(percent))}% of the possible ties`;
+  /**
+   * WHICH PICTURE this graph should be read as — ASKED, never decided here.
+   * `graphReadingFor` is the rule as data (`vizfootprint/encoding`), and its
+   * reason names the two studies it comes from. This file counts the marks and
+   * hands them over; the demo can hover, so `interaction` is true — and the CDC
+   * graph is dense enough that the matrix rule fires anyway, which is exactly
+   * what the caption then has to say out loud about the picture it is drawing.
+   */
+  const reading = graphReadingFor({ nodes: netNodes.length, edges: netEdges.length, interaction: true });
+  /**
+   * The ruling, quoted on screen — but only where the drawing really does fail.
+   * `HAIRBALL_NODES` is this desk's own floor, not the rule's: two circles and
+   * one line is complete, perfectly readable, and telling that reader to go and
+   * find a matrix is nonsense.
+   */
+  const readingWords =
+    reading.prefer === 'matrix' && netNodes.length >= HAIRBALL_NODES
+      ? ` · this drawing is a hairball, and the reading rule says so: prefer the MATRIX (source × target, shaded by jurisdiction-weeks) — ${reading.reason}`
+      : '';
   /** What the surface carried and the layout act never placed — said on screen, because the counts above are of the DRAWN marks. */
   const unplacedWords =
     (data.nodes ?? []).length - netNodes.length + ((data.edges ?? []).length - netEdges.length) === 0
@@ -559,7 +580,7 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
                     // promising a commit and a hover over it would be two
                     // answers to one question, and the wrong one is the louder
                     `${String((data.nodes ?? []).length)} diseases carried, none placed — no position has landed on this session, so there is nothing to hover`
-                  : `${String(netNodes.length)} diseases · ${String(netEdges.length)} of ${String(possibleTies)} possible ties${densityWords}${unplacedWords} · positions from a seeded stress layout landed as a commit, and each link's two ends brought over the declared relations — hover a disease to keep it and its ties bright, click to select`}
+                  : `${String(netNodes.length)} diseases · ${String(netEdges.length)} of ${String(possibleTies)} possible ties${densityWords}${unplacedWords} · positions from a seeded stress layout landed as a commit, and each link's two ends brought over the declared relations — hover a disease to keep it and its ties bright, click to select, alt-click to select it and everything it reports with${readingWords}`}
                 {desk.words(NETWORK_VIEW)}
               </>
             ),
@@ -579,6 +600,11 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
                   width={width}
                   height={height}
                   onEmit={emit(NETWORK_NODES, 'select')}
+                  // THE WALK is the EDGES layer's act: its clause names their two
+                  // endpoint columns, so it is spoken through their address and
+                  // lands there. The nodes light the answer back (the def's
+                  // `mirror` edge), which is why the same `selection` shows it.
+                  walk={{ field: 'source', emit: emit(NETWORK_EDGES, 'walk') }}
                 />
               ),
           },
