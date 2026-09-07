@@ -11,9 +11,20 @@
 #   3. this repo: install, build the site
 #   4. publish dist/site
 #
-# `SITE_BASE` is left at its default, which is the project-site path GitHub
-# Pages serves at — `/<repo>/`. A user or organisation site served at the root
-# sets `SITE_BASE: /`.
+# PINNED REFS — the library and storydeck checkouts below name an explicit
+# commit rather than floating on `main`. Neither is published to npm, so this
+# workflow's checkout IS the install; without a pin, a commit landing on
+# either sibling's `main` between one run and the next would change what this
+# demo builds from without a single line changing here, and a broken build
+# would point at the wrong repository. Bump the two SHAs by hand — with this
+# file, in its own commit — when the demo means to move to newer library code.
+#
+# `SITE_BASE` is NOT hardcoded here: `web/site.vite.config.ts` defaults it to
+# `/vizfootprint-demo/` (the local working-copy name, singular), but this repo
+# is published as `vizfootprint-demos` (plural) — a different path. Rather
+# than hardcode a second name that could drift from the first, the build step
+# below reads `configure-pages`'s own `base_path` output, so the site is
+# always mounted at wherever this repository actually is.
 name: pages
 
 on:
@@ -39,24 +50,34 @@ jobs:
         with:
           path: vizfootprint-demo
 
-      # the `file:` sibling, at the path package.json names
+      # the `file:` sibling, at the path package.json names.
+      # Pinned: not published to npm, so this checkout is the install, and an
+      # unpinned `main` could change under this workflow's feet.
       - name: check out the library beside it
         uses: actions/checkout@v4
         with:
           repository: footprintjs/vizfootprint
+          ref: 8a1d36c868beb871408346b37990b14750bdd92d
           path: vizfootprint
 
       # the Story tab's scroll lens, the third `file:` sibling — `npm install`
-      # refuses without it, because package.json names it a dependency
+      # refuses without it, because package.json names it a dependency.
+      # Pinned for the same reason as the library above.
       - name: check out storydeck beside them
         uses: actions/checkout@v4
         with:
           repository: footprintjs/storydeck
+          ref: 246d187467d8ca9d20e94b9901f5ad06faf104f9
           path: storydeck
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      # runs before the build so its `base_path` output can tell the build
+      # where this site is actually mounted
+      - id: pages
+        uses: actions/configure-pages@v5
 
       - name: build the library and its ui
         working-directory: vizfootprint
@@ -67,11 +88,12 @@ jobs:
 
       - name: build the site
         working-directory: vizfootprint-demo
+        env:
+          SITE_BASE: ${{ steps.pages.outputs.base_path }}
         run: |
           npm install
           npm run site:build
 
-      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: vizfootprint-demo/dist/site
