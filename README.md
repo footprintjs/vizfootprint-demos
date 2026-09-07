@@ -178,8 +178,9 @@ npm run site:build                # → dist/site/  (base /vizfootprint-demo/, t
 SITE_BASE=/ npm run site:build    # → the same site, mounted at the root
 ```
 
-`dist/site/` is three pages and 19 MB: an index that offers the two demos, a
-desk each, and `data/` copied in beside them. There is no server behind it and
+`dist/site/` is three pages and 18.5 MB — 1.0 MB of code and 17.5 MB of
+tables: an index that offers the two demos, a desk each, and `data/` copied in
+beside them. There is no server behind it and
 nothing in it points at one.
 
 **How a desk gets its rows without a server.** The library's source layer is a

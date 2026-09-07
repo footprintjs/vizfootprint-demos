@@ -25,7 +25,7 @@
  *
  * ── NOT single-file ─────────────────────────────────────────────────────────
  * The story page carries its data inline and is one file on purpose. These two
- * carry 17 MB between them; inlining that would be a file nobody can open. The
+ * carry 17.5 MB between them; inlining that would be a file nobody can open. The
  * data is copied beside the pages instead, which is exactly the case the
  * library's story-page ceiling tells a host to reach for `via: 'http'` for.
  */
