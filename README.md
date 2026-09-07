@@ -9,6 +9,29 @@ This repo is a **consumer**, not a showcase: it exists to exercise the
 library's seams on data nobody here authored. What it proves, it proves
 on CDC's own bytes.
 
+## Live: <https://footprintjs.github.io/vizfootprint-demos/>
+
+A static build of both demos, published from this repo by
+`.github/workflows/pages.yml` on every push to `main` — no server behind it,
+which is exactly the point; see [Publish it](#publish-it--a-static-site-no-server-at-all)
+for what that costs and what it doesn't.
+
+- **[NNDSS](https://footprintjs.github.io/vizfootprint-demos/nndss/)** — the
+  CDC's weekly notifiable-disease tables: coverage, diseases, the map, the
+  trend, the co-occurrence network, the table itself.
+- **[Grid](https://footprintjs.github.io/vizfootprint-demos/grid/)** — three
+  weeks of the US electric grid, hour by hour, as the sparse directed network
+  62 balancing authorities actually trade power over.
+
+Both run the real dashboard, the real ETL, the real definition — the one
+thing the published pages cannot do unattended is hold a server-side model
+key, so the **analyst** panel asks each visitor for their own (kept in that
+browser only, sent only to Anthropic, and entirely optional — without one the
+scripted turn still runs). Locally, with a server, it can use a key from the
+environment instead; see [Run it](#run-it) and the two laws under
+[`web/README.md`](web/README.md#the-law-one-analyst-two-drivers--and-the-visitors-key-is-the-visitors)
+for the four differences in full.
+
 ## Why NNDSS
 
 A weekly NNDSS cell that carries no number carries a flag instead, and
