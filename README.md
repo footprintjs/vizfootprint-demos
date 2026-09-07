@@ -148,16 +148,18 @@ means. The library is public; clone it next to this one:
 git clone https://github.com/footprintjs/vizfootprint.git
 git clone https://github.com/footprintjs/storydeck.git
 git clone <this repo>            # all three side by side, same parent folder
-cd vizfootprint && npm install && npm run build && npm run build:ui
+cd vizfootprint && npm install && npm run build && npm run build:ui && npm run build -w vizfootprint-studio
 cd ../vizfootprint-demo && npm install
 ```
 
 The parent folder ends up holding `vizfootprint/`, `storydeck/` and
 `vizfootprint-demo/` as siblings, which is exactly what `file:../vizfootprint`
 says. `vizfootprint-studio` is not a fourth clone — it lives inside the
-library's checkout. Continuous integration does the same thing in the same
-order: check out the repositories side by side, build the library and its ui,
-then build this site; see `.github/workflows/pages.yml`.
+library's checkout, as its own npm workspace, which is why building it is a
+third command (`build:ui` is a different workspace and does not reach it).
+Continuous integration does the same thing in the same order: check out the
+repositories side by side, build the library, its ui and its studio, then
+build this site; see `.github/workflows/pages.yml`.
 
 ```
 npm install
@@ -168,15 +170,23 @@ npm run web:dev         # http://localhost:5291
 npm test
 ```
 
-`vizfootprint-ui` is a `file:` link to the sibling checkout; rebuild it
-(`cd ../vizfootprint && npm run build:ui`) after any library change.
+`vizfootprint-ui` and `vizfootprint-studio` are `file:` links to the sibling
+checkout; rebuild them (`cd ../vizfootprint && npm run build:ui && npm run
+build -w vizfootprint-studio`) after any library change.
 
 ## Publish it — a static site, no server at all
 
 ```
-npm run site:build                # → dist/site/  (base /vizfootprint-demo/, the GitHub Pages path)
+npm run site:build                # → dist/site/  (base /vizfootprint-demo/, this script's own default)
 SITE_BASE=/ npm run site:build    # → the same site, mounted at the root
 ```
+
+That default names the local working copy, singular — this repository
+publishes as `vizfootprint-demos`, plural, which is a different path. Rather
+than hardcode the real name a second place, `.github/workflows/pages.yml`
+reads it from GitHub's own `configure-pages` action and passes it as
+`SITE_BASE`, so the deployed site is always mounted at wherever this
+repository actually lives.
 
 `dist/site/` is three pages and 18.5 MB — 1.0 MB of code and 17.5 MB of
 tables: an index that offers the two demos, a desk each, and `data/` copied in
@@ -218,10 +228,14 @@ against the page's own location — which is also why the data files are copied
 to `<base>data/…` rather than referenced by a relative string.
 
 **Continuous integration** does exactly what a person cloning by hand does,
-in the same order: check out `footprintjs/vizfootprint` and this repository
-**side by side**, `npm install && npm run build && npm run build:ui` in the
-library, `npm install && npm run site:build` here, then publish `dist/site/`.
-Nothing resolves from the npm registry, because the library is not on it.
+in the same order: check out `footprintjs/vizfootprint`, `footprintjs/storydeck`
+and this repository **side by side**, `npm install && npm run build && npm
+run build:ui && npm run build -w vizfootprint-studio` in the library, `npm
+install && npm run site:build` here, then publish `dist/site/`. Nothing
+resolves from the npm registry, because the library is not on it — the two
+sibling checkouts are pinned to a commit each, named in the workflow file,
+so a change landing on either sibling's `main` cannot alter this build
+without a line changing here too.
 
 ## Send the desk to somebody — one file, no server
 

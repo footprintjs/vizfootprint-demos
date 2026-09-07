@@ -7,7 +7,8 @@
 #
 # The order is the same one README.md gives a person cloning by hand:
 #   1. the three repositories, side by side under the same parent
-#   2. the library: install, build, build the ui
+#   2. the library: install, build, build the ui, build the studio
+#      (studio is a workspace of its own — `build:ui` does not reach it)
 #   3. this repo: install, build the site
 #   4. publish dist/site
 #
@@ -79,12 +80,13 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v5
 
-      - name: build the library and its ui
+      - name: build the library, its ui and its studio
         working-directory: vizfootprint
         run: |
           npm install
           npm run build
           npm run build:ui
+          npm run build -w vizfootprint-studio
 
       - name: build the site
         working-directory: vizfootprint-demo
