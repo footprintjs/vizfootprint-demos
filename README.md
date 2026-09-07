@@ -1,6 +1,6 @@
 # vizfootprint-demo — public data, provenance-first
 
-[vizfootprint](../vizfootprint) on a real public dataset: the CDC's weekly
+[vizfootprint](https://github.com/footprintjs/vizfootprint) on a real public dataset: the CDC's weekly
 notifiable-disease tables (NNDSS), reproduced as a dashboard whose every
 interaction is a commit, whose agent proposals are gated, and whose empty
 cells keep their kind — with the interaction grammar on screen.
@@ -25,8 +25,10 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | `data/nndss/graph/` | 1 · data | the disease co-occurrence graph derived from the snapshot by `npm run graph:generate` — `nodes` / `edges` tables the def joins with two relations, with provenance and a byte-stability promise |
 | `data/geo/` | 1 · data | US state boundaries (Census-derived, via `us-atlas`), converted and committed with provenance |
 | `src/nndss/` | 1–5 | flags → absence, CSV → tables, the declared dashboard, the declared analyses, the surface, the scripted proposals, the analyst |
+| `src/source/` | wire | the http carrier — the one the library has but does not export; its README says why |
 | `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors |
 | `web/` | 3, 4, 6 | the front door, the cockpit, the Grammar panel, the jump box, the Analyst panel |
+| `web/site/` | 3, 4, 6 | the STATIC site: an index and the two desks, each reading its tables over http with no server behind it |
 | `web/story/` | 6 | the SINGLE-FILE story page: its entry, its desk, and the captured desk it carries |
 | `scripts/` | — | `story-capture.ts` — the desk's story, off a running server |
 | `tests/` | — | vitest |
@@ -134,6 +136,29 @@ and the analyst see them.
 
 ## Run it
 
+### First: this repo needs its library beside it
+
+`package.json` depends on `vizfootprint`, `vizfootprint-ui`,
+`vizfootprint-studio` and `storydeck` through `file:` links to **sibling
+checkouts**. Nothing here resolves from the npm registry, so `npm install` in
+a lone clone will fail — that is not a bug, it is what a `file:` dependency
+means. The library is public; clone it next to this one:
+
+```
+git clone https://github.com/footprintjs/vizfootprint.git
+git clone https://github.com/footprintjs/storydeck.git
+git clone <this repo>            # all three side by side, same parent folder
+cd vizfootprint && npm install && npm run build && npm run build:ui
+cd ../vizfootprint-demo && npm install
+```
+
+The parent folder ends up holding `vizfootprint/`, `storydeck/` and
+`vizfootprint-demo/` as siblings, which is exactly what `file:../vizfootprint`
+says. `vizfootprint-studio` is not a fourth clone — it lives inside the
+library's checkout. Continuous integration does the same thing in the same
+order: check out the repositories side by side, build the library and its ui,
+then build this site; see `.github/workflows/pages.yml`.
+
 ```
 npm install
 npm run data:fetch      # only to refresh the snapshot — it is committed
@@ -145,6 +170,57 @@ npm test
 
 `vizfootprint-ui` is a `file:` link to the sibling checkout; rebuild it
 (`cd ../vizfootprint && npm run build:ui`) after any library change.
+
+## Publish it — a static site, no server at all
+
+```
+npm run site:build                # → dist/site/  (base /vizfootprint-demo/, the GitHub Pages path)
+SITE_BASE=/ npm run site:build    # → the same site, mounted at the root
+```
+
+`dist/site/` is three pages and 19 MB: an index that offers the two demos, a
+desk each, and `data/` copied in beside them. There is no server behind it and
+nothing in it points at one.
+
+**How a desk gets its rows without a server.** The library's source layer is a
+declaration, not a fetch call: a table says a **format**, a **via** and an
+**at**, and the carrier for that via reads it and vouches for a **version**.
+The served desks declare `via: 'file'` and the file carrier reads the disk.
+The static pages declare the *same tables* `via: 'http'` at the committed CSVs
+under the site's own base, and the http carrier fetches them — so a page on
+GitHub Pages ends up stamping its commits with the ETag or `Last-Modified` the
+Pages CDN vouched for. One word changes. Everything downstream — the ETL, the
+definition, the validated dashboard, the two layout acts, the charts — is the
+same code the server runs.
+
+| | served | static |
+|---|---|---|
+| the definition | `nndssDef` / `gridDef` | the same |
+| the session | built in the server process | built in your browser |
+| the tables | `via: 'file'`, off disk | `via: 'http'`, off the site |
+| the desk's session view | `pollingSource('/api/state')` | `sessionSource(session)` |
+| the rows payload | `nndssRows` / `gridRows` | the same |
+
+**What a reader loses, said rather than degraded.** Each static desk opens
+with the sentence: no **analyst** (it needs a model key and a process to hold
+the conversation), no **durable log** (commits live in the tab and go on
+reload), no **refresh** (the files are what the repository committed). Every
+other act is real — selections, undo, named paths, bookmarks, compare, the
+Sheet, the commit log, the branch map. The served path is not deleted: `npm
+run serve` + `npm run web:dev` is still how the analyst is developed, and both
+paths build from one definition per demo.
+
+**The base is a knob** because GitHub Pages serves a project site at
+`/<repo>/` and a local check serves it at `/`. `SITE_BASE` sets it, Vite
+writes it into `import.meta.env.BASE_URL`, and `web/site/boot.tsx` resolves it
+against the page's own location — which is also why the data files are copied
+to `<base>data/…` rather than referenced by a relative string.
+
+**Continuous integration** does exactly what a person cloning by hand does,
+in the same order: check out `footprintjs/vizfootprint` and this repository
+**side by side**, `npm install && npm run build && npm run build:ui` in the
+library, `npm install && npm run site:build` here, then publish `dist/site/`.
+Nothing resolves from the npm registry, because the library is not on it.
 
 ## Send the desk to somebody — one file, no server
 
@@ -164,7 +240,7 @@ The two files that make it are the recipe, and the recipe is the documentation:
 `web/story/entry.tsx` (imports the def — a definition is data except its analyses, which are code, so
 a page has to import one rather than carry it) and `web/story.vite.config.ts`
 (`vite-plugin-singlefile`, plus one hook that writes the payload through the library's own codec).
-See [`vizfootprint-ui/story/page`](../vizfootprint/ui/src/story/page/README.md) for the ceiling — past
+See [`vizfootprint-ui/story/page`](https://github.com/footprintjs/vizfootprint/blob/main/ui/src/story/page/README.md) for the ceiling — past
 ten megabytes compressed the build refuses and tells you to declare the table `via: 'http'` instead —
 and for the boot's order and its three honest states.
 
@@ -203,10 +279,41 @@ CDC). A work of the United States Government — public domain. The committed
 snapshot is a slice (a handful of diseases, two MMWR years); its exact
 query, retrieval time and row count are in `data/nndss/PROVENANCE.json`.
 
+Two things the CDC asks anyone who reuses this material to say, and they are
+both true here:
+
+- **Nothing here is endorsed by anybody.** Using the CDC's data does not mean
+  the CDC, the agency inside it that published these tables, the Department of
+  Health and Human Services, or the United States government endorses this
+  repository, this library, or anything said in either. They have not seen it.
+- **You do not have to come here for the data.** The same tables are published
+  by the CDC itself, free of charge, at the link above. The snapshot in
+  `data/nndss/` is a convenience copy of a slice, not a source of record — if
+  the two ever disagree, the CDC's copy is the one that is right.
+
 Map shapes: U.S. Census Bureau cartographic boundary files (1:10M) via the
-[`us-atlas`](https://github.com/topojson/us-atlas) package — the boundary
-data is a work of the U.S. Government, public domain; see
+[`us-atlas`](https://github.com/topojson/us-atlas) package. Two facts, not
+one: the **geometry** is the Census Bureau's, a work of the U.S. Government
+and public domain; the **package** that simplified and projected it is
+Michael Bostock's us-atlas, licensed ISC, whose copyright notice has to
+travel with the file it produced and therefore sits beside it in
+[`data/geo/LICENSE-us-atlas`](data/geo/LICENSE-us-atlas). See also
 `data/geo/PROVENANCE.json`.
+
+Grid data: U.S. Energy Information Administration — see
+[`data/grid/README.md`](data/grid/README.md) for the acknowledgement EIA asks
+for, which names the publication (the January–June 2025 six-month file) as
+well as the month this repo downloaded it.
+
+## Licence, and what it covers
+
+The **code** is MIT — see [`LICENSE`](LICENSE). The **data** under `data/` is
+not ours to license: each folder's README and `PROVENANCE.json` name whose it
+is and on what terms, and `LICENSE` closes with the same list.
+
+`package.json` says `"private": true`. That is a guard against an accidental
+`npm publish`, nothing more — this is a demo consumer, not a package, and it
+has no business on the registry whatever the repository's visibility.
 
 ## The encoding plane (which column on which channel)
 

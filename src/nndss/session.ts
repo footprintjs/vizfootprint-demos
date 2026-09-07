@@ -2,6 +2,12 @@
  * THE SURFACE — one live vizfootprint session over the NNDSS tables, and the
  * fixed tool port the agent drives it through. Layer 5, wired.
  *
+ * PURE: nothing here reads a disk, so this module runs in a browser as well as
+ * in the server. The tables and the graph are ARGUMENTS. `./surface.ts` beside
+ * it is the node door that defaults them off the committed files; the static
+ * site's page hands in tables it fetched over http. One session builder, two
+ * ways in — see `./http.ts`.
+ *
  *   tables  = loadSnapshot()          layer 1 — CDC's bytes, shaped
  *   graph   = loadGraph()             layer 1 — the committed co-occurrence graph, read back
  *   def     = nndssDef(tables, graph) layers 2–4 — declared: five tables, two relations
@@ -20,7 +26,6 @@ import type { Row } from 'vizfootprint/data';
 import { GRAPH_LAYOUT_SEED, nndssDef } from './def.js';
 import type { NndssTables } from './etl.js';
 import type { NndssGraph } from './graph.js';
-import { loadGraph, loadSnapshot } from './snapshot.js';
 
 export interface NndssSurface {
   readonly session: InteractionSession;
@@ -154,7 +159,7 @@ export async function graphRowsAt(session: InteractionSession, graph: NndssGraph
  * surface whose nodes have no positions and no sign of why. Call
  * {@link layOutGraph} after it, or use the async builder, which does.
  */
-export function buildNndssSurface(tables: NndssTables = loadSnapshot(), graph: NndssGraph = loadGraph()): NndssSurface {
+export function openNndssSurface(tables: NndssTables, graph: NndssGraph): NndssSurface {
   const dashboard = buildDashboard(nndssDef(tables, graph));
   const session = dashboard.createSession({ as: 'agent' });
   const port = vizAsTools(session, { as: 'agent' });
@@ -174,7 +179,7 @@ export function buildNndssSurface(tables: NndssTables = loadSnapshot(), graph: N
  * `analyze` commits land before the first request is served, so every position
  * the network view draws is already on the trace.
  */
-export async function buildNndssSurfaceAsync(tables: NndssTables = loadSnapshot(), graph: NndssGraph = loadGraph()): Promise<NndssSurface> {
+export async function openNndssSurfaceAsync(tables: NndssTables, graph: NndssGraph): Promise<NndssSurface> {
   const dashboard = await buildDashboardAsync(nndssDef(tables, graph));
   const session = dashboard.createSession({ as: 'agent' });
   const port = vizAsTools(session, { as: 'agent' });

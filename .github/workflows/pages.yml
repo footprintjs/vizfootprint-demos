@@ -1,0 +1,87 @@
+# THE DEPLOY — the two demos as a static site on GitHub Pages.
+#
+# This repository depends on `vizfootprint` through `file:` links to a SIBLING
+# checkout, so the job's first act is to put that sibling where the links say
+# it is. Nothing here resolves from the npm registry: the library is public on
+# GitHub and is not published to npm, which is why the checkout is the install.
+#
+# The order is the same one README.md gives a person cloning by hand:
+#   1. the three repositories, side by side under the same parent
+#   2. the library: install, build, build the ui
+#   3. this repo: install, build the site
+#   4. publish dist/site
+#
+# `SITE_BASE` is left at its default, which is the project-site path GitHub
+# Pages serves at — `/<repo>/`. A user or organisation site served at the root
+# sets `SITE_BASE: /`.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out this repository
+        uses: actions/checkout@v4
+        with:
+          path: vizfootprint-demo
+
+      # the `file:` sibling, at the path package.json names
+      - name: check out the library beside it
+        uses: actions/checkout@v4
+        with:
+          repository: footprintjs/vizfootprint
+          path: vizfootprint
+
+      # the Story tab's scroll lens, the third `file:` sibling — `npm install`
+      # refuses without it, because package.json names it a dependency
+      - name: check out storydeck beside them
+        uses: actions/checkout@v4
+        with:
+          repository: footprintjs/storydeck
+          path: storydeck
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: build the library and its ui
+        working-directory: vizfootprint
+        run: |
+          npm install
+          npm run build
+          npm run build:ui
+
+      - name: build the site
+        working-directory: vizfootprint-demo
+        run: |
+          npm install
+          npm run site:build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: vizfootprint-demo/dist/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

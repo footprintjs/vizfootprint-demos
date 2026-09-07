@@ -31,9 +31,10 @@ import type { DispatchAction, FilterRange, VizLanded } from 'vizfootprint/agent'
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/nndss/absence.js';
 import { runScriptedProposals, type ProposalOutcome } from '../src/nndss/proposals.js';
 import { buildNndssSurfaceAsync, type NndssSurface } from '../src/nndss/surface.js';
-import { DISPATCH_VERBS, LINK_KINDS, LINK_ON_CLEAR, responsesFor } from 'vizfootprint/def';
+import { LINK_KINDS, LINK_ON_CLEAR, responsesFor } from 'vizfootprint/def';
 import type { LinkKind } from 'vizfootprint/def';
 import { DASHBOARD_WORDS, NNDSS_VIEWS } from '../src/nndss/def.js';
+import { nndssRows } from '../src/nndss/rows.js';
 import type { InteractionSession, ViewQuery } from 'vizfootprint/session';
 import type { SortSpec } from 'vizfootprint/data';
 import { openSource } from 'vizfootprint/source';
@@ -874,46 +875,9 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
     if (req.method === 'GET' && door === 'state') return sendJson(res, 200, await stateOf(desk)), true;
     // the landing page, before anything is mounted: the counts, and nothing that costs a walk
     if (req.method === 'GET' && door === 'summary') return sendJson(res, 200, summaryOf(desk)), true;
-    if (req.method === 'GET' && door === 'rows') {
-      // the graph's two tables AT THE CURSOR — the committed rows plus the columns
-      // the layout and bring-over acts wrote onto them. Not the CSVs: the positions
-      // are two commits' output, and a door that read the files would serve a graph
-      // with nowhere to put anything. Read ONCE at build, where no clause exists:
-      // a whole-dashboard window applies every live clause, so re-reading here
-      // would hand a reload-after-a-selection either a refusal about a column
-      // nobody asked for or a graph whose links point at absent nodes.
-      const net = desk.surface.graphRows;
-      return sendJson(res, 200, {
-        cells: tables.cells,
-        jurisdictions: tables.jurisdictions,
-        series: tables.series,
-        nodes: net.nodes,
-        edges: net.edges,
-        // null when both windows answered; the library's own sentence when one did not
-        netRefused: net.refused,
-        grain: tables.grain,
-        diseases: tables.diseases,
-        weeks: tables.weeks,
-        counts: tables.counts,
-        absence: { field: ABSENCE_FIELD, states: ABSENCE_STATES },
-        // THE GRAMMAR, as declared — the Grammar panel renders this and nothing else:
-        // the verbs the library dispatches, each view's channel vocabulary and its
-        // starting bindings, and the one wiring rule in force today.
-        // the def's DECLARED dashboard words — the story's fallback for bookmarks no describe reached (never the live words)
-        declared: { dashboard: declaredDashboardWords() },
-        grammar: {
-          verbs: DISPATCH_VERBS,
-          // the graph rides along: the network view IS one of the encodings, and a panel that showed the other five would be a second, shorter answer to "what does this dashboard declare?"
-          // PROJECTED, never re-derived: the validated, frozen def the session
-          // actually runs on is in hand, and rebuilding it here would copy every
-          // series row per request to read one field — and could drift from what
-          // the session runs the next time `nndssDef` grows an argument.
-          encodings: desk.surface.dashboard.def.encodings ?? [],
-          links: 'implicit-crossfilter',
-          linksMeaning: 'every view\'s selection filters every other view; a view never filters itself',
-        },
-      }), true;
-    }
+    // the whole dataset, in one object — built by `src/nndss/rows.ts`, which the
+    // static site's page calls on its own in-browser session. One payload, two hosts.
+    if (req.method === 'GET' && door === 'rows') return sendJson(res, 200, nndssRows(desk.surface)), true;
     // the Sheet's window: one question, answered by the session's view-query port verbatim
     if (req.method === 'GET' && door === 'window') {
       const answer = await answerWindow(session, url.searchParams);

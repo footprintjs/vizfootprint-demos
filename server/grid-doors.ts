@@ -30,7 +30,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { DISPATCH_VERBS } from 'vizfootprint/def';
 import type { InteractionSession } from 'vizfootprint/session';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/grid/absence.js';
-import { GRID_WORDS } from '../src/grid/def.js';
+import { gridRows } from '../src/grid/rows.js';
+import type { ContrastGraph } from '../src/grid/rows.js';
 import type { GridTables } from '../src/grid/etl.js';
 import { buildGridSurfaceAsync, type GridSurface } from '../src/grid/surface.js';
 import { answerWindow, userAction } from './doors.js';
@@ -38,22 +39,8 @@ import { answerWindow, userAction } from './doors.js';
 /** Where the grid's doors live — a prefix, so the CDC doors keep theirs. */
 export const GRID_API_ROOT = '/api/grid';
 
-/**
- * The OTHER demo's graph, counted — never its verdict.
- *
- * The page runs the library's reading rule over BOTH graphs and renders what
- * comes back, which means the CDC graph has to reach the page as NUMBERS. A
- * server that shipped "the CDC graph prefers a matrix" would be a hand-written
- * verdict wearing the rule's clothes; a server that ships 15 nodes and 105
- * undirected pairs lets the reader watch the rule fire.
- */
-export interface ContrastGraph {
-  readonly label: string;
-  readonly nodes: number;
-  /** Undirected pairs, counted once — the fact `graphReadingFor` asks for. */
-  readonly edges: number;
-  readonly interaction: boolean;
-}
+/** The OTHER demo's graph, counted — the shape and its reason live with the payload that carries it. */
+export type { ContrastGraph } from '../src/grid/rows.js';
 
 export interface GridDesk {
   surface: GridSurface;
@@ -173,32 +160,7 @@ export async function gridStateOf(desk: GridDesk): Promise<Record<string, unknow
  * the cheap poll.
  */
 export function gridRowsOf(desk: GridDesk): Record<string, unknown> {
-  const { tables, dashboard, graphRows } = desk.surface;
-  return {
-    authorities: graphRows.authorities,
-    links: graphRows.links,
-    hourly: tables.hourly,
-    interchange: tables.interchange,
-    // null when both windows answered; the library's own sentence when one did not
-    netRefused: graphRows.refused,
-    hours: tables.hours,
-    counts: tables.counts,
-    absence: { field: ABSENCE_FIELD, states: ABSENCE_STATES },
-    // the def's DECLARED dashboard words — the page's fallback before any describe
-    declared: { dashboard: { ...GRID_WORDS } },
-    // THE OTHER DEMO, as counts — so the page can put the library's reading rule
-    // to both graphs and render both answers. Never a verdict from here.
-    ...(desk.contrast === undefined ? {} : { contrast: desk.contrast }),
-    // THE GRAMMAR, as declared — the verbs the library dispatches and each view's
-    // channel vocabulary. PROJECTED from the validated, frozen def the session
-    // actually runs on, never re-derived.
-    grammar: {
-      verbs: DISPATCH_VERBS,
-      encodings: dashboard.def.encodings ?? [],
-      links: 'implicit-crossfilter',
-      linksMeaning: 'every view\'s selection filters every other view; a view never filters itself',
-    },
-  };
+  return gridRows(desk.surface, desk.contrast);
 }
 
 /** The saved-picture door — naming, renaming and applying, each answered with the SESSION'S OWN result, verbatim. */

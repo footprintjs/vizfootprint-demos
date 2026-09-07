@@ -81,3 +81,49 @@ npm run web:dev     # http://localhost:5291 (proxies /api to :5290); /make/index
 npm run web:build   # web/dist — the dashboard and the wizard, two pages
 npm run make:page   # dist/make/index.html — the wizard as ONE file, the one it can publish from
 ```
+
+## `site/` — the static build
+
+Three pages that stand alone: `index.html` offers the two demos, and
+`nndss/` and `grid/` are the two desks with no server behind them. They are
+not `src/App.tsx` and `src/GridApp.tsx` with parts switched off — those hosts
+are defined by their six and two endpoints, and a static host has none. They
+are the smaller host a page with no process can honestly be, over the same
+definition, the same session builder, the same rows payload and the same
+charts.
+
+### The law: one word changes, and it is the `via`
+
+A served desk declares its tables `via: 'file'`; a static page declares the
+same tables `via: 'http'` at the committed CSVs under the site's base. The
+ETL, the definition, the layout acts and the cells are the same modules.
+
+```ts
+const { tables, graph } = await loadNndssOverHttp(siteBase());   // src/nndss/http.ts
+const surface = await openNndssSurfaceAsync(tables, graph);      // the server's own builder
+<Desk view={createSessionView(sessionSource(surface.session))} … />
+```
+
+### The law: the session is in the tab, so say so
+
+A static desk opens with `WhatIsMissing` — the analyst, the durable log and
+the refresh, each named with what a reader would have had. A page that quietly
+dropped a feature would teach a reader it never existed.
+
+```tsx
+return (<><WhatIsMissing /><StaticNndssDesk booted={state.booted} /></>);
+```
+
+### The law: the base is a knob, and the data is copied, never inlined
+
+`SITE_BASE` sets where the site is mounted (`/vizfootprint-demo/` by default,
+the GitHub Pages path); `boot.tsx` resolves it against the page's location to
+get the absolute URL the http carrier requires. The 17 MB of tables are copied
+beside the pages by the build — the single-file story page inlines its data
+and this one must not, which is the case the library's story-page ceiling
+tells a host to reach for `via: 'http'` for.
+
+```
+npm run site:build                # /vizfootprint-demo/
+SITE_BASE=/ npm run site:build    # /
+```

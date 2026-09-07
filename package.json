@@ -24,7 +24,9 @@
     "data:grid": "node data/grid/fetch.mjs",
     "grid:generate": "tsx scripts/grid-generate.ts",
     "grid:dev": "vite --config web/grid.vite.config.ts",
-    "grid:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/grid.vite.config.ts"
+    "grid:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/grid.vite.config.ts",
+    "site:build": "tsc --noEmit -p web/tsconfig.json && vite build --config web/site.vite.config.ts",
+    "site:dev": "vite --config web/site.vite.config.ts"
   },
   "dependencies": {
     "agentfootprint": "^9.82.0",

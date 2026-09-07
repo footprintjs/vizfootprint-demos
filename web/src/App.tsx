@@ -35,7 +35,7 @@ import { AnalystPanel } from './AnalystPanel.js';
 import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
 import { Home } from './Home.js';
 
-interface RowsPayload {
+export interface RowsPayload {
   readonly cells: readonly NndssCellRow[];
   readonly series: readonly NndssSeriesRow[];
   /** The graph's two tables AT THE CURSOR — the committed rows plus the columns the layout and bring-over acts wrote. */

@@ -6,6 +6,11 @@
  *   session = buildDashboard(def)     validated (the firewall throws on a lie)
  *               .createSession()
  *
+ * PURE: nothing here reads a disk, so this module runs in a browser as well as
+ * in the server. The tables are an ARGUMENT. `./surface.ts` beside it is the
+ * node door that defaults them off the committed CSVs; the static site's page
+ * hands in tables it fetched over http — see `./http.ts`.
+ *
  * Nothing here knows about HTTP; `server/grid-doors.ts` puts it on the wire.
  * It is the CDC demo's `src/nndss/surface.ts` with one difference: this def has
  * no optional half. The nodes and the edges come out of the SAME ETL as the
@@ -19,7 +24,6 @@ import type { InteractionSession } from 'vizfootprint/agent';
 import type { Row } from 'vizfootprint/data';
 import { GRID_LAYOUT_SEED, gridDef } from './def.js';
 import type { GridTables } from './etl.js';
-import { loadGrid } from './snapshot.js';
 
 export interface GridSurface {
   readonly session: InteractionSession;
@@ -132,7 +136,7 @@ export async function graphRowsAt(session: InteractionSession, tables: GridTable
  * surface whose authorities have no positions and no sign of why. Call
  * {@link layOutGrid} after it, or use the async builder, which does.
  */
-export function buildGridSurface(tables: GridTables = loadGrid()): GridSurface {
+export function openGridSurface(tables: GridTables): GridSurface {
   const dashboard = buildDashboard(gridDef(tables));
   const session = dashboard.createSession({ as: 'user' });
   const graphRows: GraphRowsAtCursor = {
@@ -149,7 +153,7 @@ export function buildGridSurface(tables: GridTables = loadGrid()): GridSurface {
  * `analyze` commits land before the first request is served, so every position
  * the network view draws is already on the trace.
  */
-export async function buildGridSurfaceAsync(tables: GridTables = loadGrid()): Promise<GridSurface> {
+export async function openGridSurfaceAsync(tables: GridTables): Promise<GridSurface> {
   const dashboard = await buildDashboardAsync(gridDef(tables));
   const session = dashboard.createSession({ as: 'user' });
   const layoutRefusals = await layOutGrid(session);

@@ -41,7 +41,7 @@ const GRID_ENDPOINTS = {
   saved: '/api/grid/saved',
 } as const;
 
-interface GridRowsPayload {
+export interface GridRowsPayload {
   readonly authorities: readonly GridAuthorityRow[];
   readonly links: readonly GridLinkRow[];
   readonly hourly: readonly GridHourlyRow[];

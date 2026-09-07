@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vizfootprint on public data — two desks</title>
+    <meta name="description" content="Two dashboards over public federal data, where every interaction is a commit and every silence keeps its kind." />
+    <style>
+      :root { color-scheme: light; }
+      html { box-sizing: border-box; }
+      *, *::before, *::after { box-sizing: inherit; }
+      body { margin: 0; font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1c2530; background: #f4f6f9; }
+      main { max-width: 52rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+      h1 { font-size: 1.6rem; margin: 0 0 .5rem; letter-spacing: -.01em; }
+      .lede { color: #4a5462; margin: 0 0 2rem; }
+      .desks { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); margin: 0 0 2rem; }
+      a.desk { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid #dfe4ea; border-radius: 10px; padding: 1.1rem 1.2rem; }
+      a.desk:hover { border-color: #9fb3c8; }
+      a.desk h2 { font-size: 1.05rem; margin: 0 0 .35rem; }
+      a.desk p { margin: 0 0 .5rem; font-size: .9rem; color: #4a5462; }
+      a.desk .rows { font-size: .8rem; color: #6b7684; font-variant-numeric: tabular-nums; }
+      section { background: #fff; border: 1px solid #dfe4ea; border-radius: 10px; padding: 1.1rem 1.2rem; margin: 0 0 1rem; }
+      section h2 { font-size: .95rem; margin: 0 0 .5rem; }
+      section p { margin: 0 0 .6rem; font-size: .9rem; color: #37414d; }
+      section p:last-child { margin-bottom: 0; }
+      ul { margin: 0 0 .6rem; padding-left: 1.1rem; font-size: .9rem; color: #37414d; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; background: #eef1f5; padding: .1em .35em; border-radius: 4px; }
+      footer { font-size: .8rem; color: #6b7684; margin-top: 2rem; }
+      footer a { color: #40566d; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>vizfootprint, on public data</h1>
+      <p class="lede">
+        Two dashboards over data nobody here authored. Every interaction is a commit you can travel back to, every proposal an agent makes is judged before it lands, and every empty cell keeps its kind — a withheld number and a real zero are never the same silence.
+      </p>
+
+      <div class="desks">
+        <a class="desk" href="./nndss/">
+          <h2>The CDC weekly desk →</h2>
+          <p>Notifiable-disease counts by area, disease and week, from the CDC's NNDSS tables — the dataset whose own flags say which silence is which.</p>
+          <p class="rows">15 diseases · every reporting area · MMWR 2025–2026 · 8.4 MB read on entry</p>
+        </a>
+        <a class="desk" href="./grid/">
+          <h2>The US grid desk →</h2>
+          <p>Three weeks of the American power grid hour by hour, from the Energy Information Administration: who used power, who made it, and who sent it to whom.</p>
+          <p class="rows">62 balancing authorities · 303 directed links · 504 hours · 8.7 MB read on entry</p>
+        </a>
+      </div>
+
+      <section>
+        <h2>What this build is, and is not</h2>
+        <p>
+          These pages are <b>static</b>. There is no server: each desk fetches the repository's own committed CSV files over http, runs the same shaping code the served version runs, and builds its dashboard in your browser. The first load of either desk therefore carries the whole snapshot, and it is not small.
+        </p>
+        <p>Because nothing runs on the other end, three things are missing, and each desk says so on its own page:</p>
+        <ul>
+          <li>the <b>analyst</b> — it needs a model key and a process to hold the conversation;</li>
+          <li>a <b>durable log</b> — your commits live in the tab and are gone when you reload;</li>
+          <li>a <b>refresh</b> — the files are what the repository committed, and re-reading them answers the same bytes.</li>
+        </ul>
+        <p>Everything else is the real thing: selections, acts, undo, named paths, bookmarks, compare, the Sheet, the commit log and the branch map.</p>
+      </section>
+
+      <section>
+        <h2>Where the data comes from</h2>
+        <p>
+          <b>Disease counts:</b> <a href="https://data.cdc.gov/NNDSS/NNDSS-Weekly-Data/x9gk-5huc">NNDSS Weekly Data</a> on data.cdc.gov — a work of the United States Government, public domain. Using this material does not mean the CDC, the agency that published these tables, the Department of Health and Human Services or the United States government endorses this site or anything said on it. The same tables are available from the CDC itself, free of charge, at that link; the copy here is a convenience slice, not a source of record.
+        </p>
+        <p>
+          <b>Grid data:</b> Source: U.S. Energy Information Administration, Hourly Electric Grid Monitor, six-month file for January–June 2025 (retrieved September 2026). Public domain; EIA's logo and seal are trademarks and are not reproduced here.
+        </p>
+        <p>
+          <b>Map shapes:</b> U.S. Census Bureau cartographic boundaries — public domain geometry — packaged by the ISC-licensed <code>us-atlas</code>, Copyright 2013-2019 Michael Bostock.
+        </p>
+      </section>
+
+      <footer>
+        Built with <a href="https://github.com/footprintjs/vizfootprint">vizfootprint</a>. The code on this site is MIT; the data is not ours to license and each folder in the repository names whose it is.
+      </footer>
+    </main>
+  </body>
+</html>
