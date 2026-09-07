@@ -115,8 +115,36 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
+/**
+ * WHERE THE TURN RUNS — the panel asks three questions and does not care who
+ * answers them. The served desk answers over `/api`; the published page answers
+ * out of a desk it holds in the browser, driven by the visitor's own key
+ * (`src/nndss/browserDesk.ts`). One panel, two hosts.
+ */
+export interface AnalystHost {
+  /** The conversation as it stands. */
+  load(): Promise<AnalystWire>;
+  /** One turn. A turn that fails comes back as an `error` line in the transcript, not as a throw — this rejects only when the host itself could not be reached. */
+  send(message: string): Promise<void>;
+  /** Forget the conversation; the commits stay in the log. */
+  clear(): Promise<AnalystWire>;
+}
+
+/** The served host: the doors this repository's own server opens. */
+export const servedHost: AnalystHost = {
+  load: () => fetchJson<AnalystWire>('/api/analyst'),
+  send: async (message) => {
+    await fetchJson('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message }) });
+  },
+  clear: () => fetchJson<AnalystWire>('/api/analyst', { method: 'DELETE' }),
+};
+
 export function AnalystPanel(props: {
   readonly readOnly: boolean;
+  /** Who runs the turn. Absent = the served doors, which is what the cockpit behind `npm run serve` uses. */
+  readonly host?: AnalystHost;
+  /** Drawn above the conversation — the published page puts the key gate here. */
+  readonly beside?: JSX.Element;
   readonly onTurn: (turns: number) => void;
   /** What the person sees on screen — shown in the composer as what rides with the next message (the server attaches the record's own view). */
   readonly onScreen?: { readonly selections: readonly string[]; readonly cursor: string | null };
@@ -133,9 +161,10 @@ export function AnalystPanel(props: {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const host = props.host ?? servedHost;
 
   const load = async (): Promise<void> => {
-    const w = await fetchJson<AnalystWire>('/api/analyst');
+    const w = await host.load();
     setWire(w);
     props.onTurn(w.transcript.filter((l) => l.role === 'analyst').length);
   };
@@ -151,7 +180,7 @@ export function AnalystPanel(props: {
     setProblem(null);
     setText('');
     try {
-      await fetchJson('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: m }) });
+      await host.send(m);
     } catch (e: unknown) {
       setProblem(e instanceof Error ? e.message : String(e));
     } finally {
@@ -173,6 +202,7 @@ export function AnalystPanel(props: {
           </span>
         ) : null}
       </p>
+      {props.beside}
       {wire && wire.transcript.length === 0 ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {wire.suggestions.map((s) => (
@@ -249,7 +279,7 @@ export function AnalystPanel(props: {
             onClick={() => {
               void (async () => {
                 try {
-                  const w = await fetchJson<AnalystWire>('/api/analyst', { method: 'DELETE' });
+                  const w = await host.clear();
                   setWire(w);
                   setProblem(null);
                   props.onTurn(0);

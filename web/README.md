@@ -32,7 +32,12 @@ demo needed:
   seek by number, validated against the active lineage.
 - **`AnalystPanel.tsx`** — the agent as a principal: a chat whose every
   reply is read against the commit log. `frameStep` turns each tool call
-  into verb · what · outcome from the call itself, never from the prose.
+  into verb · what · outcome from the call itself, never from the prose. It
+  asks three questions — load, send, clear — of an `AnalystHost`, so the same
+  panel is driven by the served doors here and by a desk in the visitor's own
+  tab on the published site.
+- **`KeyGate.tsx`** — where a visitor hands over their own Anthropic key, and
+  where the page says what it will do with it. See the law below.
 
 **A disclosure that reaches the wire and no reader is not a disclosure.** Two
 of them are rendered here, both as one quiet line and nothing more. Under a
@@ -106,12 +111,42 @@ const surface = await openNndssSurfaceAsync(tables, graph);      // the server's
 
 ### The law: the session is in the tab, so say so
 
-A static desk opens with `WhatIsMissing` — the analyst, the durable log and
-the refresh, each named with what a reader would have had. A page that quietly
-dropped a feature would teach a reader it never existed.
+A static desk opens with `WhatIsMissing` — the durable log and the refresh,
+each named with what a reader would have had, and the analyst named as what it
+now needs instead (a key, not a process). A page that quietly dropped a feature
+would teach a reader it never existed.
 
 ```tsx
-return (<><WhatIsMissing /><StaticNndssDesk booted={state.booted} /></>);
+return (<><WhatIsMissing extra={<>The <b>analyst is here</b>…</>} /><StaticNndssDesk booted={state.booted} /></>);
+```
+
+### The law: one analyst, two drivers — and the visitor's key is the visitor's
+
+The analyst is the same on both hosts; only the DRIVER differs, and the driver
+is chosen by what the environment offers (`chooseDriver`): a key runs the live
+provider, no key runs the scripted turn over the same fixed tools. Served, the
+offer comes from `ANTHROPIC_API_KEY`; published, it comes from the visitor's
+own browser. Five promises hold, and `tests/key.test.ts` reads the real request
+to prove the middle three:
+
+1. the key is kept in **their** browser's local storage and nowhere else;
+2. it is sent **only** to Anthropic, in a header — never a URL, never a body of
+   ours, never a log line;
+3. **no key is not a failure**: the page stays fully usable on the scripted
+   turn, and nothing reaches the network;
+4. a **visible control** clears it, and clearing really removes it;
+5. every read and write of storage sits in a `try/catch`, because a private
+   window throws — and when it does, the page says so instead of breaking.
+
+The disclosure is a paragraph **above the field**, not a tooltip: a person
+cannot consent to something they have to hover to read.
+
+```tsx
+// web/site/nndss/analyst.tsx — the key's whole life, in one file
+const [store] = useState(() => keyStore());          // src/nndss/key.ts, a port over Web Storage
+const [key, setKey] = useState(() => store.read());  // read once, on mount
+const analyst = useMemo(() => createBrowserDesk(surface, key), [surface, key]);
+<KeyGate … onUse={(typed) => { setProblem(store.write(typed)); setKey(typed); }} onClear={() => { setProblem(store.clear()); setKey(undefined); }} />
 ```
 
 ### The law: the base is a knob, and the data is copied, never inlined

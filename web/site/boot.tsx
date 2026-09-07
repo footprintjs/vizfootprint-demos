@@ -9,8 +9,11 @@
  * word in the desk's wiring: `sessionSource` instead of `pollingSource`.
  *
  * WHAT A READER LOSES, said out loud rather than degraded quietly: see
- * {@link WhatIsMissing}. A page that silently dropped the analyst would teach
- * a reader that the analyst never existed.
+ * {@link WhatIsMissing}. A page that silently dropped a capability would teach
+ * a reader that the capability never existed. The ANALYST is the one thing
+ * that came back: it needs a model key, not a process, so the CDC page offers
+ * to run it on a key the visitor supplies (`web/site/nndss/analyst.tsx`) and
+ * says so through this line's `extra`.
  */
 import type { ReactNode } from 'react';
 
@@ -74,7 +77,7 @@ export function Broken({ sentence }: { readonly sentence: string }): JSX.Element
 export function WhatIsMissing({ extra }: { readonly extra?: ReactNode }): JSX.Element {
   return (
     <div style={{ font: '13px/1.5 system-ui, sans-serif', color: '#4a5462', background: '#fffbe9', border: '1px solid #e8dfae', borderRadius: 8, padding: '.7rem .9rem', margin: '.5rem 0 0' }}>
-      <b>This is the static build.</b> There is no server behind it, so: the <b>analyst</b> is not here (it needs a model key and a process to hold the conversation); the <b>commit log lives in this tab</b> and is gone when you reload, where the served desk keeps one session per process; and the <b>Sources tab cannot refresh</b> — the files are what the repository committed, and re-reading them would answer the same bytes. Everything else — every selection, every act, undo, named paths, bookmarks, compare, the Sheet — is the same library doing the same work, here in the browser.
+      <b>This is the static build.</b> There is no server behind it, so: the <b>commit log lives in this tab</b> and is gone when you reload, where the served desk keeps one session per process; and the <b>Sources tab cannot refresh</b> — the files are what the repository committed, and re-reading them would answer the same bytes. Everything else — every selection, every act, undo, named paths, bookmarks, compare, the Sheet — is the same library doing the same work, here in the browser.
       {extra}
     </div>
   );

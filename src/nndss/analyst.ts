@@ -6,8 +6,14 @@
  * (`src/nndss/analyses.ts`) run by the session; a claim it cannot ground
  * comes back as a typed gap it must cite.
  *
- * The provider is injected: `scriptedNndssMock()` in tests and no-key mode,
- * `liveProvider(apiKey)` (Anthropic over fetch, no SDK) when a key is present.
+ * ONE ANALYST, TWO DRIVERS. The provider is injected and nothing else changes:
+ * `scriptedNndssMock()` in tests and no-key mode, `liveProvider(apiKey)`
+ * (Anthropic over fetch, no SDK) when a key is offered. `chooseDriver` is the
+ * one place that decides between them, and it decides on the same fact on both
+ * sides of the wire — whether a key was offered. On the server the offer comes
+ * from the environment; on the published site it comes from the visitor's own
+ * browser storage (`./key.ts`). Neither this file nor that one ever reads a
+ * key of its own accord.
  */
 import { Agent, defineTool, isPaused } from 'agentfootprint';
 import { agentThinkingTrace } from 'agentfootprint/observe';
@@ -15,9 +21,24 @@ import { browserAnthropic, mock, type LLMProvider, type LLMRequest, type LLMResp
 import type { VizToolResult, VizToolsPort } from 'vizfootprint/agent';
 import { NNDSS_ANALYSIS_IDS } from './analyses.js';
 
+/**
+ * The environment's word for the model, where there is an environment.
+ *
+ * WHY the guard rather than `process.env[...]`: this module loads in the
+ * visitor's browser now, and a bare `process` there is a ReferenceError that
+ * takes the whole page down before it draws.
+ */
+function envModel(): string | undefined {
+  try {
+    return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.['ANTHROPIC_MODEL'];
+  } catch {
+    return undefined;
+  }
+}
+
 // The grammar carries the intelligence — offers, sentences, refusals — so the analyst
 // runs on Sonnet by default; set ANTHROPIC_MODEL to try another (e.g. claude-opus-4-8).
-export const MODEL = process.env['ANTHROPIC_MODEL'] ?? 'claude-sonnet-5';
+export const MODEL = envModel() ?? 'claude-sonnet-5';
 const MAX_TOKENS = 2048;
 
 /** One completed tool call — what the panel frames with the grammar. */
@@ -72,9 +93,48 @@ HOW TO REPLY. Your WHOLE reply is one JSON object with exactly two keys and noth
 
 const apiName = (portName: string): string => portName.replace(/^viz\./, '').replace(/[^a-zA-Z0-9_-]/g, '_');
 
-/** Anthropic over fetch — no SDK; the key is handed in, never read here. */
-export function liveProvider(apiKey: string): LLMProvider {
-  return browserAnthropic({ apiKey, defaultModel: MODEL, defaultMaxTokens: MAX_TOKENS });
+/**
+ * Anthropic over `fetch` — no SDK; the key is handed in, never read here.
+ *
+ * WHAT THE BROWSER NEEDS, said out loud because it is the one thing a page
+ * cannot do by default: Anthropic refuses a request made straight from a page
+ * unless it carries `anthropic-dangerous-direct-browser-access: true`, and
+ * `browserAnthropic` sets that header on every request it makes (with
+ * `x-api-key` and `anthropic-version`). That is the whole reason this provider
+ * exists rather than the SDK one, and the reason the key travels in a HEADER
+ * to `https://api.anthropic.com/v1/messages` and never in a URL. The header's
+ * name is a warning and it is a fair one: a product would proxy through a
+ * server it owns. This is a demo where the key belongs to the reader, and a
+ * proxy of ours would mean their secret passing through our process.
+ *
+ * `fetchImpl` is for tests only — it is how `tests/key.test.ts` reads the
+ * request this provider makes without a network.
+ */
+export function liveProvider(apiKey: string, fetchImpl?: typeof fetch): LLMProvider {
+  return browserAnthropic({ apiKey, defaultModel: MODEL, defaultMaxTokens: MAX_TOKENS, ...(fetchImpl !== undefined ? { _fetch: fetchImpl } : {}) });
+}
+
+/** Which driver a turn will run on, and what the panel may say about it. */
+export interface AnalystDriver {
+  /** `live` = the visitor's own key is driving a real model; `mock` = the scripted turn, same tools, no network. */
+  readonly mode: 'live' | 'mock';
+  readonly provider: LLMProvider;
+  /** The model a live turn will name. Absent in mock, because nothing is asked of a model. */
+  readonly model?: string;
+}
+
+/**
+ * THE ONE DECISION: what did the environment offer?
+ *
+ * A key ⇒ the live driver. No key ⇒ the scripted one, which drives the same
+ * tool surface and lands the same agent-badged commits. The caller says where
+ * the offer came from; this never goes looking, so there is exactly one place
+ * on each side of the wire that touches a secret.
+ */
+export function chooseDriver(offered: string | undefined, fetchImpl?: typeof fetch): AnalystDriver {
+  const key = (offered ?? '').trim();
+  if (key === '') return { mode: 'mock', provider: scriptedNndssMock() };
+  return { mode: 'live', provider: liveProvider(key, fetchImpl), model: MODEL };
 }
 
 export function createNndssAnalyst(port: VizToolsPort, options: AnalystOptions = {}): NndssAnalyst {
