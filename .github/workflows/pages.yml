@@ -9,8 +9,10 @@
 #   1. the three repositories, side by side under the same parent
 #   2. the library: install, build, build the ui, build the studio
 #      (studio is a workspace of its own — `build:ui` does not reach it)
-#   3. this repo: install, build the site
-#   4. publish dist/site
+#   3. storydeck: install (it ships source, not a build, but still needs its
+#      own dependency installed into its own node_modules — see below)
+#   4. this repo: install, build the site
+#   5. publish dist/site
 #
 # PINNED REFS — the library and storydeck checkouts below name an explicit
 # commit rather than floating on `main`. Neither is published to npm, so this
@@ -87,6 +89,15 @@ jobs:
           npm run build
           npm run build:ui
           npm run build -w vizfootprint-studio
+
+      # storydeck ships raw source (no build script) but still carries its own
+      # runtime dependency (markdown-it) in its own node_modules — it is a
+      # `file:` sibling, not a workspace of either side, so nothing else here
+      # installs that for it, and the site build fails to resolve the import
+      # without this step.
+      - name: install storydeck's own dependencies
+        working-directory: storydeck
+        run: npm install
 
       - name: build the site
         working-directory: vizfootprint-demo

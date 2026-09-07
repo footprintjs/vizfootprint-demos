@@ -149,6 +149,7 @@ git clone https://github.com/footprintjs/vizfootprint.git
 git clone https://github.com/footprintjs/storydeck.git
 git clone <this repo>            # all three side by side, same parent folder
 cd vizfootprint && npm install && npm run build && npm run build:ui && npm run build -w vizfootprint-studio
+cd ../storydeck && npm install
 cd ../vizfootprint-demo && npm install
 ```
 
@@ -157,9 +158,13 @@ The parent folder ends up holding `vizfootprint/`, `storydeck/` and
 says. `vizfootprint-studio` is not a fourth clone — it lives inside the
 library's checkout, as its own npm workspace, which is why building it is a
 third command (`build:ui` is a different workspace and does not reach it).
-Continuous integration does the same thing in the same order: check out the
-repositories side by side, build the library, its ui and its studio, then
-build this site; see `.github/workflows/pages.yml`.
+`storydeck` ships source, not a build, but it is a `file:` sibling rather
+than a workspace of either side, so it still needs `npm install` run inside
+its own checkout — nothing else here installs its one dependency
+(`markdown-it`) for it. Continuous integration does the same thing in the
+same order: check out the repositories side by side, build the library, its
+ui and its studio, install storydeck's own dependency, then build this
+site; see `.github/workflows/pages.yml`.
 
 ```
 npm install
@@ -231,10 +236,11 @@ to `<base>data/…` rather than referenced by a relative string.
 in the same order: check out `footprintjs/vizfootprint`, `footprintjs/storydeck`
 and this repository **side by side**, `npm install && npm run build && npm
 run build:ui && npm run build -w vizfootprint-studio` in the library, `npm
-install && npm run site:build` here, then publish `dist/site/`. Nothing
-resolves from the npm registry, because the library is not on it — the two
-sibling checkouts are pinned to a commit each, named in the workflow file,
-so a change landing on either sibling's `main` cannot alter this build
+install` in storydeck, `npm install && npm run site:build` here, then
+publish `dist/site/`. Nothing resolves from the npm registry, because the
+library is not on it — the two sibling checkouts are pinned to a commit
+each, named in the workflow file, so a change landing on either sibling's
+`main` cannot alter this build
 without a line changing here too.
 
 ## Send the desk to somebody — one file, no server
