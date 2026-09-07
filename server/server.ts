@@ -11,8 +11,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
+import { createGridDesk, serveGridDoors } from './grid-doors.js';
 import { MODEL } from '../src/nndss/analyst.js';
 import { loadGraphAsync, loadSnapshotAsync } from '../src/nndss/snapshot.js';
+import { loadGridAsync } from '../src/grid/snapshot.js';
 import { loadEnv } from './env.js';
 
 const PORT = Number(process.env['PORT'] ?? 5290);
@@ -28,6 +30,20 @@ const desk = await createDesk(snapshot.tables, [], { 'snapshot.csv': snapshot.so
 console.log(`  source: snapshot.csv via file — ${String(snapshot.source.rows)} rows, ${snapshot.source.version}, read ${snapshot.source.retrievedAt}`);
 console.log(`  graph: nodes ${String(graph.graph.nodes.length)} · edges ${String(graph.graph.edges.length)} — ${graph.sources['graph/nodes.csv'].version}, ${graph.sources['graph/edges.csv'].version}`);
 
+// THE SECOND DEMO, in the same process: EIA's hourly grid through the same
+// carrier, its four tables behind `/api/grid/*`. The CDC graph rides across as
+// COUNTS — 15 diseases, 105 undirected pairs — so the grid page can put the
+// library's reading rule to both graphs and render both answers rather than
+// carrying a verdict somebody typed.
+const grid = await loadGridAsync();
+const gridDesk = await createGridDesk(grid.tables, grid.sources, {
+  label: 'the CDC disease co-occurrence graph',
+  nodes: graph.graph.nodes.length,
+  edges: graph.graph.edges.length,
+  interaction: true,
+});
+console.log(`  grid: ${String(grid.tables.authorities.length)} authorities · ${String(grid.tables.links.length)} directed links · ${String(grid.tables.hourly.length)} hours — ${grid.sources['balance.csv'].version}, ${grid.sources['interchange.csv'].version}`);
+
 function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
   const url = (req.url ?? '/').split('?')[0] ?? '/';
   const rel = url === '/' ? 'index.html' : url.replace(/^\/+/, '');
@@ -41,10 +57,15 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void 
   res.end(readFileSync(file));
 }
 
+// THE GRID'S DOORS COME FIRST, and the order is load-bearing: `serveDoors`
+// claims everything under `/api/`, so `/api/grid/rows` reaching it would be
+// answered `no door "grid/rows"` rather than reaching the grid at all.
 const server = http.createServer((req, res) => {
-  void serveDoors(desk, req, res).then((handled) => {
-    if (!handled) serveStatic(req, res);
-  });
+  void serveGridDoors(gridDesk, req, res)
+    .then((handled) => (handled ? true : serveDoors(desk, req, res)))
+    .then((handled) => {
+      if (!handled) serveStatic(req, res);
+    });
 });
 
 server.listen(PORT, () => {
@@ -52,5 +73,7 @@ server.listen(PORT, () => {
   console.log(`\n  vizfootprint-demo · NNDSS → http://localhost:${String(PORT)}`);
   console.log(`  cells ${String(tables.cells.length)} · series ${String(tables.series.length)} · diseases ${String(tables.diseases.length)} · weeks ${String(tables.weeks.length)}`);
   console.log(`  states: ${Object.entries(tables.counts).map(([k, v]) => `${k} ${String(v)}`).join(' · ')}`);
-  console.log(`  analyst: ${desk.mode === 'live' ? `live (ANTHROPIC_API_KEY present) · model ${MODEL}` : 'mock — scripted turn (put ANTHROPIC_API_KEY in .env for live)'}\n`);
+  console.log(`  analyst: ${desk.mode === 'live' ? `live (ANTHROPIC_API_KEY present) · model ${MODEL}` : 'mock — scripted turn (put ANTHROPIC_API_KEY in .env for live)'}`);
+  const g = gridDesk.surface.tables;
+  console.log(`  grid → http://localhost:${String(PORT)}/api/grid/rows · ${String(g.authorities.length)} authorities · ${String(g.links.length)} links · ${String(g.interchange.length)} flows\n`);
 });

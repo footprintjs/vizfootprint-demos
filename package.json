@@ -17,9 +17,14 @@
     "data:geo": "node data/geo/fetch.mjs",
     "graph:generate": "tsx scripts/graph-generate.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "cards": "tsx scripts/cards.tsx",
     "story:capture": "tsx scripts/story-capture.ts",
     "story:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/story.vite.config.ts",
-    "make:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/make.vite.config.ts"
+    "make:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/make.vite.config.ts",
+    "data:grid": "node data/grid/fetch.mjs",
+    "grid:generate": "tsx scripts/grid-generate.ts",
+    "grid:dev": "vite --config web/grid.vite.config.ts",
+    "grid:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/grid.vite.config.ts"
   },
   "dependencies": {
     "agentfootprint": "^9.82.0",
