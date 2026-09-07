@@ -118,7 +118,7 @@ return (<><WhatIsMissing /><StaticNndssDesk booted={state.booted} /></>);
 
 `SITE_BASE` sets where the site is mounted (`/vizfootprint-demo/` by default,
 the GitHub Pages path); `boot.tsx` resolves it against the page's location to
-get the absolute URL the http carrier requires. The 17 MB of tables are copied
+get the absolute URL the http carrier requires. The 17.5 MB of tables are copied
 beside the pages by the build — the single-file story page inlines its data
 and this one must not, which is the case the library's story-page ceiling
 tells a host to reach for `via: 'http'` for.
