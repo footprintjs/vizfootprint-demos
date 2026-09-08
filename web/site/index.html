@@ -13,12 +13,13 @@
       main { max-width: 52rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
       h1 { font-size: 1.6rem; margin: 0 0 .5rem; letter-spacing: -.01em; }
       .lede { color: #4a5462; margin: 0 0 2rem; }
-      .desks { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); margin: 0 0 2rem; }
-      a.desk { display: block; text-decoration: none; color: inherit; background: #fff; border: 1px solid #dfe4ea; border-radius: 10px; padding: 1.1rem 1.2rem; }
+      .desks { display: flex; flex-wrap: wrap; gap: .75rem; margin: 0 0 1.5rem; }
+      a.desk { text-decoration: none; color: inherit; background: #fff; border: 1px solid #dfe4ea; border-radius: 10px; padding: .6rem 1rem; font-weight: 600; }
       a.desk:hover { border-color: #9fb3c8; }
-      a.desk h2 { font-size: 1.05rem; margin: 0 0 .35rem; }
-      a.desk p { margin: 0 0 .5rem; font-size: .9rem; color: #4a5462; }
-      a.desk .rows { font-size: .8rem; color: #6b7684; font-variant-numeric: tabular-nums; }
+      .gallery { margin: 0 0 1.5rem; }
+      .gallery > p.about { margin: 0 0 1rem; font-size: .9rem; color: #37414d; }
+      .note { margin: .75rem 0 0; font-size: .85rem; color: #6b7684; }
+      .note.broken { color: #8a2b2b; background: #fff5f5; border: 1px solid #e6b4b4; border-radius: 8px; padding: .6rem .8rem; }
       section { background: #fff; border: 1px solid #dfe4ea; border-radius: 10px; padding: 1.1rem 1.2rem; margin: 0 0 1rem; }
       section h2 { font-size: .95rem; margin: 0 0 .5rem; }
       section p { margin: 0 0 .6rem; font-size: .9rem; color: #37414d; }
@@ -36,17 +37,16 @@
         Two dashboards over data nobody here authored. Every interaction is a commit you can travel back to, every proposal an agent makes is judged before it lands, and every empty cell keeps its kind — a withheld number and a real zero are never the same silence.
       </p>
 
-      <div class="desks">
-        <a class="desk" href="./nndss/">
-          <h2>The CDC weekly desk →</h2>
-          <p>Notifiable-disease counts by area, disease and week, from the CDC's NNDSS tables — the dataset whose own flags say which silence is which.</p>
-          <p class="rows">15 diseases · every reporting area · MMWR 2025–2026 · 8.4 MB read on entry</p>
-        </a>
-        <a class="desk" href="./grid/">
-          <h2>The US grid desk →</h2>
-          <p>Three weeks of the American power grid hour by hour, from the Energy Information Administration: who used power, who made it, and who sent it to whom.</p>
-          <p class="rows">62 balancing authorities · 303 directed links · 504 hours · 8.7 MB read on entry</p>
-        </a>
+      <nav class="desks" aria-label="the two desks">
+        <a class="desk" href="./nndss/">The CDC weekly desk →</a>
+        <a class="desk" href="./grid/">The US grid desk →</a>
+      </nav>
+
+      <div class="gallery">
+        <p class="about">
+          Every chip on the cards below was <b>read off the surface it names</b> — off the built definition, off the one recorded walk, or off the one table a person had to write — and each card says which. Nothing here was typed into this page. The CDC demo is two cards because it is two builds: the desk published here, with the disease co-occurrence graph, and the story page, built without it, which carries the only recorded walk this repository has. That page is its own build (<code>npm run story:page</code>) and is not published on this site.
+        </p>
+        <div id="gallery"></div>
       </div>
 
       <section>
@@ -80,5 +80,6 @@
         Built with <a href="https://github.com/footprintjs/vizfootprint">vizfootprint</a>. The code on this site is MIT; the data is not ours to license and each folder in the repository names whose it is.
       </footer>
     </main>
+    <script type="module" src="./gallery.tsx"></script>
   </body>
 </html>

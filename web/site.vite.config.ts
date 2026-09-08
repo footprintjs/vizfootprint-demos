@@ -35,6 +35,8 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_DATA_FILES } from '../src/data/files.js';
+import { SITE_CARDS_FILE } from '../src/site/cardsFile.js';
+import { siteCards, writeSiteCards } from '../src/site/cards.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..');
@@ -74,10 +76,49 @@ function committedData(): Plugin {
   };
 }
 
+/**
+ * THE CARDS, INTO THE BUILT SITE.
+ *
+ * `src/site/cards.ts` builds every surface the way it really builds and runs
+ * the library's two readers over it; this plugin decides only WHEN and WHERE.
+ * In a build the file lands beside the copied tables — `writeBundle`, the same
+ * moment `committedData` runs — and under `site:dev` the same bytes are served
+ * from memory at the same address, computed on the first request, so the front
+ * page fetches one path in both.
+ *
+ * WHY THIS CONFIG NOW LOADS THE LIBRARY, when `committedData` went out of its
+ * way not to: a file NAME must never depend on evaluating a dashboard, and it
+ * still does not — `SITE_CARDS_FILE` comes from an import-free module the page
+ * shares. The cards themselves ARE the library's readers over the built
+ * definitions; there is no cheaper honest way to get them, and a site whose
+ * pages bundle the library could not be built without it anyway.
+ */
+function demoCards(): Plugin {
+  let inMemory: string | undefined;
+  return {
+    name: 'vizfootprint-demo:cards',
+    writeBundle(): void {
+      const to = writeSiteCards(OUT);
+      console.log(`cards: wrote ${path.relative(REPO, to)}`);
+    },
+    configureServer(server): void {
+      server.middlewares.use((req, res, next) => {
+        if (req.url !== `${BASE}${SITE_CARDS_FILE}`) {
+          next();
+          return;
+        }
+        inMemory ??= JSON.stringify(siteCards());
+        res.setHeader('content-type', 'application/json');
+        res.end(inMemory);
+      });
+    },
+  };
+}
+
 export default defineConfig({
   root: SITE,
   base: BASE,
-  plugins: [react(), committedData()],
+  plugins: [react(), committedData(), demoCards()],
   // Every `file:` sibling keeps its own React for its own tests, and storydeck's
   // components run inside ours. Two copies of React is the classic hook crash.
   resolve: { dedupe: ['react', 'react-dom'] },

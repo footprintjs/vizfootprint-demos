@@ -158,6 +158,25 @@ beside the pages by the build — the single-file story page inlines its data
 and this one must not, which is the case the library's story-page ceiling
 tells a host to reach for `via: 'http'` for.
 
+### The law: the front page's cards are read, never typed
+
+`index.html` used to carry two hand-written desk cards with a row of numbers
+each — facts about a build that could change without the page changing. Now
+`gallery.tsx` draws the studio's `DemoGallery` over `data/cards.json`, which
+the build writes beside the tables (`src/site/cards.ts`, at the same
+`writeBundle` that copies the CSVs): `defFeatures` over each surface's real
+build, `logFeatures` over the one trace a surface really ships, and the CDC
+desk's hand table labelled as hand-written. One card per SURFACE — the CDC
+desk and the CDC story page are two builds and two cards — and the filter
+narrows to surfaces. The two desk links stay in the HTML, so a gallery that
+could not read its file says so in a sentence and the desks still open.
+
+```tsx
+// web/site/gallery.tsx — the whole page-side of it
+const cards = readSiteCards(await (await fetch(new URL(SITE_CARDS_FILE, siteBase()))).json());
+<DemoGallery surfaces={cards.surfaces} heading="What each surface covers" />
+```
+
 ```
 npm run site:build                # /vizfootprint-demo/
 SITE_BASE=/ npm run site:build    # /
