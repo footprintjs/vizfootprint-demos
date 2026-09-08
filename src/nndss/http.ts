@@ -14,7 +14,7 @@
  * is a real answer to "which snapshot was this number computed from".
  */
 import { openSource } from 'vizfootprint/source';
-import { httpSource } from '../source/http.js';
+import { httpSource } from 'vizfootprint/source';
 import { nndssTablesFromRows, type NndssTables } from './etl.js';
 import { graphOf, type NndssGraph } from './graph.js';
 import { NNDSS_FILES } from '../data/files.js';

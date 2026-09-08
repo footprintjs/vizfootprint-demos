@@ -29,6 +29,7 @@ import type { AnalysisSlot, DashboardDef, DataSourceDef, RelationDecl, ViewEncod
 import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
 import { NNDSS_ANALYSES } from './analyses.js';
+import { POPULATION_ANALYSES, POPULATION_RELATION, POPULATION_TABLE, populationTable, type PopulationRow } from './population.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from './absence.js';
 import type { NndssTables } from './etl.js';
 import type { NndssGraph } from './graph.js';
@@ -227,8 +228,23 @@ function graphTables(graph: NndssGraph): Readonly<Record<'nodes' | 'edges', Data
  * yet; a def with no graph declares three tables and no relations rather than two tables
  * with no rows. The server and every node consumer load the graph beside the snapshot.
  */
+/**
+ * The relations this def declares, from the two OPTIONAL tables that carry
+ * them: the graph's two edges onto the diseases, and the cells' one edge onto
+ * the population.
+ *
+ * WHY one function rather than two spreads: `relations` is a LIST, and a def
+ * that spread two of them would keep only the second — the exact quiet bug a
+ * reader would not see. Empty stays absent, because a def that declares an
+ * empty list of relations is saying something it does not mean.
+ */
+function relationsOf(graph: NndssGraph | undefined, population: readonly PopulationRow[] | undefined): RelationDecl[] {
+  return [...(graph === undefined ? [] : GRAPH_RELATIONS), ...(population === undefined ? [] : [POPULATION_RELATION])];
+}
+
 export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef {
   const absence = { field: ABSENCE_FIELD, states: [...ABSENCE_STATES] };
+  const relations = relationsOf(graph, tables.population);
   return {
     meta: { title: 'NNDSS weekly — vizfootprint on CDC data' },
     data: {
@@ -258,8 +274,11 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       },
       // the disease co-occurrence graph (data/nndss/graph): nodes keyed by disease, edges pointing at them
       ...(graph === undefined ? {} : graphTables(graph)),
+      // the denominator (data/population): one row per place, keyed by the name
+      // CDC files it under, so a rate can be a declared column and not a lookup
+      ...(tables.population === undefined ? {} : { [POPULATION_TABLE]: populationTable(tables.population) }),
     },
-    ...(graph === undefined ? {} : { relations: GRAPH_RELATIONS }),
+    ...(relations.length === 0 ? {} : { relations }),
     // WHY the network's four declarations are all gated on the graph: its layers
     // read `nodes` and `edges`, and a layer over a table this def did not declare
     // is exactly what the def door refuses. No graph, no view — never a view with
@@ -273,7 +292,14 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       { viewId: 'trend', chartKind: 'line', channels: ['x', 'y', 'color', 'facet'], initial: { x: 't', y: 'value', color: 'entity' } },
       ...(graph === undefined ? [] : [NET_ENCODING]),
     ],
-    analyses: { ...NNDSS_ANALYSES, ...(graph === undefined ? {} : GRAPH_ANALYSES) },
+    analyses: {
+      ...NNDSS_ANALYSES,
+      ...(graph === undefined ? {} : GRAPH_ANALYSES),
+      // gated on the table for the same reason the network's four are gated on
+      // the graph: an act over a table this def did not declare is what the door
+      // refuses, and a refusal at boot is worse than an act nobody declared
+      ...(tables.population === undefined ? {} : POPULATION_ANALYSES),
+    },
     // Layer 4 — each view's GRAIN: the group keys its marks stand for ([] = one mark per row). An edge whose
     // source emits over one grain and whose target shows another CROSSES grains and must state its fold,
     // or the def door refuses it with the sentence; the default rule's crossing edges carry `crossfilter`.

@@ -24,6 +24,7 @@ import { openSource } from 'vizfootprint/source';
 import { fileSource } from 'vizfootprint/source/file';
 import { nndssTables, nndssTablesFromRows, type NndssTables } from './etl.js';
 import { graphOf, type NndssGraph, type SnapshotProvenance } from './graph.js';
+import { populationRows, type PopulationRow } from './population.js';
 
 /** Where the committed slice of CDC's weekly table lives. */
 export const SNAPSHOT_CSV = new URL('../../data/nndss/snapshot.csv', import.meta.url);
@@ -44,9 +45,29 @@ export interface CarriedSource {
   readonly rows: number;
 }
 
+/** Where the denominator lives — the Census Bureau's state estimates, fetched with their provenance (`data/population`). */
+export const POPULATION_CSV = new URL('../../data/population/population.csv', import.meta.url);
+
 /** The committed snapshot, parsed. */
 export function loadSnapshot(path: URL = SNAPSHOT_CSV): NndssTables {
   return nndssTables(readFileSync(path, 'utf8'));
+}
+
+/**
+ * The committed population table, parsed — the denominator a rate needs.
+ *
+ * A door of its own rather than a field of {@link loadSnapshot}: the desk this
+ * demo ships declares three tables and a graph, and giving every caller a
+ * fourth table it has no view over would be a change to the dashboard rather
+ * than a capability offered to one. A caller that wants cases per hundred
+ * thousand asks for it:
+ *
+ * ```ts
+ * const surface = buildNndssSurface({ ...loadSnapshot(), population: loadPopulation() });
+ * ```
+ */
+export function loadPopulation(path: URL = POPULATION_CSV): PopulationRow[] {
+  return populationRows(readFileSync(path, 'utf8'));
 }
 
 /**

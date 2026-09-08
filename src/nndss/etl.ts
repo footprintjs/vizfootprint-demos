@@ -30,6 +30,7 @@
 import { parseCSVTyped } from 'vizfootprint/data';
 import type { SeriesGrain, SeriesPoint } from 'vizfootprint/def';
 import { cellOf, type Absence } from './absence.js';
+import type { PopulationRow } from './population.js';
 
 export type JurisdictionKind = 'state' | 'region' | 'total';
 
@@ -80,6 +81,17 @@ export interface NndssTables {
   readonly weeks: readonly string[];
   /** Honest counts: cells by state, and the rows the CSV parser could not type. */
   readonly counts: Readonly<Record<Absence, number>>;
+  /**
+   * The DENOMINATOR, when a caller hands one in — `data/population`, one row
+   * per place (`./population.ts`).
+   *
+   * Optional and never loaded by default, for the story page's reason: it is a
+   * second committed artefact, and a def with no population declares three
+   * tables and no rate rather than a fourth table with no rows. A caller that
+   * wants cases per hundred thousand loads it and passes it, and the def then
+   * declares the table, the relation and the two acts together.
+   */
+  readonly population?: readonly PopulationRow[];
 }
 
 /** The Saturday ending MMWR week `week` of `year` (week 1 contains January 4th). */

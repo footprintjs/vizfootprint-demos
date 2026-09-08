@@ -344,10 +344,55 @@ travel with the file it produced and therefore sits beside it in
 [`data/geo/LICENSE-us-atlas`](data/geo/LICENSE-us-atlas). See also
 `data/geo/PROVENANCE.json`.
 
+Population: U.S. Census Bureau, Population Estimates Program (Vintage 2024,
+file `NST-EST2024-ALLDATA`) — a work of the U.S. Government, public domain.
+52 rows, one per place, in [`data/population/`](data/population/README.md)
+with its provenance beside it. It is the **denominator**: see "Cases per
+hundred thousand people" below.
+
 Grid data: U.S. Energy Information Administration — see
 [`data/grid/README.md`](data/grid/README.md) for the acknowledgement EIA asks
 for, which names the publication (the January–June 2025 six-month file) as
 well as the month this repo downloaded it.
+
+## Cases per hundred thousand people
+
+A count is not a rate. "Texas reported 900 cases" and "Wyoming reported 40" are
+the same sentence about two very different places, and the desk had nothing to
+divide by until `data/population/` was fetched.
+
+The rate is **two ordinary acts across one declared relation** — never a lookup
+inside a formula, because a lookup that named its own join would name one nobody
+declared:
+
+```ts
+// the def declares the tie; the acts read it off that declaration
+relations: [{ from: { table: 'cells', column: 'jurisdiction' }, to: { table: 'population', column: 'jurisdiction' } }]
+
+const surface = buildNndssSurface({ ...loadSnapshot(), population: loadPopulation() });
+await surface.session.declareAnalysis('bringPopulation', { cause });  // → jurisdiction_population on cells
+await surface.session.declareAnalysis('casesPer100k', { cause });     // → cases / jurisdiction_population * 100000
+```
+
+Both land as `analyze` commits carrying their whole declaration, so a replay
+rebuilds the column from the log alone, and the second is refused in a sentence
+if it is asked for before the first has run.
+
+**The population is opt-in, not loaded by default.** The desk this repo ships
+declares three tables and a graph; handing every caller a fourth it has no view
+over would be a change to the dashboard rather than a capability offered to one.
+Pass `population` and the def declares the table, the relation and both acts
+together; leave it out and it declares none of them.
+
+**What has no rate says so.** NNDSS files census divisions, roll-ups, four
+territories and one city beside the states, and the estimates file carries none
+of them — so those rows get **no** rate rather than a made-up one, and the
+bring-over act counts every row it could not follow. A cell the source could not
+report (`report_state: unavailable`, printed as `0`) has no rate either: a
+reported nothing is not a zero, and the absence law is what keeps it that way.
+
+`tests/population.test.ts` pins all of it, over the shipped snapshot as well as
+over four rows you can count by hand.
 
 ## Licence, and what it covers
 

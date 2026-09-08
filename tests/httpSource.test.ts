@@ -1,9 +1,16 @@
 /**
- * THE HTTP CARRIER — the demo's own, against the library's published port.
+ * THE HTTP CARRIER — the LIBRARY's, through its published door.
  *
- * These tests exist because the static site's whole data path is this one
- * module: a page with no server declares its tables `via: 'http'` and this is
- * what reads them. Every assertion here is a promise the site depends on — the
+ * The demo carried its own copy of this carrier for one release, because the
+ * library's was written and tested and unreachable: no specifier resolved it.
+ * The door is open now (`vizfootprint/source`), the copy is deleted, and these
+ * tests stayed — they are worth more here than they were there, because they
+ * exercise the carrier the way a CONSUMER meets it rather than the way its own
+ * folder does.
+ *
+ * They exist because the static site's whole data path is this one module: a
+ * page with no server declares its tables `via: 'http'` and this is what reads
+ * them. Every assertion here is a promise the site depends on — the
  * rows arrive decoded, the version is what the SERVER vouched for, a second
  * read with that version is a 304 and not a re-download, and every way a read
  * can fail has a name rather than an empty table.
@@ -11,8 +18,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { createHash } from 'node:crypto';
-import { openSource, isSourceRefusal } from 'vizfootprint/source';
-import { httpSource } from '../src/source/http.js';
+import { openSource, isSourceRefusal, httpSource } from 'vizfootprint/source';
 
 const CSV = 'disease,cases\nMumps,4\nPertussis,9\n';
 

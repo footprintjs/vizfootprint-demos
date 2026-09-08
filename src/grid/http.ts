@@ -12,7 +12,7 @@
  * rather than inlining them the way the single-file story page does.
  */
 import { openSource } from 'vizfootprint/source';
-import { httpSource } from '../source/http.js';
+import { httpSource } from 'vizfootprint/source';
 import { gridTablesFromRows, type GridTables } from './etl.js';
 import type { HttpCarriedSource } from '../nndss/http.js';
 import { GRID_FILES } from '../data/files.js';
