@@ -347,6 +347,7 @@ travel with the file it produced and therefore sits beside it in
 Population: U.S. Census Bureau, Population Estimates Program (Vintage 2024,
 file `NST-EST2024-ALLDATA`) — a work of the U.S. Government, public domain.
 52 rows, one per place, in [`data/population/`](data/population/README.md)
+(51 of them become denominators — see that README for the one the join refuses)
 with its provenance beside it. It is the **denominator**: see "Cases per
 hundred thousand people" below.
 
@@ -369,7 +370,14 @@ declared:
 // the def declares the tie; the acts read it off that declaration
 relations: [{ from: { table: 'cells', column: 'jurisdiction' }, to: { table: 'population', column: 'jurisdiction' } }]
 
-const surface = buildNndssSurface({ ...loadSnapshot(), population: loadPopulation() });
+// `loadSnapshot()` carries the population beside the cells, and the async
+// builder lands both acts at boot, right after the graph's two — so the desk
+// the server and the static site serve already has the column at its cursor
+const surface = await buildNndssSurfaceAsync();
+surface.rateRefusals;                         // [] — or the sentence an act was refused with
+surface.cellsAtCursor.rows[0]['cases_per_100k'];
+
+// the same two acts by hand, on a synchronous surface (declared, not yet landed)
 await surface.session.declareAnalysis('bringPopulation', { cause });  // → jurisdiction_population on cells
 await surface.session.declareAnalysis('casesPer100k', { cause });     // → cases / jurisdiction_population * 100000
 ```
@@ -378,16 +386,26 @@ Both land as `analyze` commits carrying their whole declaration, so a replay
 rebuilds the column from the log alone, and the second is refused in a sentence
 if it is asked for before the first has run.
 
-**The population is opt-in, not loaded by default.** The desk this repo ships
-declares three tables and a graph; handing every caller a fourth it has no view
-over would be a change to the dashboard rather than a capability offered to one.
-Pass `population` and the def declares the table, the relation and both acts
-together; leave it out and it declares none of them.
+**On the desk, the rate is a cell** — a bar per state for the picked disease,
+summed over the kept weeks like the map, whose caption names the two commits
+it came from and counts the jurisdictions that have no population row. The
+`/api/rows` door serves the cells **at the cursor** (CDC's columns plus the two
+the acts wrote) and the population table beside them; the static site copies
+`data/population/` for the same reason it copies the graph. The story page
+shapes its tables from the one CSV it carries and so declares no population,
+no relation, no acts and no rate cell — `nndssDef` gates all four on the
+table, never a view with nothing under it.
 
-**What has no rate says so.** NNDSS files census divisions, roll-ups, four
-territories and one city beside the states, and the estimates file carries none
-of them — so those rows get **no** rate rather than a made-up one, and the
-bring-over act counts every row it could not follow. A cell the source could not
+**What has no rate says so.** NNDSS files census divisions, roll-ups, the four
+territories other than Puerto Rico, and one city beside the states, and the
+estimates file carries none of them. Nor does **New York** get a rate, and that
+one is a decision rather than a gap: CDC files New York City separately, so the
+`New York` cells exclude the city while the Census row of that name counts it —
+a matching name over a different population, which
+[`data/population/README.md`](data/population/README.md) shows the arithmetic
+for. Nineteen of the seventy reporting areas therefore get **no** rate rather
+than a made-up one, and the bring-over act counts every row it could not
+follow. A cell the source could not
 report (`report_state: unavailable`, printed as `0`) has no rate either: a
 reported nothing is not a zero, and the absence law is what keeps it that way.
 

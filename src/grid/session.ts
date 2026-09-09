@@ -85,7 +85,16 @@ async function land(session: InteractionSession, analysisId: string, table: stri
     if (!res.ok) return res.rejection.detail;
     if (res.analysis?.commit !== undefined) return null;
     const result = res.analysis?.result;
-    const why = result !== undefined && !result.ok ? ` — ${result.reason} at ${String(result.n)} rows` : '';
+    // Two ways an analysis lands nothing, and they are not the same thing: a
+    // DEGENERATE fit read the rows and found no honest answer in them; an
+    // UNAVAILABLE one never read them, because the engine refused — so it
+    // carries the engine's own sentence and no row count at all.
+    const why =
+      result === undefined || result.ok
+        ? ''
+        : result.reason === 'unavailable'
+          ? ` — the rows could not be read: ${result.rejection.detail ?? result.rejection.reason}`
+          : ` — ${result.reason} at ${String(result.n)} rows`;
     return `analysis "${analysisId}" landed nothing${why}`;
   } catch (err) {
     return `analysis "${analysisId}" threw: ${err instanceof Error ? err.message : String(err)}`;

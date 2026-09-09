@@ -29,7 +29,7 @@ import 'vizfootprint-ui/styles.css';
 import 'storydeck/storydeck.css';
 import { Desk, type DeskProjection, type DeskProposal } from 'vizfootprint-studio/desk';
 import { createSessionView, pollingSource } from 'vizfootprint-ui';
-import { STORY_FIGURE, colorOfState, useNndssCells, useSilences, type NndssCellRow, type NndssDeskData, type NndssEdgeRow, type NndssNodeRow, type NndssSeriesRow } from './cells.js';
+import { STORY_FIGURE, colorOfState, useNndssCells, useSilences, type NndssCellRow, type NndssDeskData, type NndssEdgeRow, type NndssNodeRow, type NndssPopulationRow, type NndssSeriesRow } from './cells.js';
 import { noteRefs, type ReplyRef } from './derive.js';
 import { AnalystPanel } from './AnalystPanel.js';
 import { GrammarPanel, type GrammarWire } from './GrammarPanel.js';
@@ -43,6 +43,10 @@ export interface RowsPayload {
   readonly edges: readonly NndssEdgeRow[];
   /** The sentence the session refused those windows with, when it did. */
   readonly netRefused: string | null;
+  /** The denominator, one row per place, when the surface declares it — the rate itself rides on `cells`, landed by two acts. */
+  readonly population?: readonly NndssPopulationRow[];
+  /** The sentence the rate acts were refused with, or their window was, when they were. */
+  readonly rateRefused: string | null;
   readonly grain: { readonly bucket?: string; readonly reducer?: string; readonly note?: string };
   readonly diseases: readonly string[];
   readonly weeks: readonly string[];
@@ -106,7 +110,7 @@ export function App(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one read per entry
   }, [entered]);
 
-  const data = useMemo<NndssDeskData>(() => (rows === null ? { ...NO_ROWS, geo } : { cells: rows.cells, series: rows.series, nodes: rows.nodes, edges: rows.edges, netRefused: rows.netRefused, diseases: rows.diseases, weeks: rows.weeks, absence: rows.absence, grain: rows.grain, geo }), [rows, geo]);
+  const data = useMemo<NndssDeskData>(() => (rows === null ? { ...NO_ROWS, geo } : { cells: rows.cells, series: rows.series, nodes: rows.nodes, edges: rows.edges, netRefused: rows.netRefused, population: rows.population, rateRefused: rows.rateRefused, diseases: rows.diseases, weeks: rows.weeks, absence: rows.absence, grain: rows.grain, geo }), [rows, geo]);
   const silences = useSilences(data);
   const declaredWords = rows?.declared?.dashboard;
 
@@ -186,7 +190,10 @@ export function App(): JSX.Element {
       }}
       data={{
         table: 'cells',
-        sheet: (columns) => httpSheetData({ endpoint: '/api/window', table: 'cells', columns }),
+        // the TABLE is the desk's second argument, never a name written here: it
+        // asks for `cells` and for every table an act CUT, and a port pinned to
+        // one name would answer the wrong rows under the right tab
+        sheet: (columns, table) => httpSheetData({ endpoint: '/api/window', table, columns }),
         checks,
         checksError,
         onRefresh: refreshSources,

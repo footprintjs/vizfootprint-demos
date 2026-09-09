@@ -1,9 +1,11 @@
 /**
  * THE ROWS PAYLOAD — everything a cockpit needs to draw, in one object.
  *
- * The three ETL'd tables, the graph's two AT THE CURSOR, the absence
- * vocabulary, the grain, and the grammar as the def declares it. It is read
- * ONCE on entry and never polled; the cheap poll is the session state.
+ * The cells AT THE CURSOR (CDC's columns plus the two the rate acts wrote),
+ * the other two ETL'd tables, the population, the graph's two AT THE CURSOR,
+ * the absence vocabulary, the grain, and the grammar as the def declares it.
+ * It is read ONCE on entry and never polled; the cheap poll is the session
+ * state.
  *
  * WHY it lives here and not in the server: there are two hosts now. The server
  * answers it at `/api/rows`; the static site's page calls it directly on a
@@ -21,11 +23,18 @@ const LINKS = 'implicit-crossfilter';
 const LINKS_MEANING = "every view's selection filters every other view; a view never filters itself";
 
 export function nndssRows(surface: NndssSurface): Record<string, unknown> {
-  const { tables, graphRows, dashboard } = surface;
+  const { tables, graphRows, cellsAtCursor, dashboard } = surface;
   return {
-    cells: tables.cells,
+    // the cells AT THE CURSOR: CDC's rows plus the two columns the rate acts wrote
+    // (`jurisdiction_population`, `cases_per_100k`) — the same law as the graph's
+    // positions below: a derived column is a commit's output, and the file has none
+    cells: cellsAtCursor.rows,
+    // null when both rate acts landed and the window answered; the sentence when not
+    rateRefused: cellsAtCursor.refused,
     jurisdictions: tables.jurisdictions,
     series: tables.series,
+    // the denominator, as the def declared it — absent on a surface that declared none (the story page's shape)
+    ...(tables.population === undefined ? {} : { population: tables.population }),
     // the graph's two tables AT THE CURSOR — the committed rows plus the columns
     // the layout and bring-over acts wrote onto them. Not the CSVs: the positions
     // are two commits' output, and a reader that took the files would serve a

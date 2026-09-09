@@ -4,7 +4,10 @@
  * Everything the agent and the cockpit will ever know about this dashboard
  * is declared here: the three ETL'd tables and which column carries the
  * cells' absence state — and, when the committed graph is handed in, the
- * `nodes` / `edges` tables and the two relations that join them — the views
+ * `nodes` / `edges` tables and the two relations that join them; and, when the
+ * denominator is handed in, the `population` table, the relation that joins it
+ * to the cells, the two acts that derive a rate from it and the bar over that
+ * column — the views
  * and who drives each, the visual channels a view may rebind, the analyses
  * that may run, the multiple-comparison budget.
  * vizfootprint's validator refuses what it cannot enforce.
@@ -38,10 +41,16 @@ const ALPHA = 0.05;
 
 const COVERAGE: ActorMeta = { actor: 'user', label: 'Coverage — which silence is which', does: 'pick a report state: which cells are present, not configured, unavailable or withheld' };
 const DISEASES: ActorMeta = { actor: 'user', label: 'Reported cases by disease', does: 'pick a disease to focus the dashboard on it' };
-const KINDS: ActorMeta = { actor: 'user', label: 'Cells by area kind', does: 'pick an area kind: states, regions, territories or the nation' };
+// three kinds, because `JurisdictionKind` has three values: the territories and
+// New York City are filed under `state`, the kind CDC files a place individually as
+const KINDS: ActorMeta = { actor: 'user', label: 'Cells by area kind', does: 'pick an area kind: a place CDC files individually (state), a census division (region) or a national roll-up (total)' };
 const WEEKS: ActorMeta = { actor: 'user', label: 'Reported cases by week', does: 'brush a range of weeks to narrow the time window' };
 const TREND: ActorMeta = { actor: 'user', label: 'Trend per area', does: 'follow one area\'s weekly trend' };
 const MAP: ActorMeta = { actor: 'user', label: 'Reported cases by state, on the map', does: 'click a state on the map to select it, shift-click for several' };
+// the RATE: the one view over the column two acts derived — declared only where the population table is (see `nndssDef`)
+// 'reporting jurisdiction', not 'state': the bars include the District of
+// Columbia and Puerto Rico, which are a federal district and a territory
+const RATE: ActorMeta = { actor: 'user', label: 'Cases per 100,000 people (Census Vintage 2024), by reporting jurisdiction', does: 'pick a jurisdiction by its rate — a bar with no population row is not there, not zero' };
 const TABLE: ActorMeta = { actor: 'user', label: 'The cells, as CDC printed them', does: 'pick one row of the table: a jurisdiction and its cells' };
 const NET: ActorMeta = { actor: 'user', label: 'Which diseases report together', does: 'hover a disease to light its ties, click it to select, shift-click for several, alt-click to select it and everything it reports with' };
 // The SHEET (the data layer's second tab): every row the charts see, read through the same link
@@ -49,9 +58,12 @@ const NET: ActorMeta = { actor: 'user', label: 'Which diseases report together',
 const SHEET: ActorMeta = { actor: 'user', label: 'Sheet', does: 'scroll every row the charts see, and read the window it is showing' };
 const ANALYST: ActorMeta = { actor: 'agent', label: 'Analyst' };
 
-// every view this def CAN declare — `net` only when a graph is handed in (see
-// `nndssDef`), so the story page's graph-less def declares the other nine.
-export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', 'weeks', 'trend', 'table', 'sheet', 'net', 'analyst'] as const;
+/** The rate view's id — spelled once, because the list below, the def, the cell and the acts' caption all name it. */
+export const RATE_VIEW = 'rate';
+// every view this def CAN declare — `net` only when a graph is handed in and
+// `rate` only when the population is (see `nndssDef`), so the story page's
+// def over one CSV declares the other nine.
+export const NNDSS_VIEWS = ['coverage', 'diseases', 'kinds', 'map', RATE_VIEW, 'weeks', 'trend', 'table', 'sheet', 'net', 'analyst'] as const;
 
 /** The dashboard's DECLARED words (title + summary) — the def's prose entry and the story's fallback read the same constant. */
 export const DASHBOARD_WORDS = {
@@ -143,13 +155,17 @@ const NET_ENCODING: ViewEncodingDecl = {
  * `target` has nothing to say about a table of CDC cells. The layers of one
  * frame get no default edge between them (`vizfootprint/links`, `sharesFrame`),
  * so the mirror has to be declared; the rest have one, so it has to be cut.
+ *
+ * `views` is what THIS def declared, not `NNDSS_VIEWS`: a link into a view the
+ * def did not declare (the rate view on a def with no population) is exactly
+ * what the def door refuses, and the cut is owed only to views that exist.
  */
-function walkLinks(): readonly LinkDecl[] {
+function walkLinks(views: readonly string[]): readonly LinkDecl[] {
   const source = layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER);
   const kind = 'neighbourhood' as const;
   return [
     { source, kind, target: layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER), response: 'mirror', label: 'the walked neighbourhood, lit on the nodes' },
-    ...NNDSS_VIEWS.filter((viewId) => viewId !== NETWORK_VIEW).map((target) => ({
+    ...views.filter((viewId) => viewId !== NETWORK_VIEW).map((target) => ({
       source,
       kind,
       target,
@@ -220,15 +236,6 @@ function graphTables(graph: NndssGraph): Readonly<Record<'nodes' | 'edges', Data
 }
 
 /**
- * The def over the three ETL'd tables — and, when the committed graph is handed in, over
- * the graph's two as well, joined by `GRAPH_RELATIONS`.
- *
- * WHY optional: the story page builds this def in a browser over the ONE CSV it carries
- * (`web/story/entry.tsx`), and the graph is a second committed artefact it does not carry
- * yet; a def with no graph declares three tables and no relations rather than two tables
- * with no rows. The server and every node consumer load the graph beside the snapshot.
- */
-/**
  * The relations this def declares, from the two OPTIONAL tables that carry
  * them: the graph's two edges onto the diseases, and the cells' one edge onto
  * the population.
@@ -242,9 +249,37 @@ function relationsOf(graph: NndssGraph | undefined, population: readonly Populat
   return [...(graph === undefined ? [] : GRAPH_RELATIONS), ...(population === undefined ? [] : [POPULATION_RELATION])];
 }
 
+/**
+ * The def over the three ETL'd tables — and over each OPTIONAL table a caller
+ * hands in: the graph's `nodes` / `edges`, joined by `GRAPH_RELATIONS`, and the
+ * `population` denominator, joined by `POPULATION_RELATION`.
+ *
+ * WHY both are optional: the story page builds this def in a browser over the
+ * ONE CSV it carries (`web/story/entry.tsx`) — no graph and no denominator —
+ * and each missing table takes its own declarations with it rather than leaving
+ * a table with no rows. So a def built with neither declares the three ETL'd
+ * tables and no relations; the node and http doors load both beside the
+ * snapshot, and that def declares six tables and three relations.
+ */
 export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef {
   const absence = { field: ABSENCE_FIELD, states: [...ABSENCE_STATES] };
-  const relations = relationsOf(graph, tables.population);
+  // WHY an EMPTY table is narrowed to `undefined` here rather than tested for
+  // at four gates: the question every gate below asks is "is there a
+  // denominator", and a zero-row table answers yes to `!== undefined`. A
+  // regenerated file whose every row was dropped would declare the table, the
+  // relation, both acts and the bar — a rate view with nothing under it, which
+  // is what the sentence below promises never to declare.
+  const population = tables.population === undefined || tables.population.length === 0 ? undefined : tables.population;
+  const relations = relationsOf(graph, population);
+  const hasPopulation = population !== undefined;
+  // WHY the network's four declarations are all gated on the graph, and the
+  // rate's on the population — two different laws, not one borrowed twice. The
+  // network's layers read `nodes` and `edges`, and a view over a table this def
+  // did not declare is what the def door refuses. The rate bar reads
+  // `cases_per_100k` on `cells`, a column two acts can only land when a
+  // `population` table is there to carry a denominator across. No graph, no
+  // view; no denominator, no rate — never a view with nothing under it.
+  const actors = { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, ...(hasPopulation ? { [RATE_VIEW]: RATE } : {}), weeks: WEEKS, trend: TREND, table: TABLE, sheet: SHEET, ...(graph === undefined ? {} : { net: NET }), analyst: ANALYST };
   return {
     meta: { title: 'NNDSS weekly — vizfootprint on CDC data' },
     data: {
@@ -276,18 +311,16 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       ...(graph === undefined ? {} : graphTables(graph)),
       // the denominator (data/population): one row per place, keyed by the name
       // CDC files it under, so a rate can be a declared column and not a lookup
-      ...(tables.population === undefined ? {} : { [POPULATION_TABLE]: populationTable(tables.population) }),
+      ...(population === undefined ? {} : { [POPULATION_TABLE]: populationTable(population) }),
     },
     ...(relations.length === 0 ? {} : { relations }),
-    // WHY the network's four declarations are all gated on the graph: its layers
-    // read `nodes` and `edges`, and a layer over a table this def did not declare
-    // is exactly what the def door refuses. No graph, no view — never a view with
-    // nothing under it.
-    actors: { coverage: COVERAGE, diseases: DISEASES, kinds: KINDS, map: MAP, weeks: WEEKS, trend: TREND, table: TABLE, sheet: SHEET, ...(graph === undefined ? {} : { net: NET }), analyst: ANALYST },
+    actors,
     encodings: [
       { viewId: 'coverage', chartKind: 'bar', channels: ['category'], initial: { category: ABSENCE_FIELD } },
       { viewId: 'diseases', chartKind: 'bar', channels: ['category'], initial: { category: 'disease' } },
       { viewId: 'kinds', chartKind: 'bar', channels: ['category'], initial: { category: 'kind' } },
+      // one bar per place; the height is the derived column, summed by the host over the kept weeks
+      ...(hasPopulation ? [{ viewId: RATE_VIEW, chartKind: 'bar', channels: ['category'], initial: { category: 'jurisdiction' } }] : []),
       { viewId: 'weeks', chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 't', y: 'cases' } },
       { viewId: 'trend', chartKind: 'line', channels: ['x', 'y', 'color', 'facet'], initial: { x: 't', y: 'value', color: 'entity' } },
       ...(graph === undefined ? [] : [NET_ENCODING]),
@@ -298,7 +331,7 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       // gated on the table for the same reason the network's four are gated on
       // the graph: an act over a table this def did not declare is what the door
       // refuses, and a refusal at boot is worse than an act nobody declared
-      ...(tables.population === undefined ? {} : POPULATION_ANALYSES),
+      ...(population === undefined ? {} : POPULATION_ANALYSES),
     },
     // Layer 4 — each view's GRAIN: the group keys its marks stand for ([] = one mark per row). An edge whose
     // source emits over one grain and whose target shows another CROSSES grains and must state its fold,
@@ -308,6 +341,8 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       { viewId: 'diseases', keys: ['disease'] },
       { viewId: 'kinds', keys: ['kind'] },
       { viewId: 'map', keys: ['jurisdiction'] },
+      // the rate's marks stand for PLACES, the map's grain — a bar per jurisdiction
+      ...(hasPopulation ? [{ viewId: RATE_VIEW, keys: ['jurisdiction'] }] : []),
       { viewId: 'weeks', keys: ['t'] },
       { viewId: 'trend', keys: ['t', 'entity'] },
       { viewId: 'table', keys: ['jurisdiction'] },
@@ -370,7 +405,7 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       // theirs. It reaches exactly one place, and it MIRRORS there: the nodes
       // layer lights the ego net the walk recorded (the answer is on the commit,
       // so time travel shows the set that walk found, not today's).
-      ...(graph === undefined ? [] : walkLinks()),
+      ...(graph === undefined ? [] : walkLinks(Object.keys(actors))),
     ],
     // The encoding plane's HOUSE RULES, as data — the same sentences refuse a bad initial binding
     // at build, a bad rebind at dispatch (human picker or analyst tool), and grey the picker.
@@ -419,6 +454,26 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
           howToRead: { author: { kind: 'derived' } },
         },
       },
+      // the RATE's words, because the one number on this desk that is a
+      // DIVISION must carry its period and its denominator wherever it is read,
+      // and a React caption travels with neither the def nor an export
+      ...(hasPopulation
+        ? [{
+            viewId: RATE_VIEW,
+            slots: {
+              title: { text: 'Cases per 100,000 people, by reporting jurisdiction', author: { kind: 'human' as const, by: 'the dashboard author' }, levels: ['construction' as const] },
+              altShort: { text: 'A bar chart of reported cases per 100,000 people for the selected disease, one bar per jurisdiction that has a population estimate.', author: { kind: 'human' as const }, levels: ['construction' as const] },
+              altLong: {
+                text: "Cases for the selected disease, summed over the weeks kept in view, divided by the U.S. Census Bureau's Vintage 2024 estimate (as of July 1, 2024) for that place, times 100,000. With no week filter this is a cumulative rate over every MMWR week in the snapshot — 2025 and 2026 — and never an annual incidence rate; the denominator is one 2024 estimate for both case years, because no later vintage was published when the file was fetched. A jurisdiction with no estimate has no bar at all: a silence, never a zero. A bar built on a handful of cases is unstable, so read it with its case count from the table beside it.",
+                author: { kind: 'human' as const },
+                levels: ['construction' as const],
+                // the basis names DECLARED columns of the default table: `cases_per_100k`
+                // and `jurisdiction_population` are landed by acts, not declared here
+                basis: { columns: ['jurisdiction', 'cases'] },
+              },
+            },
+          }]
+        : []),
       ...(graph === undefined ? [] : [netProse(graph)]),
     ],
     fdr: { procedure: 'LORD++', alpha: ALPHA },

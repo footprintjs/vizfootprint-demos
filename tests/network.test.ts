@@ -233,7 +233,10 @@ describe('a surface with no graph says so, and starts anyway', () => {
   it('hands the committed rows back with the sentence when the window is refused', async () => {
     const session = buildDashboard(nndssDef(TABLES)).createSession({ as: 'user' });
     const rows = await graphRowsAt(session, TINY);
-    expect(rows.refused).toContain('no table "nodes" is declared');
+    // the library's sentence names the tables HERE, not what the def declared:
+    // a table an act cut is readable on the branch that cut it, so "declared"
+    // would send a reader to look for a declaration that never existed
+    expect(rows.refused).toContain('no table "nodes" here');
     expect(rows.nodes).toEqual(TINY.nodes); // the committed rows, with no positions — the cell then says it cannot draw
     expect(rows.nodes.every((n) => n['x'] === undefined)).toBe(true);
   });

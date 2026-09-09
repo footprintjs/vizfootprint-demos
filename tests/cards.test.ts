@@ -31,25 +31,31 @@ describe('the two surfaces', () => {
   it('are two builds with two revisions, off one definition function', () => {
     expect(desk.demo).toBe(story.demo);
     expect(desk.declares.revision).not.toBe(story.declares.revision);
-    expect(desk.declares.tables).toHaveLength(5);
+    // the desk: cells, jurisdictions, series, the graph's nodes and edges, and the population — the story page: the first three
+    expect(desk.declares.tables).toHaveLength(6);
     expect(story.declares.tables).toHaveLength(3);
-    expect(desk.declares.views).toHaveLength(10);
+    expect(desk.declares.views).toHaveLength(11);
     expect(story.declares.views).toHaveLength(9);
   });
 
-  it('gives the network — and everything that hangs off it — to the desk alone', () => {
+  it('gives the network and the rate — and everything that hangs off them — to the desk alone', () => {
     expect(desk.declares.chartKinds).toEqual(['bar', 'line', 'network']);
     expect(story.declares.chartKinds).toEqual(['bar', 'line']);
     expect(desk.declares.selectionKinds).toContain('neighbourhood');
     expect(story.declares.selectionKinds).not.toContain('neighbourhood');
     expect(desk.declares.views.find((view) => view.viewId === 'net')?.layers).toHaveLength(2);
     expect(story.declares.views.some((view) => view.viewId === 'net')).toBe(false);
-    expect(desk.declares.relations).toHaveLength(2);
+    // the graph's two relations and the cells' one onto the population
+    expect(desk.declares.relations).toHaveLength(3);
     expect(story.declares.relations).toHaveLength(0);
-    expect(desk.declares.analyses).toHaveLength(8);
+    // six statistics, the graph's two acts, the rate's two acts
+    expect(desk.declares.analyses).toHaveLength(10);
     expect(story.declares.analyses).toHaveLength(6);
-    expect(desk.declares.links.declared).toBe(16);
+    // the rate view is one more place the walk deliberately does not reach
+    expect(desk.declares.links.declared).toBe(17);
     expect(story.declares.links.declared).toBe(6);
+    expect(desk.declares.views.some((view) => view.viewId === 'rate')).toBe(true);
+    expect(story.declares.views.some((view) => view.viewId === 'rate')).toBe(false);
   });
 
   it('narrows to the ONE surface that can do the thing, never to the demo', () => {

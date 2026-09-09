@@ -56,6 +56,15 @@ export interface CellRow {
   readonly ytd: number | null;
   readonly ytd_state: Absence;
   readonly prev52_max: number | null;
+  /**
+   * The previous-52-week maximum's own state. CDC flags `m2` from the SAME
+   * vocabulary as `m1` and `m3`, and its blank cells today all carry `NC` —
+   * "not calculated, too little data", the small-number suppression on the
+   * historical baseline. Dropping the flag would make that suppression
+   * indistinguishable from no history at all, on the one column a reader
+   * compares this week's count against.
+   */
+  readonly prev52_max_state: Absence;
   readonly [k: string]: string | number | null;
 }
 
@@ -79,22 +88,33 @@ export interface NndssTables {
   readonly grain: SeriesGrain;
   readonly diseases: readonly string[];
   readonly weeks: readonly string[];
-  /** Honest counts: cells by state, and the rows the CSV parser could not type. */
+  /** Honest counts: the current-week cell (`m1`) by absence state — the five sum to the rows that became cells. */
   readonly counts: Readonly<Record<Absence, number>>;
   /**
+   * Rows that never became a cell, because they named no place or no MMWR week
+   * — see {@link nndssTablesFromRows}. Zero on the committed snapshot; a number
+   * here is the file saying something this ETL will not shape.
+   */
+  readonly skipped: number;
+  /**
    * The DENOMINATOR, when a caller hands one in — `data/population`, one row
-   * per place (`./population.ts`).
+   * per place, as of July 1 of its `vintage` (`./population.ts`).
    *
-   * Optional and never loaded by default, for the story page's reason: it is a
-   * second committed artefact, and a def with no population declares three
-   * tables and no rate rather than a fourth table with no rows. A caller that
-   * wants cases per hundred thousand loads it and passes it, and the def then
-   * declares the table, the relation and the two acts together.
+   * `cells` spans MMWR YEARS (2025 and 2026 in the committed snapshot) and this
+   * table has no year in its key, so a rate over the two is cases per 100,000
+   * residents OF THE VINTAGE YEAR — a denominator one to two years older than
+   * the later case weeks. Any caption over `cases_per_100k` quotes the vintage
+   * and the lag it implies; the two files are refetched together.
+   *
+   * Optional in the TYPE for the story page's reason: that page shapes its
+   * tables from the one CSV it carries, and a def with no population declares
+   * three tables and no rate rather than a fourth table with no rows. The node
+   * and http doors (`./snapshot.ts`, `./http.ts`) load it by default, and the
+   * def then declares the table, the relation and the two acts together.
    */
   readonly population?: readonly PopulationRow[];
 }
 
-/** The Saturday ending MMWR week `week` of `year` (week 1 contains January 4th). */
 /** The column an analysis regresses over when it wants time as a number. */
 export const WEEK_INDEX_FIELD = 'week_index';
 /** Week 0 — the Saturday ending MMWR week 1 of 2025, the first week in the slice. */
@@ -104,9 +124,17 @@ export function weekIndex(t: string): number {
   return Math.round((Date.parse(t) - Date.parse(WEEK_ZERO)) / (7 * 86_400_000));
 }
 
+/**
+ * The Saturday ending MMWR week `week` of `year`.
+ *
+ * MMWR's law, and the only reason this arithmetic is not obvious: week 1 is the
+ * week CONTAINING JANUARY 4th. So the Saturday that ends week 1 is the first
+ * Saturday on or after Jan 4 (`6 - dow` days from it, counting from Sunday),
+ * and week `n` ends `(n - 1)` whole weeks later.
+ */
 export function mmwrWeekEnd(year: number, week: number): string {
   const jan4 = new Date(Date.UTC(year, 0, 4));
-  const dow = jan4.getUTCDay(); // Sunday = 0
+  const dow = jan4.getUTCDay();
   const week1End = new Date(jan4.getTime() + (6 - dow) * 86_400_000);
   const end = new Date(week1End.getTime() + (week - 1) * 7 * 86_400_000);
   return end.toISOString().slice(0, 10);
@@ -134,33 +162,59 @@ export function nndssTables(csvText: string): NndssTables {
 
 /** The same ETL over rows a source adapter already decoded (the data-source layer's `format: 'csv'`). */
 export function nndssTablesFromRows(rows: readonly Record<string, unknown>[]): NndssTables {
-  const parsed = { rows };
   const cells: CellRow[] = [];
   const jurisdictionsByName = new Map<string, JurisdictionRow>();
   const counts: Record<Absence, number> = { present: 0, 'not-configured': 0, unavailable: 0, withheld: 0, unknown: 0 };
-  for (const r of parsed.rows) {
-    const jurisdiction = String(r['states']);
-    const kind = kindOf({ states: r['states'], location1: r['location1'], location2: r['location2'] });
+  // `mmwrWeekEnd` and `weekIndex` are pure in (year, week) and the snapshot has
+  // 86 distinct weeks over 90,300 rows — computed per row they allocate three
+  // Dates and reparse two ISO strings ninety thousand times, on the main thread
+  // of the page the story build runs this ETL in.
+  const weekCache = new Map<number, { readonly t: string; readonly index: number }>();
+  const weekOf = (year: number, week: number): { readonly t: string; readonly index: number } => {
+    const key = year * 100 + week;
+    const hit = weekCache.get(key);
+    if (hit !== undefined) return hit;
+    const t = mmwrWeekEnd(year, week);
+    const made = { t, index: weekIndex(t) };
+    weekCache.set(key, made);
+    return made;
+  };
+  let skipped = 0;
+  for (const r of rows) {
+    // WHY the identity columns are judged before anything is shaped, the law
+    // `populationRowsFrom` keeps: a row missing either number is dropped, never
+    // guessed at. `String(null)` is the place "null" and `Number(null)` is the
+    // year 0, which `mmwrWeekEnd` turns into a real-looking 1899 date that
+    // sorts FIRST — the left edge of every time axis, invented by this file.
+    const jurisdiction = typeof r['states'] === 'string' ? r['states'] : '';
+    const disease = typeof r['label'] === 'string' ? r['label'] : '';
     const year = Number(r['year']);
     const week = Number(r['week']);
+    if (jurisdiction === '' || disease === '' || !Number.isInteger(year) || !Number.isInteger(week)) {
+      skipped += 1;
+      continue;
+    }
+    const kind = kindOf({ states: r['states'], location1: r['location1'], location2: r['location2'] });
     const current = cellOf(r['m1'], r['m1_flag']);
     const ytd = cellOf(r['m3'], r['m3_flag']);
+    const prev = cellOf(r['m2'], r['m2_flag']);
     counts[current.state] += 1;
-    const t = mmwrWeekEnd(year, week);
+    const { t, index } = weekOf(year, week);
     cells.push({
       jurisdiction,
       kind,
-      disease: String(r['label']),
+      disease,
       year,
       week,
       t,
-      week_index: weekIndex(t),
+      week_index: index,
       cases: current.value,
       report_state: current.state, // the declared absence column (ABSENCE_FIELD)
       flag: current.flag,
       ytd: ytd.value,
       ytd_state: ytd.state,
-      prev52_max: num(r['m2']),
+      prev52_max: prev.value,
+      prev52_max_state: prev.state,
     });
     if (!jurisdictionsByName.has(jurisdiction)) {
       jurisdictionsByName.set(jurisdiction, { jurisdiction, kind, lon: num(r['lon']), lat: num(r['lat']) });
@@ -182,5 +236,6 @@ export function nndssTablesFromRows(rows: readonly Record<string, unknown>[]): N
     diseases,
     weeks,
     counts,
+    skipped,
   };
 }

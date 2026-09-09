@@ -24,7 +24,7 @@ import { openSource } from 'vizfootprint/source';
 import { fileSource } from 'vizfootprint/source/file';
 import { nndssTables, nndssTablesFromRows, type NndssTables } from './etl.js';
 import { graphOf, type NndssGraph, type SnapshotProvenance } from './graph.js';
-import { populationRows, type PopulationRow } from './population.js';
+import { populationRows, populationRowsFrom, type PopulationRow } from './population.js';
 
 /** Where the committed slice of CDC's weekly table lives. */
 export const SNAPSHOT_CSV = new URL('../../data/nndss/snapshot.csv', import.meta.url);
@@ -48,24 +48,22 @@ export interface CarriedSource {
 /** Where the denominator lives — the Census Bureau's state estimates, fetched with their provenance (`data/population`). */
 export const POPULATION_CSV = new URL('../../data/population/population.csv', import.meta.url);
 
-/** The committed snapshot, parsed. */
-export function loadSnapshot(path: URL = SNAPSHOT_CSV): NndssTables {
-  return nndssTables(readFileSync(path, 'utf8'));
+/**
+ * The committed snapshot, parsed — WITH the denominator beside it.
+ *
+ * WHY the population rides on the default: the desk has a view over it now
+ * (the rate bar, `web/src/cells.tsx`), and the def declares the table, the
+ * relation and the two acts together off `tables.population`. A default that
+ * left it out would boot a desk whose rate cell says "no denominator" on every
+ * run, which is a demo of the gap and not of the column. A caller that wants
+ * three tables and no rate — the story page's shape — spreads it away:
+ * `{ ...loadSnapshot(), population: undefined }`.
+ */
+export function loadSnapshot(path: URL = SNAPSHOT_CSV, population: URL = POPULATION_CSV): NndssTables {
+  return { ...nndssTables(readFileSync(path, 'utf8')), population: loadPopulation(population) };
 }
 
-/**
- * The committed population table, parsed — the denominator a rate needs.
- *
- * A door of its own rather than a field of {@link loadSnapshot}: the desk this
- * demo ships declares three tables and a graph, and giving every caller a
- * fourth table it has no view over would be a change to the dashboard rather
- * than a capability offered to one. A caller that wants cases per hundred
- * thousand asks for it:
- *
- * ```ts
- * const surface = buildNndssSurface({ ...loadSnapshot(), population: loadPopulation() });
- * ```
- */
+/** The committed population table alone, parsed — one door, so a test can read the denominator without the 90,300 cells. */
 export function loadPopulation(path: URL = POPULATION_CSV): PopulationRow[] {
   return populationRows(readFileSync(path, 'utf8'));
 }
@@ -99,10 +97,19 @@ async function carried(path: URL, table: string): Promise<{ readonly rows: reado
   return { rows: snap.rows, source: { format: 'csv', via: 'file', at: path.href, version: snap.version, retrievedAt: snap.retrievedAt, rows: snap.rows.length } };
 }
 
-/** The snapshot through the library's source layer, with the provenance the carrier vouches for. */
-export async function loadSnapshotAsync(path: URL = SNAPSHOT_CSV): Promise<{ readonly tables: NndssTables; readonly source: CarriedSource }> {
-  const { rows, source } = await carried(path, 'cells');
-  return { tables: nndssTablesFromRows(rows), source };
+/**
+ * The snapshot through the library's source layer, with the provenance the
+ * carrier vouches for — and the population table through the same carrier,
+ * keyed as the desk's provenance lists it, so a rate's denominator is vouched
+ * for by version exactly as its numerator is.
+ */
+export async function loadSnapshotAsync(
+  path: URL = SNAPSHOT_CSV,
+  population: URL = POPULATION_CSV,
+): Promise<{ readonly tables: NndssTables; readonly source: CarriedSource; readonly sources: Readonly<Record<'population.csv', CarriedSource>> }> {
+  const cells = await carried(path, 'cells');
+  const people = await carried(population, 'population');
+  return { tables: { ...nndssTablesFromRows(cells.rows), population: populationRowsFrom(people.rows) }, source: cells.source, sources: { 'population.csv': people.source } };
 }
 
 /** The committed graph, parsed and narrowed — a file that drifted from the generator is refused with the row and column. */

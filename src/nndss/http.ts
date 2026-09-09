@@ -1,7 +1,7 @@
 /**
  * THE COMMITTED SNAPSHOT, OVER HTTP — the browser half of the ETL.
  *
- * `./snapshot.ts` reads the same three CSVs off disk with the library's file
+ * `./snapshot.ts` reads the same four CSVs off disk with the library's file
  * carrier. A page has no disk, so it declares the same tables `via: 'http'`
  * and lets the http carrier fetch them: same declaration shape, same decoder,
  * same refusal vocabulary, and a version the SERVER vouched for rather than a
@@ -17,6 +17,7 @@ import { openSource } from 'vizfootprint/source';
 import { httpSource } from 'vizfootprint/source';
 import { nndssTablesFromRows, type NndssTables } from './etl.js';
 import { graphOf, type NndssGraph } from './graph.js';
+import { populationRowsFrom } from './population.js';
 import { NNDSS_FILES } from '../data/files.js';
 
 export { NNDSS_FILES };
@@ -49,13 +50,24 @@ async function carried(base: string | URL, file: string, table: string, format: 
   return { rows: snap.rows, source: { format, via: 'http', at, version: snap.version, retrievedAt: snap.retrievedAt, rows: snap.rows.length } };
 }
 
-/** The snapshot and the committed graph, fetched and shaped — the browser's `loadSnapshotAsync` + `loadGraphAsync`, in one round trip each. */
+/** The snapshot, the denominator and the committed graph, fetched and shaped — the browser's `loadSnapshotAsync` + `loadGraphAsync`, in one round trip each. */
 export async function loadNndssOverHttp(base: string | URL): Promise<{ readonly tables: NndssTables; readonly graph: NndssGraph; readonly sources: Readonly<Record<string, HttpCarriedSource>> }> {
-  const [cells, nodes, edges] = await Promise.all([carried(base, NNDSS_FILES.snapshot, 'cells', 'csv'), carried(base, NNDSS_FILES.nodes, 'nodes', 'csv'), carried(base, NNDSS_FILES.edges, 'edges', 'csv')]);
+  // WHY the denominator is fetched unconditionally though `NndssTables` marks
+  // it OPTIONAL: the same law `./snapshot.ts` states — the type is optional for
+  // the story page, which shapes its tables from one CSV, but a desk booted
+  // without it demos the gap rather than the column. All four fail together, so
+  // a missing file is a page that says which file, not a rate cell saying "no
+  // denominator" on every run. A caller wanting three tables spreads it away.
+  const [cells, people, nodes, edges] = await Promise.all([
+    carried(base, NNDSS_FILES.snapshot, 'cells', 'csv'),
+    carried(base, NNDSS_FILES.population, 'population', 'csv'),
+    carried(base, NNDSS_FILES.nodes, 'nodes', 'csv'),
+    carried(base, NNDSS_FILES.edges, 'edges', 'csv'),
+  ]);
   return {
-    tables: nndssTablesFromRows(cells.rows),
+    tables: { ...nndssTablesFromRows(cells.rows), population: populationRowsFrom(people.rows) },
     graph: graphOf({ nodes: nodes.rows, edges: edges.rows }),
-    sources: { 'snapshot.csv': cells.source, 'graph/nodes.csv': nodes.source, 'graph/edges.csv': edges.source },
+    sources: { 'snapshot.csv': cells.source, 'population.csv': people.source, 'graph/nodes.csv': nodes.source, 'graph/edges.csv': edges.source },
   };
 }
 

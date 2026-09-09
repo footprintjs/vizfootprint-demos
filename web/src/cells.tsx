@@ -74,6 +74,17 @@ export const colorOfArea = (name: string | undefined): string => {
 /** The columns the table cell prints — CDC's cells as CDC printed them. */
 const TABLE_COLUMNS = (absenceField: string): readonly string[] => ['jurisdiction', 'kind', 'cases', absenceField, 'flag', 'ytd', 'prev52_max'];
 /**
+ * The area kinds with no denominator, in the order a reader expects them, each
+ * in the rate caption's words. The `state` kind is last because it is the
+ * surprising one — a place CDC files individually and the estimates cannot
+ * answer for — and the caption names those by name.
+ */
+const UNRATED_KIND_WORDS: readonly (readonly [kind: string, words: string])[] = [
+  ['region', 'census-division regions'],
+  ['total', 'national roll-ups'],
+  ['state', 'places CDC files individually'],
+];
+/**
  * WHICH CELLS THE STORY FIGURE SHOWS. Four of them: a story column is half
  * a screen wide, and a reader following a narrative wants the charts the
  * narrative is about, not the whole instrument panel.
@@ -89,8 +100,12 @@ export const STORY_FIGURE = ['diseases', 'map', 'trend', 'weeks'] as const;
  * 'nodes' here would keep selecting under an address the def no longer owns the
  * moment the layer is renamed, and nothing would typecheck differently.
  */
-import { NETWORK_VIEW, NETWORK_NODES_LAYER, NETWORK_EDGES_LAYER } from '../../src/nndss/def.js';
-export { NETWORK_VIEW };
+import { NETWORK_VIEW, NETWORK_NODES_LAYER, NETWORK_EDGES_LAYER, RATE_VIEW } from '../../src/nndss/def.js';
+// the rate's two act ids and two column names come from the one module that
+// declares the acts — a caption that re-spelled them could name a commit that
+// is not on the log
+import { POPULATION_ACTS, POPULATION_ON_CELLS, RATE_COLUMN } from '../../src/nndss/population.js';
+export { NETWORK_VIEW, RATE_VIEW };
 export const NETWORK_NODES = layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER);
 /** The EDGES layer's address — where a WALK is spoken, because its clause is over that table (either endpoint in the walked set). */
 export const NETWORK_EDGES = layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER);
@@ -135,6 +150,12 @@ export interface NndssSeriesRow {
   readonly metric: string;
   readonly value: number;
 }
+/** One row of the `population` table: a place, how many people the Census Bureau estimated there, and the vintage of that estimate. */
+export interface NndssPopulationRow {
+  readonly jurisdiction: string;
+  readonly population: number;
+  readonly vintage?: number;
+}
 
 /**
  * What the desk is drawn over, however it arrived — off `/api/rows` in the
@@ -153,6 +174,16 @@ export interface NndssDeskData {
   readonly edges?: readonly NndssEdgeRow[];
   /** The sentence the session refused the graph's windows with, when it did. */
   readonly netRefused?: string | null;
+  /**
+   * The denominator, when this surface declares it — one row per place. Absent
+   * is a real answer (the story page shapes its tables from the one CSV it
+   * carries), and an absent table draws NO rate cell rather than a bar with
+   * nothing under it. The rate itself is not here: it is a column on `cells`,
+   * landed by two acts, and the cell reads it off the rows by name.
+   */
+  readonly population?: readonly NndssPopulationRow[];
+  /** The sentence the rate acts were refused with, or their window was, when they were. */
+  readonly rateRefused?: string | null;
   readonly diseases: readonly string[];
   readonly weeks: readonly string[];
   /** The declared absence column and its vocabulary. */
@@ -217,6 +248,7 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
   const trendX = bound('trend', 'x', 't');
   const trendY = bound('trend', 'y', 'value');
   const trendSeries = bound('trend', 'color', 'entity');
+  const rateField = bound(RATE_VIEW, 'category', 'jurisdiction');
   const selFor = desk.selFor;
 
   /**
@@ -272,7 +304,7 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
   /** The kind a view SUMS over — else states (summing states + regions + roll-ups would count every case three times). */
   const kindFor = (viewId: string): string => pickedFrom(selFor(viewId), 'kinds', 'kind', DEFAULT_KIND);
   /** "Has an area been chosen?" is the same question as any other: what reaches this view through the link graph. */
-  const areaChosenIn = (viewId: string): boolean => arrivesFrom(selFor(viewId), ['kinds', 'table', 'map']);
+  const areaChosenIn = (viewId: string): boolean => arrivesFrom(selFor(viewId), ['kinds', 'table', 'map', RATE_VIEW]);
 
   // the slices every fold below is keyed on: what is selected, what the links do with it, what was cleared
   const sel = [state.selections, state.links, state.cleared] as const;
@@ -389,6 +421,69 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
     const places = new Set(cells.filter((c) => c.kind === 'state').map((c) => c.jurisdiction));
     return [...places].filter((p) => !shapes.has(p)).sort();
   }, [geo, cells]);
+
+  // ── the rate: a column two acts landed, read off the rows by name ─────────
+
+  /**
+   * WHETHER THE RATE ACTS HAVE LANDED on the rows this desk was handed: the
+   * column is THERE — present on the row even where its value is null. A desk
+   * built off a session that never ran the acts (or off CDC's file) has rows
+   * with no such key, and the cell then says so rather than summing nothing.
+   */
+  const rateLanded = useMemo(() => cells.length > 0 && RATE_COLUMN in cells[0]!, [cells]);
+
+  /**
+   * WHICH PLACES HAVE NO DENOMINATOR — read off the bring-over act's own output
+   * (a `jurisdiction_population` that is null on every one of a place's cells),
+   * never off a list typed here. A fact about the table, like the silences: it
+   * does not move with the selection, and it is counted once per snapshot.
+   */
+  const unrated = useMemo(() => {
+    const kindOf = new Map<string, string>();
+    const withPeople = new Set<string>();
+    if (rateLanded)
+      for (const c of cells) {
+        kindOf.set(c.jurisdiction, c.kind);
+        if (typeof c[POPULATION_ON_CELLS] === 'number') withPeople.add(c.jurisdiction);
+      }
+    const byKind = new Map<string, string[]>();
+    for (const [place, kind] of kindOf) if (!withPeople.has(place)) byKind.set(kind, [...(byKind.get(kind) ?? []), place]);
+    return { rated: withPeople.size, total: kindOf.size - withPeople.size, byKind };
+  }, [cells, rateLanded]);
+
+  /**
+   * The rate per category of whatever column the bar encodes, for the picked
+   * disease, over the kept STATE cells — CDC's leaf rows, the only kind the
+   * estimates file names. Summing per-week rates is the rate of the summed
+   * cases (one denominator per place), so this is the map's fold in rate
+   * units; a silent cell carries a null and adds nothing, never a zero, and a
+   * place whose every kept cell is silent gets NO bar.
+   */
+  const rateData = useMemo(() => {
+    const s = selFor(RATE_VIEW);
+    const keep = keepPredicate(s);
+    const pickedDisease = diseaseFor(RATE_VIEW);
+    const sums = categorySums(cells, rateField, RATE_COLUMN, (r) => r['kind'] === 'state' && r['disease'] === pickedDisease && keep(r));
+    return [...sums.entries()].sort((a, b) => b[1] - a[1]).map(([category, count]) => ({ category, count }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor/diseaseFor read the slices already listed
+  }, [cells, rateField, ...sel]);
+
+  /** The places with no rate, said on screen where the bars are — counted, and the ones a reader would look for on the bar named. */
+  const unratedWords =
+    unrated.total === 0
+      ? ''
+      : ` · ${String(unrated.total)} jurisdictions have no row in the population table and therefore no rate: ${UNRATED_KIND_WORDS.flatMap(([kind, words]) => {
+          const names = unrated.byKind.get(kind);
+          if (names === undefined) return [];
+          return [kind === 'state' ? `${String(names.length)} ${words} (${names.join(', ')})` : `${String(names.length)} ${words}`];
+        }).join(', ')}`;
+  const [bringAct, deriveAct] = POPULATION_ACTS;
+  /** The estimates the denominator came from, in the table's own words: how many places, and which vintage the year must be quoted with. */
+  const censusWords = (): string => {
+    const rows = data.population ?? [];
+    const vintage = rows.find((row) => row.vintage !== undefined)?.vintage;
+    return `the Census Bureau's ${vintage === undefined ? '' : `Vintage ${String(vintage)} `}estimates for ${String(rows.length)} places`;
+  };
 
   const latestWeek = data.weeks[data.weeks.length - 1] ?? '';
   const tableRows = useMemo(() => {
@@ -526,6 +621,36 @@ export function useNndssCells(desk: DeskProjection, data: NndssDeskData): readon
           <VizMap viewId="map" geo={geo} coordinates="planar" regionField="jurisdiction" data={mapData} valueLabel="cases" ariaLabel={desk.altShort('map')} selection={selFor('map')} width={width} height={height} onEmit={emit('map', 'select')} />
         ),
     },
+    // THE RATE: the map's number divided by the people who live there, drawn only
+    // where this surface declares the denominator. Absent is a real answer (the
+    // story page's tables have no population), and no cell is honester than none.
+    ...(data.population === undefined
+      ? []
+      : [
+          {
+            id: RATE_VIEW,
+            weight: 4,
+            caption: (
+              <>
+                {!rateLanded
+                  ? // the body below is about to say nothing landed; a caption
+                    // describing two commits over it would be two answers to one
+                    // question, and the wrong one is the louder
+                    `cases per 100,000 people — no rate has landed on this session, so there is nothing to draw`
+                  : `${diseaseFor(RATE_VIEW)} — cases per 100,000 people per ${rateField === 'jurisdiction' ? 'reporting jurisdiction' : noun(rateField)}, summed over kept weeks, so it is a CUMULATIVE rate over that window and never an annual one${rateField === 'jurisdiction' ? '' : ' (a sum of per-place rates across places is not a rate — bind category back to jurisdiction)'} · from two acts on the trace: ${bringAct} carried ${censusWords()} across the declared relation cells.jurisdiction → population.jurisdiction onto every cell as ${POPULATION_ON_CELLS}, then ${deriveAct} landed ${RATE_COLUMN} = cases / ${POPULATION_ON_CELLS} × 100,000 · ${String(unrated.rated)} places have a rate${unratedWords} · a silent cell has no rate and adds nothing (a silence, never a zero) · a rate over very few cases is unstable — read a bar against its case count in the table before quoting it · click a bar to select the jurisdiction`}
+                {desk.words(RATE_VIEW)}
+              </>
+            ),
+            render: ({ width, height }: { width: number; height: number }): ReactNode =>
+              !rateLanded ? (
+                <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+                  {data.rateRefused ?? `the rate acts have not landed on this session — the cells carry no ${RATE_COLUMN} yet, so there is nothing honest to draw`}
+                </div>
+              ) : (
+                <VizBar viewId={RATE_VIEW} data={rateData} field={rateField} selection={selFor(RATE_VIEW)} columns={columns} fits={desk.fitsOf(RATE_VIEW)} encoding={shown[RATE_VIEW] ?? {}} width={width} height={height} onEmit={emit(RATE_VIEW, 'select')} onReencode={reencode} />
+              ),
+          },
+        ]),
     {
       id: 'weeks',
       weight: 3,

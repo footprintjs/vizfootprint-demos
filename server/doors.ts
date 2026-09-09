@@ -205,6 +205,8 @@ export async function createDesk(tables?: NndssTables, activity: ActivityStep[] 
   const driver = chooseDriver(process.env['ANTHROPIC_API_KEY']);
   const analyst = createNndssAnalyst(surface.port, {
     provider: driver.provider,
+    // the driver already decided this: absent in mock, because nothing is asked of a model
+    ...(driver.model !== undefined ? { model: driver.model } : {}),
     onActivity: (step) => activity.push(step),
   });
   return { surface, proposals: [], analyst, mode: driver.mode, ...(driver.model !== undefined ? { model: driver.model } : {}), activity, turnActive: false, transcript: [], provenance };

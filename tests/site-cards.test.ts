@@ -77,15 +77,16 @@ describe('the surfaces the site publishes', () => {
 });
 
 describe('the CDC desk and the CDC story page differ exactly where the design says', () => {
-  it('desk-only DECLARED chips are the network and what hangs off it: the view, its layers, the neighbourhood selection and link, the relation, the two graph analyses, the keyed node table', () => {
+  it('desk-only DECLARED chips are the network and the rate, and what hangs off them: the view, its layers, the neighbourhood selection and link, the relations, the four acts, the keyed tables', () => {
     const declaredOnDeskOnly = onlyOn(cdcDesk, cdcStory).filter((id) => id.startsWith('declares:'));
     expect([...declaredOnDeskOnly].sort()).toEqual(
-      ['declares:chart:network', 'declares:selection:neighbourhood', 'declares:link:neighbourhood', 'declares:relation:many-to-one', 'declares:builtin:layout', 'declares:builtin:bringOver', 'declares:holds:layers', 'declares:holds:row key'].sort(),
+      ['declares:chart:network', 'declares:selection:neighbourhood', 'declares:link:neighbourhood', 'declares:relation:many-to-one', 'declares:builtin:layout', 'declares:builtin:bringOver', 'declares:builtin:derive', 'declares:holds:layers', 'declares:holds:row key'].sort(),
     );
     // the same difference, read straight off the reader rather than off the chips
     expect(cdcDesk.declares.views.find((v) => v.viewId === 'net')?.layers).toHaveLength(2);
     expect(cdcStory.declares.views.some((v) => v.viewId === 'net')).toBe(false);
-    expect(cdcDesk.declares.analyses.map((a) => a.builtin).filter((b) => b !== undefined).sort()).toEqual(['bringOver', 'layout']);
+    // the graph's layout and bring-over, and the rate's bring-over and derive
+    expect(cdcDesk.declares.analyses.map((a) => a.builtin).filter((b) => b !== undefined).sort()).toEqual(['bringOver', 'bringOver', 'derive', 'layout']);
     expect(cdcStory.declares.analyses.some((a) => a.builtin !== undefined)).toBe(false);
   });
 

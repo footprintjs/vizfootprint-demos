@@ -18,6 +18,14 @@ export const NNDSS_FILES = {
   snapshot: 'data/nndss/snapshot.csv',
   nodes: 'data/nndss/graph/nodes.csv',
   edges: 'data/nndss/graph/edges.csv',
+  // The denominator: one row per place, Census Vintage 2024 (as of July 1,
+  // 2024). The rate's BRING-OVER act reads it across the declared relation and
+  // lands the column on `cells`; the derive act then divides by what that act
+  // left there, and never touches this table (the library has no `lookup` op —
+  // `vizfootprint`'s `src/derive/README.md`, law 12). `snapshot.csv` three
+  // lines up ships MMWR 2025-2026 cases, so the two files are YEAR-COUPLED and
+  // are refetched together.
+  population: 'data/population/population.csv',
   geo: 'data/geo/us-states.geo.json',
 } as const;
 
@@ -36,7 +44,7 @@ export const GRID_FILES = {
  * to travel with the file it covers — publishing the boundaries without it
  * would break the one condition that made publishing them lawful.
  */
-export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json'] as const;
+export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json'] as const;
 
 /** Everything the built site needs under `data/` — the tables and the papers that must travel with them. */
 export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...SITE_PROVENANCE_FILES];

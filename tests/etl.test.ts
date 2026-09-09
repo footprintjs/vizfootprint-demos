@@ -48,6 +48,22 @@ describe('nndssTables on a tiny CSV in the snapshot shape', () => {
     expect(t.cells[2]).toMatchObject({ jurisdiction: 'Guam', cases: null, report_state: 'not-configured', flag: 'N', ytd: null, ytd_state: 'not-configured' });
     expect(t.cells[3]).toMatchObject({ jurisdiction: 'Vermont', cases: null, report_state: 'unavailable', flag: 'U' });
     expect(t.counts).toEqual({ present: 3, 'not-configured': 1, unavailable: 1, withheld: 0, unknown: 0 });
+    expect(t.skipped).toBe(0);
+    // the previous-52-week maximum carries its STATE too: CDC flags `m2` from
+    // the same vocabulary, so a suppressed baseline is not a missing one
+    expect(t.cells[0]).toMatchObject({ prev52_max: 40, prev52_max_state: 'present' });
+    expect(t.cells[2]).toMatchObject({ prev52_max: null, prev52_max_state: 'not-configured' });
+  });
+
+  it('a row that names no place, no disease or no MMWR week is SKIPPED and counted, never shaped into a cell', () => {
+    // a stray blank line is a short row (`parseCSV` pads the missing cells with
+    // null), and `String(null)` / `Number(null)` would make it the place "null"
+    // in the year 0 — a 1899 date that sorts first, at the left edge of the axis
+    const stray = nndssTables([csv, '', ',,,,,,,,,,,,,,,'].join('\n'));
+    expect(stray.cells).toHaveLength(5);
+    expect(stray.skipped).toBe(2);
+    expect(stray.weeks).toEqual(['2026-03-14', '2026-03-21']);
+    expect(stray.jurisdictions.map((j) => j.jurisdiction)).not.toContain('null');
   });
 
   it('series points exist for every PRESENT cell, each naming its kind — a silence is a missing row', () => {

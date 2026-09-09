@@ -16,35 +16,10 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { graphReadingFor } from 'vizfootprint/def';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
-import { DEFAULT_DISEASE, NETWORK_NODES, useNndssCells, type NndssDeskData, type NndssEdgeRow, type NndssNodeRow } from '../web/src/cells.js';
+import { DEFAULT_DISEASE, NETWORK_NODES, type NndssDeskData, type NndssEdgeRow, type NndssNodeRow } from '../web/src/cells.js';
 import { buildNndssSurface, graphRowsAt, layOutGraph } from '../src/nndss/surface.js';
 import { loadGraph } from '../src/nndss/snapshot.js';
-
-/** A desk with nothing selected, nothing said and nothing to say — the quietest true projection. */
-const QUIET = {
-  state: { selections: [], links: [], cleared: [] },
-  view: { emit: () => undefined, reencode: () => undefined },
-  bound: (_viewId: string, _channel: string, fallback: string) => fallback,
-  selFor: () => ({ clauses: new Map(), resolve: 'intersect', selfClauseId: null }),
-  fitsOf: () => undefined,
-  shown: {},
-  columns: [],
-  label: (viewId: string) => viewId,
-  words: () => null,
-  proseOf: () => [],
-  altShort: () => undefined,
-  readOnly: false,
-  say: () => undefined,
-  openAside: () => undefined,
-  editChart: () => undefined,
-  seekBookmark: () => undefined,
-  applyPicture: () => undefined,
-  savePicture: () => undefined,
-  describeCommit: () => undefined,
-  // WHY the cast: `DeskProjection` is the desk's own contract, built by a hook the
-  // studio does not export. A stub is the only way in from outside, and naming
-  // every member above is what keeps it an honest one.
-} as unknown as DeskProjection;
+import { QUIET, cellsOf, count, textOf } from './deskStub.js';
 
 /** The desk data a surface with no graph hands over — the story page's shape. */
 const NO_GRAPH: NndssDeskData = { cells: [], series: [], diseases: [], weeks: [], absence: { field: 'report_state', states: [] }, grain: {}, geo: null };
@@ -54,20 +29,6 @@ function picking(sourceViewId: string, value: string): DeskProjection {
   const clauses = new Map([[sourceViewId, { field: 'disease', kind: 'point', value, predicate: (row: Record<string, unknown>) => row['disease'] === value }]]);
   return { ...QUIET, selFor: () => ({ clauses, resolve: 'intersect', selfClauseId: null }) } as unknown as DeskProjection;
 }
-
-/** The cells, built the way the desk builds them: once, from a component body. */
-function cellsOf(data: NndssDeskData, desk: DeskProjection = QUIET): ReturnType<typeof useNndssCells> {
-  let built: ReturnType<typeof useNndssCells> = [];
-  function Probe(): null {
-    built = useNndssCells(desk, data);
-    return null;
-  }
-  renderToStaticMarkup(<Probe />);
-  return built;
-}
-
-const textOf = (node: React.ReactNode): string => renderToStaticMarkup(<>{node}</>).replace(/<[^>]+>/g, '');
-const count = (html: string, tag: string): number => (html.match(new RegExp(`<${tag}[ >]`, 'g')) ?? []).length;
 
 /** The real graph, laid out by the real acts — the rows the cockpit's own door serves. */
 async function realGraphData(): Promise<NndssDeskData> {

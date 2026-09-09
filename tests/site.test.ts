@@ -40,7 +40,7 @@ describe('every file a page fetches is a file the build carries', () => {
 describe('one rows payload, two hosts', () => {
   it('gives the CDC desk every field its cockpit reads', () => {
     const rows = nndssRows(buildNndssSurface(undefined, loadGraph()));
-    expect(Object.keys(rows).sort()).toEqual(['absence', 'cells', 'counts', 'declared', 'diseases', 'edges', 'grain', 'grammar', 'jurisdictions', 'netRefused', 'nodes', 'series', 'weeks']);
+    expect(Object.keys(rows).sort()).toEqual(['absence', 'cells', 'counts', 'declared', 'diseases', 'edges', 'grain', 'grammar', 'jurisdictions', 'netRefused', 'nodes', 'population', 'rateRefused', 'series', 'weeks']);
   });
 
   it('gives the grid desk every field its cockpit reads', () => {

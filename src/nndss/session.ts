@@ -8,9 +8,9 @@
  * site's page hands in tables it fetched over http. One session builder, two
  * ways in — see `./http.ts`.
  *
- *   tables  = loadSnapshot()          layer 1 — CDC's bytes, shaped
+ *   tables  = loadSnapshot()          layer 1 — CDC's bytes, shaped, with the Census denominator beside them
  *   graph   = loadGraph()             layer 1 — the committed co-occurrence graph, read back
- *   def     = nndssDef(tables, graph) layers 2–4 — declared: five tables, two relations
+ *   def     = nndssDef(tables, graph) layers 2–4 — declared: six tables, three relations
  *   session = buildDashboard(def)     validated (the firewall throws on a lie)
  *               .createSession()
  *   port    = vizAsTools(session)     the eight tools the agent may call
@@ -26,6 +26,7 @@ import type { Row } from 'vizfootprint/data';
 import { GRAPH_LAYOUT_SEED, nndssDef } from './def.js';
 import type { NndssTables } from './etl.js';
 import type { NndssGraph } from './graph.js';
+import { POPULATION_ACTS, POPULATION_ON_CELLS, RATE_COLUMN } from './population.js';
 
 export interface NndssSurface {
   readonly session: InteractionSession;
@@ -48,6 +49,14 @@ export interface NndssSurface {
    * door serves this instead of re-reading per request — see {@link graphRowsAt}.
    */
   readonly graphRows: GraphRowsAtCursor;
+  /** What the two rate acts REFUSED, kept for the same reason `layoutRefusals` is — see {@link landTheRate}. */
+  readonly rateRefusals: readonly string[];
+  /**
+   * The cells table AT THE CURSOR — CDC's rows plus the two columns the rate
+   * acts wrote onto them — read once, at the same clause-free moment as the
+   * graph. The rows door serves THIS as `cells`; see {@link cellsAt}.
+   */
+  readonly cellsAtCursor: CellsAtCursor;
 }
 
 /**
@@ -84,6 +93,37 @@ export async function layOutGraph(session: InteractionSession): Promise<readonly
 }
 
 /**
+ * THE TWO ACTS THAT TURN COUNTS INTO A RATE — dispatched, never computed.
+ *
+ * `bringPopulation` carries `population` across the declared relation
+ * `cells.jurisdiction → population.jurisdiction` and lands it on `cells` as
+ * `jurisdiction_population`; `casesPer100k` then lands
+ * `cases / jurisdiction_population * 100000` as a declared column
+ * (`POPULATION_ANALYSES`, `./population.ts`). Both are ordinary `analyze`
+ * commits at the top of the log, right after the layout's two, carrying their
+ * whole declaration — so a replay rebuilds the rate from bytes alone and a
+ * reader who asks where a number came from is shown two commits.
+ *
+ * WHY the second is skipped when the first refused: the derive column is judged
+ * against the columns visible at the cursor, and without the denominator it is
+ * refused in a sentence naming the column it could not read — a second sentence
+ * about the same missing table, which a reader has already been told.
+ *
+ * A surface with no population table refuses both here, in words, before any
+ * dispatch: the def declared no such act, and a session sentence about an
+ * undeclared analysis would name the symptom rather than the cause.
+ */
+export async function landTheRate(session: InteractionSession, tables: Pick<NndssTables, 'population'>): Promise<readonly string[]> {
+  if (tables.population === undefined) return ['this surface declares no population table, so there is no denominator to bring over and no rate to derive'];
+  const cause = (intent: string): Cause => ({ requestedBy: 'system', computedBy: 'system', intent });
+  const [bring, derive] = POPULATION_ACTS;
+  const brought = await land(session, bring, 'cells', cause(`bring each place's Census population over the declared relation onto the cells, as ${POPULATION_ON_CELLS}`));
+  if (brought !== null) return [brought];
+  const rate = await land(session, derive, 'cells', cause(`derive ${RATE_COLUMN} = cases / ${POPULATION_ON_CELLS} * 100000 on every cell`));
+  return rate === null ? [] : [rate];
+}
+
+/**
  * One `analyze` act, landed — the refusal SENTENCE, or null when a commit
  * landed. Three ways an act can fail to put anything on the log, and all three
  * come back as words:
@@ -100,7 +140,16 @@ async function land(session: InteractionSession, analysisId: string, table: stri
     if (!res.ok) return res.rejection.detail;
     if (res.analysis?.commit !== undefined) return null;
     const result = res.analysis?.result;
-    const why = result !== undefined && !result.ok ? ` — ${result.reason} at ${String(result.n)} rows` : '';
+    // Two ways an analysis lands nothing, and they are not the same thing: a
+    // DEGENERATE fit read the rows and found no honest answer in them; an
+    // UNAVAILABLE one never read them, because the engine refused — so it
+    // carries the engine's own sentence and no row count at all.
+    const why =
+      result === undefined || result.ok
+        ? ''
+        : result.reason === 'unavailable'
+          ? ` — the rows could not be read: ${result.rejection.detail ?? result.rejection.reason}`
+          : ` — ${result.reason} at ${String(result.n)} rows`;
     return `analysis "${analysisId}" landed nothing${why}`;
   } catch (err) {
     return `analysis "${analysisId}" threw: ${err instanceof Error ? err.message : String(err)}`;
@@ -153,6 +202,36 @@ export async function graphRowsAt(session: InteractionSession, graph: NndssGraph
 }
 
 /**
+ * THE CELLS TABLE AT THE CURSOR — CDC's rows plus whatever the rate acts wrote
+ * onto them (`jurisdiction_population`, `cases_per_100k`). The graph's law,
+ * applied to the cells: a derived column lives on the session, not in the CSV,
+ * and a desk drawn off the file would have to divide on its own — the exact
+ * thing the acts exist to have already done, on the trace.
+ *
+ * Read ONCE, clause-free, by {@link openNndssSurfaceAsync}, for the reason
+ * {@link graphRowsAt} gives: a window read later narrows under whatever is
+ * selected, and a reload would serve a dashboard missing the cells somebody
+ * happened to have filtered out.
+ *
+ * `refused` carries the sentence when the acts did not land or the window was
+ * not answered — and the rows are then CDC's own, so a desk still draws its
+ * counts and its rate cell says why it has none.
+ */
+export interface CellsAtCursor {
+  readonly rows: readonly Row[];
+  /** `null` when both acts landed and the window answered; the sentence when it did not. */
+  readonly refused: string | null;
+}
+
+export async function cellsAt(session: InteractionSession, tables: NndssTables, rateRefusals: readonly string[]): Promise<CellsAtCursor> {
+  if (rateRefusals.length > 0) return { rows: tables.cells, refused: rateRefusals.join('; ') };
+  // a window of zero rows is a table of zero rows, not a question worth asking
+  if (tables.cells.length === 0) return { rows: [], refused: null };
+  const window = await session.viewQuery({ table: 'cells', limit: tables.cells.length });
+  return window.ok ? { rows: window.rows, refused: null } : { rows: tables.cells, refused: window.rejected };
+}
+
+/**
  * The surface, SYNCHRONOUSLY — for a test or a script that wants a session and
  * nothing else. The graph is declared but NOT laid out: dispatching is async,
  * and a builder that quietly returned before its own acts landed would be a
@@ -170,7 +249,11 @@ export function openNndssSurface(tables: NndssTables, graph: NndssGraph): NndssS
     edges: graph.edges,
     refused: 'the layout act has not landed on this session — this surface was built synchronously, which declares the graph without laying it out',
   };
-  return { session, port, tables, graph, dashboard, layoutRefusals: [], graphRows };
+  const cellsAtCursor: CellsAtCursor = {
+    rows: tables.cells,
+    refused: 'the rate acts have not landed on this session — this surface was built synchronously, which declares the population without bringing it over',
+  };
+  return { session, port, tables, graph, dashboard, layoutRefusals: [], graphRows, rateRefusals: [], cellsAtCursor };
 }
 
 /**
@@ -184,10 +267,12 @@ export async function openNndssSurfaceAsync(tables: NndssTables, graph: NndssGra
   const session = dashboard.createSession({ as: 'agent' });
   const port = vizAsTools(session, { as: 'agent' });
   const layoutRefusals = await layOutGraph(session);
+  const rateRefusals = await landTheRate(session, tables);
   // read HERE and nowhere else: this is the one moment the session is guaranteed
   // to hold no clause, which is the only moment the whole-dashboard window is
-  // the whole graph
+  // the whole graph — and the whole cells table
   const read = await graphRowsAt(session, graph);
   const graphRows: GraphRowsAtCursor = read.refused === null && layoutRefusals.length > 0 ? { ...read, refused: layoutRefusals.join('; ') } : read;
-  return { session, port, tables, graph, dashboard, layoutRefusals, graphRows };
+  const cellsAtCursor = await cellsAt(session, tables, rateRefusals);
+  return { session, port, tables, graph, dashboard, layoutRefusals, graphRows, rateRefusals, cellsAtCursor };
 }

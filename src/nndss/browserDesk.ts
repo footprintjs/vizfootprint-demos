@@ -42,7 +42,7 @@ export function createBrowserDesk(surface: NndssSurface, key: string | undefined
   const driver = chooseDriver(key, fetchImpl);
   const activity: ActivityStep[] = [];
   const desk: DrivenDesk = {
-    analyst: createNndssAnalyst(surface.port, { provider: driver.provider, onActivity: (step) => activity.push(step) }),
+    analyst: createNndssAnalyst(surface.port, { provider: driver.provider, ...(driver.model !== undefined ? { model: driver.model } : {}), onActivity: (step) => activity.push(step) }),
     mode: driver.mode,
     ...(driver.model !== undefined ? { model: driver.model } : {}),
     activity,

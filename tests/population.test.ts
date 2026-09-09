@@ -29,7 +29,7 @@ import type { NndssTables } from '../src/nndss/etl.js';
 
 const cause: Cause = { requestedBy: 'user', computedBy: 'user', intent: 'ask for a rate' };
 
-/** The real committed denominator — 52 places, fetched from the Census Bureau with its provenance beside it. */
+/** The real committed denominator — 51 places, fetched from the Census Bureau with its provenance beside it (the file's 52nd row, New York, is refused the join: see `populationRowsFrom`). */
 const POPULATION = loadPopulation();
 const PEOPLE = new Map(POPULATION.map((row) => [row.jurisdiction, row.population] as const));
 
@@ -101,6 +101,9 @@ describe('the denominator is declared, not looked up', () => {
     // and the names are the Census Bureau's own, unedited — which is what makes the join a join
     expect(PEOPLE.get('Texas')).toBeGreaterThan(20_000_000);
     expect(PEOPLE.has('New England')).toBe(false);
+    // and New York is absent although the file names it — its Census row counts
+    // New York City's people while CDC's `New York` cells exclude them
+    expect(PEOPLE.has('New York')).toBe(false);
   });
 
   it('reads a row only when it carries both numbers, and never guesses at one it does not', () => {
@@ -109,6 +112,14 @@ describe('the denominator is declared, not looked up', () => {
     // a file with no vintage column is readable, and the year is simply NOT
     // CLAIMED — a year nobody wrote down does not become a zero
     expect(populationRows('jurisdiction,population\n"Texas",100\n')).toEqual([{ jurisdiction: 'Texas', population: 100 }]);
+    // a population that is not a POSITIVE count of people is no denominator: a
+    // zero would be FOLLOWED by the join and counted as covered, while
+    // `cases / 0` came back absent — a place the trace calls answered and the
+    // screen leaves blank. A negative one would be drawn.
+    expect(populationRows('jurisdiction,population\n"Guam",0\n"Utah",-1\n')).toEqual([]);
+    // and a name whose Census row covers different people than CDC's row of the
+    // same name is refused the join outright, rather than joined to the wrong ones
+    expect(populationRows('jurisdiction,population,vintage\n"New York",19867248,2024\n"Ohio",11000000,2024\n')).toEqual([{ jurisdiction: 'Ohio', population: 11000000, vintage: 2024 }]);
   });
 });
 

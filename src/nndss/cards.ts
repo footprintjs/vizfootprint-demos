@@ -2,11 +2,16 @@
  * WHAT THIS DEMO COVERS — the two surfaces, as cards.
  *
  * THE FACT THIS FILE EXISTS FOR: **one demo is not one dashboard.** The desk
- * builds its definition WITH the co-occurrence graph — a network view, two
- * layers, eight analyses, a walk you can take from a node — and the story page
- * builds the same demo WITHOUT it, from the same `nndssDef`. Its captured trace
- * never touches the network at all. So this demo has TWO cards, with two
+ * builds its definition WITH the co-occurrence graph AND WITH the Census
+ * denominator — a network view over two layers, a walk you can take from a
+ * node, and cases per 100,000 people — and the story page builds the same demo
+ * WITHOUT EITHER, from the same `nndssDef`: counts only, and a captured trace
+ * that never touches the network at all. So this demo has TWO cards, with two
  * revisions, and every fact on each one came off the surface it names.
+ *
+ * No count of anything is typed in that sentence, and that is deliberate: the
+ * numbers move with the def, and a hand-written one here would be the first
+ * thing on either card a reader could not trust.
  *
  * Nothing here lists a feature. `defFeatures` reads them off the built
  * dashboards and `logFeatures` off the captured commits; the only hand-written
@@ -82,12 +87,15 @@ export function nndssSurfaces(input: NndssCardsInput): readonly DemoSurface[] {
   return [deskSurface(input), storySurface(input)];
 }
 
-/** The desk: the definition WITH the graph, and the gestures this cockpit wires to it. */
+/** The desk: the definition WITH the graph and WITH the denominator, and the gestures this cockpit wires to it. */
 function deskSurface(input: NndssCardsInput): DemoSurface {
+  // the vintage is READ off the table this card is built over, never typed — a
+  // caption that outlived its file is the one thing this module exists to stop
+  const vintage = input.tables.population?.find((row) => row.vintage !== undefined)?.vintage;
   return {
     demo: NNDSS_DEMO,
     surface: 'desk',
-    blurb: 'the whole cockpit, built with the disease co-occurrence graph — a network view over two layers, and a walk you can take from a node',
+    blurb: `the whole cockpit, built with the disease co-occurrence graph — a network view over two layers, and a walk you can take from a node — and with the Census denominator, so a bar can show cases per 100,000 people${vintage === undefined ? '' : ` over the Bureau's Vintage ${String(vintage)} estimates`}`,
     href: '/',
     declares: defFeatures(buildDashboard(nndssDef(input.tables, input.graph))),
     byHand: NNDSS_GESTURES,
@@ -95,8 +103,8 @@ function deskSurface(input: NndssCardsInput): DemoSurface {
 }
 
 /**
- * The story page: the SAME definition function, called without the graph, and
- * the trace somebody really left on it.
+ * The story page: the SAME definition function, called without the graph AND
+ * without the denominator, and the trace somebody really left on it.
  *
  * It carries no `byHand` notes: a story page's reader steps into the cockpit
  * through a door in the prose, and which gestures that cockpit offers is the
@@ -104,11 +112,20 @@ function deskSurface(input: NndssCardsInput): DemoSurface {
  */
 function storySurface(input: NndssCardsInput): DemoSurface {
   const captured = input.captured;
+  // WHY the fields are NAMED rather than the population spread away: the story
+  // page shapes its tables from the one CSV it carries (`web/story/entry.tsx`),
+  // so it declares no denominator, no relation and no rate — and a card built
+  // over `loadSnapshot()`'s default would advertise two acts a reader opening
+  // that page cannot land. The card must be built the way the page builds, and
+  // a deny-list would carry the NEXT optional table onto this card by default;
+  // naming what the page's ETL really produces excludes it unless somebody adds it.
+  const { cells, jurisdictions, series, grain, diseases, weeks, counts, skipped } = input.tables;
+  const tables: NndssTables = { cells, jurisdictions, series, grain, diseases, weeks, counts, skipped };
   return {
     demo: NNDSS_DEMO,
     surface: 'story page',
-    blurb: 'one HTML file: the same demo without the graph, carrying its own log, bookmarks and pictures',
-    declares: defFeatures(buildDashboard(nndssDef(input.tables))),
+    blurb: 'one HTML file: the same demo without the graph and without the denominator — counts only, no cases per 100,000 — carrying its own log, bookmarks and pictures',
+    declares: defFeatures(buildDashboard(nndssDef(tables))),
     ...(captured === undefined ? {} : { walked: logFeatures(captured.log, { bookmarks: captured.bookmarks, saved: captured.saved }) }),
   };
 }

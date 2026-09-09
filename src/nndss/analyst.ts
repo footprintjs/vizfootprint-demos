@@ -20,6 +20,7 @@ import { agentThinkingTrace } from 'agentfootprint/observe';
 import { browserAnthropic, mock, type LLMProvider, type LLMRequest, type LLMResponse } from 'agentfootprint/providers';
 import type { VizToolResult, VizToolsPort } from 'vizfootprint/agent';
 import { NNDSS_ANALYSIS_IDS } from './analyses.js';
+import { readReply } from './reply.js';
 
 /**
  * The environment's word for the model, where there is an environment.
@@ -30,7 +31,12 @@ import { NNDSS_ANALYSIS_IDS } from './analyses.js';
  */
 function envModel(): string | undefined {
   try {
-    return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.['ANTHROPIC_MODEL'];
+    // WHY the blank is ABSENT rather than empty, the reading `chooseDriver`
+    // gives the key: `ANTHROPIC_MODEL= npm run serve` sets the variable to '',
+    // which is not nullish — so `?? 'claude-sonnet-5'` would keep it and every
+    // live turn would ask the API for the model "".
+    const raw = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.['ANTHROPIC_MODEL'];
+    return raw === undefined || raw.trim() === '' ? undefined : raw.trim();
   } catch {
     return undefined;
   }
@@ -49,6 +55,8 @@ export interface ActivityStep {
 }
 export interface AnalystOptions {
   readonly provider?: LLMProvider;
+  /** The model a live turn will name, for the trace — absent in mock, the way {@link AnalystDriver.model} is. */
+  readonly model?: string;
   readonly onActivity?: (step: ActivityStep) => void;
   readonly maxIterations?: number;
 }
@@ -71,11 +79,13 @@ export const SYSTEM = `You are the analyst on a LIVE dashboard of CDC's weekly n
 
 The rows are CELLS: one area (a state, territory or city; a census-division REGION; or a national roll-up TOTAL), one disease, one MMWR week (t = the Saturday that ends it). A cell's number is cases; a cell with no number carries report_state instead: not-configured (not reportable there — stop looking), unavailable (the area could not send it — go ask), withheld (CDC has it and did not print it), unknown (nothing said). A silence is NEVER a zero: every analysis runs over present cells only and its notes say so.
 
-The views (whats_here lists them): coverage (bar, category=report_state), diseases (bar, category=disease), kinds (bar, category=kind), weeks (line, x=t y=cases), trend (line: the picked disease per area over t), table (the cells at the latest week), analyst (yours). The sums the cockpit shows are over ONE kind of area — states unless a select on 'kinds' says otherwise (select kind=region there to see regions). Regions and totals are CDC's own rows, never sums anyone made.
+The views (whats_here lists them): coverage (bar, category=report_state), diseases (bar, category=disease), kinds (bar, category=kind), map (the picked disease per state), rate (bar, category=jurisdiction: cases per 100,000 people for the PICKED disease, summed over the weeks the filter keeps — a CUMULATIVE rate over that window, never an annual one; its category stays 'jurisdiction', because a sum of per-place rates across places is not a rate), weeks (line, x=t y=cases), trend (line: the picked disease per area over t), table (the cells at the latest week), analyst (yours). The sums the cockpit shows are over ONE kind of area — states unless a select on 'kinds' says otherwise (select kind=region there to see regions). Regions and totals are CDC's own rows, never sums anyone made.
+
+The tables: cells (the default — every clause, analysis and window reads it), jurisdictions, series, population (one row per place: the Census Bureau's Vintage 2024 estimate, as of July 1 2024 — a denominator one to two years OLDER than these MMWR 2025 and 2026 case weeks, and a rate's basis names that vintage — keyed by the same name CDC files the place under), and the co-occurrence graph's nodes and edges. A RATE is on the cells already, landed at boot by two acts you can read on the log: bringPopulation carried population across the declared relation cells.jurisdiction → population.jurisdiction as jurisdiction_population, and casesPer100k landed cases_per_100k = cases / jurisdiction_population * 100000 — ONE MMWR week's cases per 100,000 people, so the column is a WEEKLY rate and the bar's height is that rate summed over the kept weeks. Nineteen jurisdictions — the nine census-division regions, the four national roll-ups, New York, New York City and the four territories other than Puerto Rico — have no row in the population table, so their jurisdiction_population and cases_per_100k are null: no rate, never a zero. New York is on that list although the Census Bureau names it: CDC files New York City as its own reporting area, so the New York cells EXCLUDE the city while the Census row of that name counts it, and a denominator must cover the same people as its numerator — the honest answer is a silence, not a number that is 40% low. NO TOOL HANDS YOU A RATE NUMBER: whats_here carries no data rows, and every declared analysis measures cases, not cases_per_100k. So speak about the rate chart's SHAPE — which bars are tall, which places have no bar at all — and never quote a rate figure; a question that needs one ranked or compared is a typed GAP to cite (rule 4), never a division you did yourself. And a rate over a handful of cases is noise: under about 20 cases in the window it is unreliable (the CDC/NCHS standard), so never call a place highest or lowest on a small count.
 
 Your tools are FIXED: whats_here, dispatch, declare_analysis, why, fork, bookmark, paths, compare, propose_chart. Work method, every turn:
 1. Call whats_here FIRST — the views and their encodings, the columns, the active selections, the analyses and whether each is ready, the FDR ledger, the gaps, the named paths. Orient before you act.
-2. Narrow with dispatch: verb 'select' takes one point value — viewId 'diseases' field 'disease' (a disease name exactly as listed), 'kinds' field 'kind' (state | region | total), 'coverage' field 'report_state', 'table' or 'map' field 'jurisdiction' (an area name) — OR MANY values: pass values (an array) instead of value to keep exactly those, add exclude: true to keep everything BUT them ("the Gulf states", "all but Texas"); values: null clears that view's selection. Verb 'filter' takes an ISO-8601 date range on field 't' through viewId 'weeks' — either bound may be null; range null clears it. Verb 'reencode' rebinds a channel whats_here lists for a view. One dispatch is one act; say your intent in plain words — it becomes the commit's cause.
+2. Narrow with dispatch: verb 'select' takes one point value — viewId 'diseases' field 'disease' (a disease name exactly as listed), 'kinds' field 'kind' (state | region | total), 'coverage' field 'report_state', 'table', 'map' or 'rate' field 'jurisdiction' (an area name) — OR MANY values: pass values (an array) instead of value to keep exactly those, add exclude: true to keep everything BUT them ("the Gulf states", "all but Texas"); values: null clears that view's selection. Verb 'filter' takes an ISO-8601 date range on field 't' through viewId 'weeks' — either bound may be null; range null clears it. Verb 'reencode' rebinds a channel whats_here lists for a view — never the rate view's category, which stays 'jurisdiction': a sum of per-place rates across places is not a rate. One dispatch is one act; say your intent in plain words — it becomes the commit's cause.
 3. Never compute a statistic yourself. declare_analysis runs a DECLARED analysis over the current selection: ${NNDSS_ANALYSIS_IDS.join(', ')}. The group summaries (casesByDisease, casesByKind, casesByArea, casesByWeek) return present-cell counts and mean weekly cases per group; trendOverWeeks fits a straight line through cases over the week index and is refused as degenerate under 10 points; casesVsPrev52Max is a TEST — does this week track the previous 52-week high — and lands one row in the FDR ledger. Report the ledger's verdict from whats_here, never your own count; a degenerate flag is a non-discovery — say so.
 4. A question no analysis can answer comes back as a typed gap. Cite the gap instead of inventing a number — that is how the team learns what to build.
 5. STORY: when the person asks to save, keep, mark or remember a moment, call bookmark with a short name. Acting while viewing the past forks a branch. In your reply, name each act you took by its verb (select, filter, analyze, bookmark, …) so the person can read your reply against the commit log.
@@ -154,7 +164,14 @@ export function createNndssAnalyst(port: VizToolsPort, options: AnalystOptions =
     });
   });
 
-  const think = agentThinkingTrace({ agent: 'NNDSS analyst', model: MODEL, asker: 'you' });
+  // the trace names the model a turn will really ask; the scripted driver asks
+  // none, and stamping the live name on it would break the law `AnalystDriver.model`
+  // states forty lines up — absent in mock, because nothing is asked of a model
+  const think = agentThinkingTrace({ agent: 'NNDSS analyst', model: options.model ?? 'scripted (no model)', asker: 'you' });
+  // WHY the literal and not MODEL: 'anthropic' is the provider-default SENTINEL —
+  // `browserAnthropic.buildBody` swaps it for that provider's `defaultModel`, which
+  // `liveProvider` set to MODEL, and the mock has no model to name. Writing MODEL
+  // here would move the model choice out of the one place this file swears owns it.
   let builder = Agent.create({ provider: options.provider ?? scriptedNndssMock(), name: 'nndss-analyst', model: 'anthropic' })
     .system(SYSTEM)
     .maxIterations(options.maxIterations ?? 12)
@@ -185,7 +202,14 @@ export function createNndssAnalyst(port: VizToolsPort, options: AnalystOptions =
       const result = await agent.run({ message }, { correlationId });
       if (isPaused(result)) return { text: 'The run paused unexpectedly (no confirmation gate is wired).', correlationId };
       const text = String(result);
-      transcript.push(`Analyst: ${text.slice(0, 300)}`);
+      // WHY the envelope is READ before it is remembered: `text` is the whole
+      // two-key JSON object SYSTEM asks for, and slicing that at 300 characters
+      // stores an object cut mid-string — which is what the next turn is handed
+      // back under "Recent conversation". `refs` would eat the budget meant for
+      // words, and the analyst would read its own past replies as broken machinery.
+      const said = readReply(text);
+      const words = said.kind === 'envelope' && typeof said.value.text === 'string' ? said.value.text : text;
+      transcript.push(`Analyst: ${words.slice(0, 300)}`);
       return { text, correlationId };
     },
   };

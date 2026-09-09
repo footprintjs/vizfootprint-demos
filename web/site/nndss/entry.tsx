@@ -10,7 +10,8 @@
  * `useNndssCells` (one set of charts) and the Grammar panel.
  *
  * The boot, in the order the server does it:
- *   1. the three committed CSVs, over http, through the library's source port
+ *   1. the four committed CSVs — the snapshot, the denominator and the graph's
+ *      two — over http, through the library's source port
  *   2. the ETL, unchanged — it was always pure
  *   3. the dashboard, validated, and the two layout acts landed as commits
  *   4. a session view over an IN-PROCESS session (`sessionSource`), not a poll
@@ -58,7 +59,7 @@ async function boot(): Promise<Booted> {
 
 function StaticNndssDesk({ booted }: { readonly booted: Booted }): JSX.Element {
   const { surface, rows, geo, checks } = booted;
-  const data: NndssDeskData = { cells: rows.cells, series: rows.series, nodes: rows.nodes, edges: rows.edges, netRefused: rows.netRefused, diseases: rows.diseases, weeks: rows.weeks, absence: rows.absence, grain: rows.grain, geo };
+  const data: NndssDeskData = { cells: rows.cells, series: rows.series, nodes: rows.nodes, edges: rows.edges, netRefused: rows.netRefused, population: rows.population, rateRefused: rows.rateRefused, diseases: rows.diseases, weeks: rows.weeks, absence: rows.absence, grain: rows.grain, geo };
   const silences = useSilences(data);
   return (
     <Desk
@@ -79,8 +80,9 @@ function StaticNndssDesk({ booted }: { readonly booted: Booted }): JSX.Element {
       data={{
         table: 'cells',
         // the Sheet's window, answered by the session's own view-query port —
-        // the served desk asks the same question through `/api/window`
-        sheet: () => sessionSheetData(surface.session, { table: 'cells' }),
+        // the served desk asks the same question through `/api/window`. The
+        // TABLE is the desk's to name: `cells`, and every table an act cut.
+        sheet: (_columns, table) => sessionSheetData(surface.session, { table }),
         checks,
       }}
       story={{ declared: rows.declared?.dashboard, author: 'the desk', figure: STORY_FIGURE, emptyNote: 'No bookmarks named on this lineage yet — name a bookmark in the time strip and it becomes a section here.' }}

@@ -1,13 +1,15 @@
 /**
- * The demo server — Node's built-in http, one live surface, the doors.
+ * The demo server — Node's built-in http, TWO live surfaces (the NNDSS desk and
+ * the EIA grid) in one process, the doors.
  *
  *   npm run serve          → http://localhost:5290/api/state
+ *                          → http://localhost:5290/api/grid/rows
  *
  * In development the web app (`npm run web:dev`, port 5291) proxies `/api`
  * here; a production build is served from `web/dist` by this process.
  */
 import http from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
@@ -26,9 +28,19 @@ loadEnv(); // the repo's own .env, if any — names only ever reach the log, nev
 const snapshot = await loadSnapshotAsync();
 // the graph the generator derived from that snapshot, through the same carrier — two more files the desk can vouch for by version
 const graph = await loadGraphAsync();
-const desk = await createDesk(snapshot.tables, [], { 'snapshot.csv': snapshot.source, ...graph.sources }, graph.graph); // what the carrier vouched for, beside the library's own per-table provenance
+const desk = await createDesk(snapshot.tables, [], { 'snapshot.csv': snapshot.source, ...snapshot.sources, ...graph.sources }, graph.graph); // what the carrier vouched for, beside the library's own per-table provenance
 console.log(`  source: snapshot.csv via file — ${String(snapshot.source.rows)} rows, ${snapshot.source.version}, read ${snapshot.source.retrievedAt}`);
-console.log(`  graph: nodes ${String(graph.graph.nodes.length)} · edges ${String(graph.graph.edges.length)} — ${graph.sources['graph/nodes.csv'].version}, ${graph.sources['graph/edges.csv'].version}`);
+// The denominator through the same carrier, and what the two rate acts left on
+// the log — a refusal is printed, never swallowed. PLACES is the table the join reads, ROWS is what the carrier parsed: `populationRowsFrom`
+// drops any row with no name, no positive population, or a name covering different people than
+// CDC's row of it, so printing the file's row count under the word "places" would name a
+// denominator the desk does not have. The two numbers beside each other show what was dropped.
+const people = snapshot.sources['population.csv'];
+console.log(`  population: ${String(snapshot.tables.population?.length ?? 0)} places of ${String(people.rows)} rows, ${people.version} · rate: ${desk.surface.rateRefusals.length === 0 ? 'both acts landed' : desk.surface.rateRefusals.join('; ')}`);
+// the same law on the same line as the acts it reports: `layOutGraph` returns its refusals
+// rather than throwing so a caller can print them, and a clean-looking graph line beside a
+// line that volunteers its own refusals is the operator learning it from the page instead
+console.log(`  graph: nodes ${String(graph.graph.nodes.length)} · edges ${String(graph.graph.edges.length)} — ${graph.sources['graph/nodes.csv'].version}, ${graph.sources['graph/edges.csv'].version} · layout: ${desk.surface.layoutRefusals.length === 0 ? 'both acts landed' : desk.surface.layoutRefusals.join('; ')}`);
 
 // THE SECOND DEMO, in the same process: EIA's hourly grid through the same
 // carrier, its four tables behind `/api/grid/*`. The CDC graph rides across as
@@ -48,7 +60,10 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void 
   const url = (req.url ?? '/').split('?')[0] ?? '/';
   const rel = url === '/' ? 'index.html' : url.replace(/^\/+/, '');
   const file = path.join(WEB_DIST, rel);
-  if (!file.startsWith(WEB_DIST) || !existsSync(file)) {
+  // WHY `isFile` and not `existsSync`: `web/dist/make/` and `web/dist/assets/` are
+  // DIRECTORIES the built site's own URLs name, `existsSync` says yes to them, and
+  // `readFileSync` on one throws EISDIR. A directory is not a 500, it is a 404.
+  if (!file.startsWith(WEB_DIST) || statSync(file, { throwIfNoEntry: false })?.isFile() !== true) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end(existsSync(WEB_DIST) ? 'not found' : 'no web build yet — run `npm run web:dev` for the dev server, or `npm run web:build`');
     return;
@@ -65,6 +80,18 @@ const server = http.createServer((req, res) => {
     .then((handled) => (handled ? true : serveDoors(desk, req, res)))
     .then((handled) => {
       if (!handled) serveStatic(req, res);
+    })
+    // WHY the chain must end in a catch: both door functions catch inside
+    // themselves, so `serveStatic` is the one throw that reaches here — and an
+    // unhandled rejection on a voided chain is a process EXIT under Node's
+    // default, not a 500. One request would take both desks, the analyst
+    // session and the grid down with it. A server that will not start is worse
+    // than a surface that says why, and so is one that will not stay up.
+    .catch((err: unknown) => {
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error(`  ${req.method ?? 'GET'} ${req.url ?? '/'} — ${detail}`);
+      if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' });
+      res.end(detail);
     });
 });
 

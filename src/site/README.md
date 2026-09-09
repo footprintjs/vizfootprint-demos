@@ -17,8 +17,9 @@ readSiteCards(await (await fetch(new URL(SITE_CARDS_FILE, siteBase()))).json()).
 ## The law: a chip is read, never typed
 
 Each surface is built the way it really builds — `nndssDef(tables, graph)` for
-the CDC desk, `nndssDef(tables)` for the CDC story page, `gridDef(tables)` for
-the grid desk — and `defFeatures` reads the build. `logFeatures` reads the one
+the CDC desk, `nndssDef(tables)` over tables with no population for the CDC
+story page (that page shapes its tables from the one CSV it carries),
+`gridDef(tables)` for the grid desk — and `defFeatures` reads the build. `logFeatures` reads the one
 trace a surface really ships (the story page's 32-commit capture); a desk with
 no capture says *no trace has been captured* in the studio's words rather than
 carrying an invented one. The CDC desk's gesture table (`NNDSS_GESTURES`) is
