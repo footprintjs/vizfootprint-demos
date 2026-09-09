@@ -65,10 +65,16 @@ describe('the def declares four tables and two relations', () => {
 describe('the absence words survive the round trip', () => {
   it('every table that has a silence column declares it, and the session gives that column role "absence"', async () => {
     const def = gridDef(TINY_GRID);
-    // the ETL's own field name reaches the def unchanged
-    expect(def.data['hourly']!.absence).toEqual({ field: ABSENCE_FIELD, states: [...ABSENCE_STATES] });
-    expect(def.data['links']!.absence).toMatchObject({ field: 'report_state' });
-    expect(def.data['interchange']!.absence).toMatchObject({ field: 'report_state' });
+    // the ETL's own field name reaches the def unchanged — and so does the one thing the
+    // def says ABOUT those words: `estimated` and `replaced` still hold a figure, so a row
+    // carrying one is not a table saying two things at once (`interchange` names none:
+    // there an `unavailable` hour really has no number, and `mw` is null)
+    expect(def.data['hourly']!.absence).toEqual({ field: ABSENCE_FIELD, states: [...ABSENCE_STATES], carries: ['estimated', 'replaced'] });
+    expect(def.data['links']!.absence).toMatchObject({ field: 'report_state', carries: ['unavailable'] });
+    expect(def.data['interchange']!.absence).toEqual({ field: 'report_state', states: [...ABSENCE_STATES] });
+    // `authorities` declares NO table-level absence: `demand_state` speaks for a figure that is
+    // not on that table, and the row's own counts (0 hours, 5 neighbours) are true beside it
+    expect(def.data['authorities']!.absence).toBeUndefined();
     const o = await buildDashboard(def).createSession().overview();
     expect(o.columns['hourly']!.find((c) => c.field === ABSENCE_FIELD)).toMatchObject({ role: 'absence' });
     expect(o.columns['links']!.find((c) => c.field === 'report_state')).toMatchObject({ role: 'absence' });

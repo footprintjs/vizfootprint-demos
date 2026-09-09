@@ -34,7 +34,8 @@ import type { LinkDecl } from 'vizfootprint/def';
 import type { AnalysisSlot, DashboardDef, DataSourceDef, RelationDecl, ViewEncodingDecl } from 'vizfootprint/agent';
 import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
-import { ABSENCE_FIELD, ABSENCE_STATES } from './absence.js';
+import { ABSENCE_FIELD, ABSENCE_STATES, PUBLISHED_STATES } from './absence.js';
+import type { Absence } from './absence.js';
 import type { GridTables } from './etl.js';
 
 const ALPHA = 0.05;
@@ -222,8 +223,30 @@ function netProse(tables: GridTables): ProseDecl {
 
 // ── the four tables, declared ────────────────────────────────────────────────
 
-/** The six absence words, on whichever column of a table carries them. */
-const absenceOn = (field: string): { readonly field: string; readonly states: readonly string[] } => ({ field, states: [...ABSENCE_STATES] });
+/**
+ * The six absence words, on whichever column of a table carries them — and
+ * which of those words still hold a NUMBER on that table (`carries`).
+ *
+ * The library's data door refuses a table that says two things at once: a row
+ * whose state column calls it silent and whose value column holds a figure. Two
+ * of EIA's words are not silences at all — an `estimated` figure is EIA's own
+ * number for an hour nobody filed, and a `replaced` one is the number EIA
+ * published beside the number the authority filed — so the tables that use them
+ * say so, and the check stops refusing rows that are honest. Default none: a
+ * table that names nothing is judged the old way, every word but `present` a
+ * silence. `carries` is per TABLE for a reason, and `report_state` is the case:
+ * on `interchange` an `unavailable` hour genuinely carries nothing (`mw` is
+ * null), while on the folded `links` table the same word leaves the row's own
+ * counts standing.
+ */
+const absenceOn = (field: string, carries?: readonly Absence[]): NonNullable<DataSourceDef['absence']> => ({
+  field,
+  states: [...ABSENCE_STATES],
+  ...(carries === undefined ? {} : { carries: [...carries] }),
+});
+
+/** The words that hold a figure besides `present` — read off the states in which a figure EXISTS, so the two lists can never drift. */
+const CARRIES: readonly Absence[] = PUBLISHED_STATES.filter((state) => state !== 'present');
 
 function gridSources(tables: GridTables): Record<string, DataSourceDef> {
   return {
@@ -233,7 +256,9 @@ function gridSources(tables: GridTables): Record<string, DataSourceDef> {
     hourly: {
       // declared as an (inline) SOURCE so every commit carries the version it was true of
       source: { format: 'rows', via: 'inline', at: tables.hourly },
-      absence: absenceOn(ABSENCE_FIELD),
+      // demand_state is the headline word, and `demand` is the figure it speaks for:
+      // an estimated or replaced row HAS one, so it is not a silence
+      absence: absenceOn(ABSENCE_FIELD, CARRIES),
       columns: {
         authority: { role: 'identifier', label: 'balancing authority' },
         region: { role: 'dimension' },
@@ -262,9 +287,17 @@ function gridSources(tables: GridTables): Record<string, DataSourceDef> {
     authorities: {
       rows: tables.authorities.map((r) => ({ ...r })),
       key: 'authority',
-      absence: absenceOn('demand_state'),
+      // NO table-level absence here, deliberately. A table's absence column speaks
+      // for the ROW — the library reads a row it calls silent as having no value in
+      // any column — and `demand_state` speaks for one FIGURE, `demand`, which lives
+      // an hour at a time on `hourly` and not on this table at all. The numbers on
+      // this row are observations that stand whatever that word says: an external
+      // authority filed 0 hours and has 5 neighbours, both counted, both true. It is
+      // still declared an ABSENCE WORD below, so the library's own law still holds it
+      // off every magnitude channel — a state is a category, never a number.
       columns: {
         authority: { role: 'identifier', label: 'EIA code' },
+        demand_state: { role: 'absence', label: 'whether it ever filed demand — the figure itself is on `hourly`' },
         name: { role: 'dimension', label: 'name (null where the published list has no entry — never the code echoed back)' },
         name_state: { role: 'dimension', label: 'whether the name was found' },
         region: { role: 'dimension' },
@@ -283,7 +316,13 @@ function gridSources(tables: GridTables): Record<string, DataSourceDef> {
     // is declared in every hour and never carries a number" lives.
     links: {
       rows: tables.links.map((r) => ({ ...r })),
-      absence: absenceOn('report_state'),
+      // `report_state` speaks for the FLOW, and the flow is `interchange.mw`, an hour
+      // at a time. What this folded row carries is counts — how many hours EIA wrote
+      // for the pair, how many of them carried a number, the megawatt-hours summed
+      // over those — and they are there whatever the word says. So on THIS table
+      // `unavailable` carries a value, and says so; on `interchange`, where the word
+      // sits beside `mw` itself, it carries nothing and stays a plain silence.
+      absence: absenceOn('report_state', ['unavailable']),
       columns: {
         from_authority: { role: 'dimension', label: 'the sender' },
         to_authority: { role: 'dimension', label: 'the receiver' },
