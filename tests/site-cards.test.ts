@@ -179,11 +179,16 @@ describe('every chip is traceable to a reader or to the hand table — none type
 
   it('the exoplanet desk carries no hand table, and its walked chips are the commits `exo:capture` really left', () => {
     expect(exoDesk.byHand).toBeUndefined();
-    // the five acts, the planet it picked and the sort it landed — and NOTHING for the
-    // two reads of that walk: a `why` and an `export` land no commit, so no reader can
-    // vouch for them and no chip claims them (`web/site/exo/walk.json` → `reads`)
-    expect(idsOf(exoDesk).filter((id) => id.startsWith('walked:')).sort()).toEqual(['walked:selection:point', 'walked:verb:analyze', 'walked:verb:navigate', 'walked:verb:select'].sort());
-    expect(exoDesk.walked?.commits).toBe(7);
+    // the five acts, the histogram bucket it filtered, the planet it picked and the sort
+    // it landed — and NOTHING for the two reads of that walk: a `why` and an `export` land
+    // no commit, so no reader can vouch for them and no chip claims them
+    // (`web/site/exo/walk.json` → `reads`). Nor anything for the REFUSED click that walk
+    // opens with: a refusal lands no commit either, and it rides beside the log as
+    // `refusedBeforeTheAct` precisely because no chip may claim it as an act.
+    expect(idsOf(exoDesk).filter((id) => id.startsWith('walked:')).sort()).toEqual(
+      ['walked:selection:interval', 'walked:selection:point', 'walked:verb:analyze', 'walked:verb:filter', 'walked:verb:navigate', 'walked:verb:select'].sort(),
+    );
+    expect(exoDesk.walked?.commits).toBe(8);
     expect(exoDesk.walked?.families.analysis).toBe(5);
   });
 

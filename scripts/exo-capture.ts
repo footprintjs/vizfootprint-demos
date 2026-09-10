@@ -11,8 +11,17 @@
  *
  * The walk is the one the demo is about:
  *
- *   1. the five acts land (the surface's own boot: the aggregate that mints the
- *      histogram's table, its two derived columns, the bring-over, the delta)
+ *   0. CLICK THE HISTOGRAM FIRST, before anything has landed — and read the
+ *      refusal. The histogram's layer draws the table the `radiiPerPlanet`
+ *      aggregate mints, so at this cursor there is no table under the picture
+ *      and the library says exactly that, naming the act as the repair. It is
+ *      the demo's best sentence about a minted table, so the walk reaches it
+ *      deliberately rather than leaving a reader to guess it exists.
+ *   1. the five acts land (the aggregate that mints the histogram's table, its
+ *      two derived columns, the bring-over, the delta)
+ *   1b. CLICK THE SAME BAR AGAIN — now it lands: an interval over the minted
+ *      table's `radii`, on the log, with its cause. One gesture, two answers,
+ *      and the only thing that changed between them is the history.
  *   2. SELECT a planet on the scatter — the declared link fills the sheet with
  *      every publication for it
  *   3. SORT the sheet by publication date — oldest first, so the disagreement
@@ -28,7 +37,8 @@
  *
  * The two reads are recorded beside the log rather than in it, because they
  * landed nothing and a file that mixed them into the commits would be claiming
- * acts that never happened.
+ * acts that never happened. The REFUSAL of step 0 is recorded there for the
+ * same reason — it landed nothing either, and it is the point of the step.
  *
  * Output: `web/site/exo/walk.json` — read by `src/site/cards.ts` (`exoWalk`),
  * which runs `logFeatures` over the log so the demo's card can say what
@@ -39,7 +49,8 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exportFromSession } from 'vizfootprint/session';
 import type { Cause } from 'vizfootprint/cause';
-import { SCATTER_ADDRESS, SHEET_VIEW } from '../src/exo/def.js';
+import { SCATTER_ADDRESS, SHEET_VIEW, SPREAD_ADDRESS } from '../src/exo/def.js';
+import { SPREAD_BUCKET } from '../src/exo/session.js';
 import { buildExoSurfaceAsync } from '../src/exo/surface.js';
 
 const OUT = new URL('../web/site/exo/walk.json', import.meta.url);
@@ -54,15 +65,33 @@ const OUT = new URL('../web/site/exo/walk.json', import.meta.url);
  */
 const PLANET = 'TRAPPIST-1 e';
 
+
 /** The sheet's arrangement scope — the library's LY-1 door (`vizfootprint-ui` · `sheetLayoutViewId`), spelled here so this script needs no React import. */
 const SHEET_LAYOUT = 'layout:sheet:measurements';
 
 const cause = (intent: string): Cause => ({ requestedBy: 'user', computedBy: 'user', intent });
 
 async function main(): Promise<void> {
+  // steps 0 and 1 are the surface's own boot, in that order: it clicks the histogram
+  // before anything has landed, keeps the refusal, and only then lands the five acts
+  // (`src/exo/session.ts` · probeTheMintedTable · openExoSurfaceAsync)
   const surface = await buildExoSurfaceAsync();
   if (surface.actRefusals.length > 0) throw new Error(`the acts did not land, so there is no walk to capture: ${surface.actRefusals.join('; ')}`);
+  if (surface.mintedTableRefusal === null) {
+    throw new Error("the histogram accepted a click before its table was minted — there is no refusal to record, and the demo's claim about a minted table is wrong");
+  }
   const { session } = surface;
+
+  // 1b · the SAME gesture again, now that the act has landed. The definition did not
+  //      change; the history did, and that is the whole sentence of this pair.
+  const accepted = await session.dispatch({
+    verb: 'filter',
+    viewId: SPREAD_ADDRESS,
+    field: 'radii',
+    range: [...SPREAD_BUCKET],
+    cause: cause(`select the planets with ${String(SPREAD_BUCKET[0])} published radius — the same click the boot was refused`),
+  });
+  if (!accepted.ok) throw new Error(`the histogram was refused after its act landed: ${accepted.rejection.detail}`);
 
   // 2 · the planet
   const picked = await session.dispatch({ verb: 'select', viewId: SCATTER_ADDRESS, field: 'pl_name', value: PLANET, cause: cause(`read every published value for ${PLANET}`) });
@@ -96,6 +125,18 @@ async function main(): Promise<void> {
     log: session.log.records,
     bookmarks: session.bookmarkViews(),
     saved: [],
+    /**
+     * THE REFUSED GESTURE, kept beside the log because it landed nothing —
+     * step 0 of the walk. The page shows these words at rest: a live visitor
+     * arrives after the acts have landed and can never reach the refusal, so
+     * the only honest way to show it is to record a real one.
+     */
+    refusedBeforeTheAct: {
+      gesture: { verb: 'filter', viewId: SPREAD_ADDRESS, field: 'radii', range: [...SPREAD_BUCKET] },
+      detail: surface.mintedTableRefusal,
+      /** …and the same gesture once the act had landed, so the pair reads as one fact about the history. */
+      acceptedAfterTheAct: accepted.commit?.id ?? null,
+    },
     // the two READS, kept out of the log because they landed nothing
     reads: {
       why: { question: { kind: 'selection', viewId: SCATTER_ADDRESS }, answer: why },
@@ -107,6 +148,7 @@ async function main(): Promise<void> {
 
   process.stderr.write(
     `exo: walked ${String(walk.log.length)} commits (${String(surface.tables.measurements.length)} measurements, ${String(surface.derived.rows.length)} planets in the minted table), ` +
+      `refused one gesture before its act, ` +
       `exported ${String(exported.receipt.exported.rows)} of ${String(exported.receipt.count)} rows for ${PLANET}\n→ ${fileURLToPath(OUT)}\n`,
   );
 }

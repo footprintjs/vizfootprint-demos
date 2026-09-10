@@ -1,6 +1,6 @@
 {
   "from": "in process — this demo has no served host, so the walk is taken through the same session builder the page uses",
-  "capturedAt": "2026-09-10T17:39:40.991Z",
+  "capturedAt": "2026-09-10T23:08:08.956Z",
   "planet": "TRAPPIST-1 e",
   "log": [
     {
@@ -307,6 +307,34 @@
     {
       "id": "s6",
       "parent": "s5",
+      "viewId": "spread~buckets",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Planets, grouped by how many radii were published for them"
+      },
+      "kind": "interval",
+      "field": "radii",
+      "value": [
+        1,
+        2
+      ],
+      "clientViewIds": [
+        "spread~buckets"
+      ],
+      "predicateSQL": "(\"radii\" BETWEEN 1 AND 2)",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "select the planets with 1 published radius — the same click the boot was refused"
+      },
+      "ts": 5,
+      "data": {
+        "measurements": "inline:13651164-b5eb3254"
+      }
+    },
+    {
+      "id": "s7",
+      "parent": "s6",
       "viewId": "mass_radius~planets",
       "actorMeta": {
         "actor": "user",
@@ -324,14 +352,14 @@
         "computedBy": "user",
         "intent": "read every published value for TRAPPIST-1 e"
       },
-      "ts": 5,
+      "ts": 6,
       "data": {
         "measurements": "inline:13651164-b5eb3254"
       }
     },
     {
-      "id": "s7",
-      "parent": "s6",
+      "id": "s8",
+      "parent": "s7",
       "viewId": "layout:sheet:measurements",
       "actorMeta": {
         "actor": "system",
@@ -349,7 +377,7 @@
         "computedBy": "user",
         "intent": "sort the published values by date, oldest first"
       },
-      "ts": 6,
+      "ts": 7,
       "data": {
         "measurements": "inline:13651164-b5eb3254"
       }
@@ -359,14 +387,27 @@
     {
       "id": "b1",
       "label": "every published radius for TRAPPIST-1 e",
-      "commitId": "s7",
-      "at": "s7",
-      "ts": 6,
+      "commitId": "s8",
+      "at": "s8",
+      "ts": 7,
       "by": "user",
-      "madeAt": "2026-09-10T17:39:40.978Z"
+      "madeAt": "2026-09-10T23:08:08.943Z"
     }
   ],
   "saved": [],
+  "refusedBeforeTheAct": {
+    "gesture": {
+      "verb": "filter",
+      "viewId": "spread~buckets",
+      "field": "radii",
+      "range": [
+        1,
+        2
+      ]
+    },
+    "detail": "view \"spread~buckets\" draws \"radii_per_planet\", which the act \"radiiPerPlanet\" mints — it has not landed on this path",
+    "acceptedAfterTheAct": "s6"
+  },
   "reads": {
     "why": {
       "question": {
@@ -379,15 +420,20 @@
         "key": "mass_radius~planets",
         "threaded": false,
         "viz": {
-          "commitId": "s6"
+          "commitId": "s7"
         },
         "agent": null,
         "kernel": null,
         "commits": [
           {
             "tier": "viz",
-            "id": "s6",
+            "id": "s7",
             "kind": "declaring"
+          },
+          {
+            "tier": "viz",
+            "id": "s6",
+            "kind": "input-selection"
           }
         ],
         "misses": [
@@ -415,7 +461,7 @@
         "table": "measurements",
         "viewId": "sheet",
         "version": "inline:13651164-b5eb3254",
-        "cursor": "s7",
+        "cursor": "s8",
         "sort": [
           {
             "field": "pl_pubdate",
@@ -469,7 +515,7 @@
             }
           }
         ],
-        "at": "2026-09-10T17:39:40.991Z"
+        "at": "2026-09-10T23:08:08.956Z"
       },
       "bodyBytes": 1816,
       "firstLine": "measurement_id,pl_name,hostname,ref,ref_label,pl_refname,pl_pubdate,pub_year,default_flag,pl_orbper,pl_rade,pl_radeerr1,pl_radeerr2,radius_state,radius_bound,pl_bmasse,pl_bmasseerr1,pl_bmasseerr2,mass_state,mass_bound,mass_kind,disc_year,discoverymethod,sy_dist,pl_name_pl_rade,delta"

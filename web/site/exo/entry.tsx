@@ -11,11 +11,17 @@
  *   1. the two committed CSVs — 9.8 MB — over http, through the library's
  *      source port, so every commit can stamp a version somebody vouched for
  *   2. the ETL, unchanged — it was always pure
- *   3. the dashboard, validated, and the FIVE acts landed as commits: the
- *      aggregate that mints the histogram's table, its two derived columns, the
- *      bring-over that carries the accepted radius onto every measurement, and
- *      the delta that says how far each publication sits from it
- *   4. a session view over an IN-PROCESS session (`sessionSource`), not a poll
+ *   3. ONE CLICK ON THE HISTOGRAM, refused — made before anything has landed,
+ *      because at that cursor the table under that picture does not exist and
+ *      the library says so, naming the act that mints it. It lands nothing and
+ *      the sentence is kept ({@link Booted.refusal}); the honesty line below
+ *      shows it, because a visitor arrives after the acts and can never reach
+ *      it themselves.
+ *   4. the dashboard's FIVE acts landed as commits: the aggregate that mints the
+ *      histogram's table, its two derived columns, the bring-over that carries
+ *      the accepted radius onto every measurement, and the delta that says how
+ *      far each publication sits from it
+ *   5. a session view over an IN-PROCESS session (`sessionSource`), not a poll
  *
  * The order is the contract: the histogram has no table until the aggregate
  * lands, and the payload is read at the one moment no clause can exist.
@@ -33,17 +39,19 @@ import { EXO_STORY_FIGURE, colorOfState, useExoCells, useExoSilences, type ExoDe
 import type { Row } from '../../src/derive.js';
 import { Broken, Reading, WhatIsMissing, sentenceOf, siteBase } from '../boot.js';
 
-/** What the boot produces: a live session with five commits on it, the rows it will draw, and the data checks. */
+/** What the boot produces: a live session with five commits on it, the rows it will draw, the data checks, and the one refusal it collected on the way. */
 interface Booted {
   readonly surface: ExoSurface;
   readonly rows: Record<string, unknown>;
   readonly checks: readonly string[];
+  /** The library's own sentence for the pre-act click on the histogram — `null` if it was somehow accepted. */
+  readonly refusal: string | null;
 }
 
 async function boot(): Promise<Booted> {
   const { tables } = await loadExoOverHttp(siteBase());
   const surface = await openExoSurfaceAsync(tables);
-  return { surface, rows: exoRows(surface), checks: await surface.dashboard.lintData() };
+  return { surface, rows: exoRows(surface), checks: await surface.dashboard.lintData(), refusal: surface.mintedTableRefusal };
 }
 
 /** The payload's rows, read at the one crossing this page makes — the CDC page's `entry.tsx` says why a cast is the honest shape here. */
@@ -101,6 +109,14 @@ function Page(): JSX.Element {
           <>
             {' '}
             Also absent here: a <b>find door</b> for the sheet. A search reaches the rows the page already holds and no further — with the whole slice in the browser that is every row, but a served deployment over the full archive would need one.
+            {state.booted.refusal !== null && (
+              <>
+                {' '}
+                And one thing that is missing only <i>until you ask for it</i>. The histogram draws a table no file holds: an act cuts it at run time. So this page clicked a bar before that act had landed, and the library refused — in these words, which are its own and not ours:{' '}
+                <code style={{ background: '#fff', border: '1px solid #e8dfae', borderRadius: 4, padding: '.1rem .3rem' }}>{state.booted.refusal}</code>{' '}
+                Then it landed the act, which is why the bars below can be clicked at all. The refusal is in this session&rsquo;s gap ledger, filed under <b>needs-act</b> — the repair is to perform the act, not to re-read the definition — and it comes back if you seek back past that commit.
+              </>
+            )}
           </>
         }
       />

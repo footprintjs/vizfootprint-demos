@@ -6,13 +6,19 @@
  * strip, the editor and the sheet; what is here is this demo's own:
  *
  *   `mass_radius`  the composite's accepted radius against its accepted mass,
- *                  one dot per planet, inside a DECLARED window
- *                  (`MASS_RADIUS_WINDOW`) because the encoding vocabulary has
- *                  no log scale — and the caption counts what the window leaves
- *                  out.
+ *                  one dot per planet, on LOGARITHMIC axes — the log–log
+ *                  figure this field publishes. Which curve each axis is drawn
+ *                  on is not decided here: the def declares it on the view's
+ *                  frame (`SCATTER_FRAME`), the session projects that
+ *                  declaration verbatim, and {@link transformOf} reads it off
+ *                  the projection. There is no drawn window any more, and no
+ *                  planet is filtered out for being too big.
  *   `spread`       a histogram of how many published radii each planet has,
  *                  over the table the aggregate act MINTED. Not over the data:
- *                  this cell cannot compute those rows and does not try.
+ *                  this cell cannot compute those rows and does not try. A bar
+ *                  is CLICKABLE — an interval over the minted table's `radii` —
+ *                  and before the act that mints that table has landed, the
+ *                  library refuses the click in a sentence naming the act.
  *   `by_year`      references by publication year, off the reference table.
  *
  * ── The captions carry the silences ─────────────────────────────────────────
@@ -34,7 +40,12 @@
  *      limit, and the scatter draws it at that number anyway because the
  *      encoding vocabulary has no way to mark a bound differently (scatter
  *      caption, counted from the same rows the dots come from — never a
- *      reason to leave the dot off, only a reason to say what it is).
+ *      reason to leave the dot off, only a reason to say what it is);
+ *   6. a planet a LOGARITHM cannot place — an accepted mass or radius of zero
+ *      or below. The library's fold counts those as `ResolvedDomain.excluded`
+ *      and the chart prints the count in the picture; the caption counts the
+ *      same thing with the library's own `placeable` predicate, so the words
+ *      and the marks can never disagree (scatter caption, counted).
  *
  * ── And one thing this file may NOT do ──────────────────────────────────────
  * Recompute the derived table. It arrives from the session, read once where no
@@ -45,12 +56,12 @@
  * implementation on screen would be the one nobody tested.
  */
 import { useMemo, type ReactNode } from 'react';
-import { VizBar, VizHistogram, VizScatter, keepPredicate, type HistogramBinDatum, type ScatterDatum } from 'vizfootprint-ui';
+import { VizBar, VizHistogram, VizScatter, keepPredicate, placeable, type ChartDomain, type HistogramBinDatum, type ScaleKind, type ScatterDatum, type SessionViewState } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection, DeskSilence } from 'vizfootprint-studio/desk';
 import { categoryCounts, emitIntent, pickedFrom, type Row } from './derive.js';
-import { DISAGREES_COLUMN, MASS_RADIUS_WINDOW, SCATTER_ADDRESS, SCATTER_VIEW, SPREAD_COLUMN, SPREAD_VIEW, BY_YEAR_VIEW } from '../../src/exo/def.js';
+import { DISAGREES_COLUMN, SCATTER_ADDRESS, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, BY_YEAR_VIEW } from '../../src/exo/def.js';
 
-export { SCATTER_VIEW, SCATTER_ADDRESS, SPREAD_VIEW, BY_YEAR_VIEW };
+export { SCATTER_VIEW, SCATTER_ADDRESS, SPREAD_VIEW, SPREAD_ADDRESS, BY_YEAR_VIEW };
 
 // ── the vocabulary's colours ─────────────────────────────────────────────────
 
@@ -116,6 +127,27 @@ export function useExoSilences(data: ExoDeskData): readonly DeskSilence[] {
 
 /** A coordinate is a coordinate only when it is a real number. */
 const placed = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * WHICH CURVE A VIEW'S AXES ARE DRAWN ON — read off the session's projection of
+ * the DEF's declared frame (`ViewView.frame`, projected verbatim), never a
+ * constant written here.
+ *
+ * This is the whole reason the transform lives on the frame and not in a chart
+ * prop somebody types: an axis's nature is a declaration, it travels with the
+ * definition the session actually runs on, and a cell that decided it locally
+ * would be a second owner of the picture. `ChartDomain.transform` is the
+ * renderer's half of the same word, so what comes out of here goes straight in.
+ *
+ * Absent for a view that declares no frame (and on an older wire), which is the
+ * linear axis every chart drew before the key existed.
+ */
+export function transformOf(state: Pick<SessionViewState, 'views'>, viewId: string): ChartDomain['transform'] {
+  const frame = state.views.find((v) => v.viewId === viewId)?.frame;
+  if (frame === undefined) return undefined;
+  const curve = (channel: string): ScaleKind | undefined => frame[channel]?.transform;
+  return { ...(curve('x') !== undefined ? { x: curve('x') } : {}), ...(curve('y') !== undefined ? { y: curve('y') } : {}) };
+}
 const num = (v: unknown, digits = 2): string => (typeof v === 'number' ? v.toFixed(digits) : '—');
 const count = (n: number): string => n.toLocaleString('en-US');
 
@@ -159,10 +191,18 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
   // the slices every fold below is keyed on: what is selected, what the links do with it, what was cleared
   const sel = [state.selections, state.links, state.cleared] as const;
 
+  /** The axes the DEF declares for the scatter, read through the projection — see {@link transformOf}. */
+  const scatterTransform = useMemo(() => transformOf(state, SCATTER_VIEW), [state]);
+
   /**
-   * The dots: one per planet with BOTH numbers, inside the declared window. A
-   * planet outside it is not drawn and is COUNTED — a picture that quietly
-   * dropped the giants would be the mistake this repository exists to refuse.
+   * The dots: one per planet with BOTH numbers. EVERY one of them — there is no
+   * window and nothing is filtered out for being too big, because the axes are
+   * logarithmic and the whole population fits on them.
+   *
+   * They are handed to the chart WHOLE, including the ones a logarithm cannot
+   * place: the chart is what counts those (the library's `excluded` law — the
+   * picture is where a reader meets the number the marks are missing from), and
+   * a cell that pre-filtered them would leave it counting zero.
    */
   const dots = useMemo<readonly ScatterDatum[]>(
     () =>
@@ -170,12 +210,23 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
         const x = p[massField];
         const y = p[radiusField];
         if (!placed(x) || !placed(y)) return [];
-        if (x < MASS_RADIUS_WINDOW.mass.from || x > MASS_RADIUS_WINDOW.mass.to) return [];
-        if (y < MASS_RADIUS_WINDOW.radius.from || y > MASS_RADIUS_WINDOW.radius.to) return [];
         // the CATEGORY is where the accepted radius came from — a paper, or the archive itself
         return [{ id: String(p['pl_name']), x, y, category: String(p['radius_ref_kind'] ?? 'unknown'), row: p as Row }];
       }),
     [planets, massField, radiusField],
+  );
+
+  /**
+   * SILENCE SIX: the dots the TRANSFORM cannot place — a mass or a radius of
+   * zero or below, which no logarithm has an answer for.
+   *
+   * Counted with the library's own `placeable`, the same predicate the chart
+   * draws by and the library's fold sets `ResolvedDomain.excluded` from, so the
+   * caption and the note inside the picture can never report two numbers.
+   */
+  const unplottable = useMemo(
+    () => dots.filter((d) => !placeable(scatterTransform?.x, d.x) || !placeable(scatterTransform?.y, d.y)).length,
+    [dots, scatterTransform],
   );
 
   /** SILENCE ONE and TWO: how much of the composite came from no paper at all. */
@@ -183,16 +234,23 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
     const calculatedRadius = planets.filter((p) => p['radius_ref_kind'] === 'archive').length;
     const calculatedMass = planets.filter((p) => p['mass_ref_kind'] === 'archive').length;
     const modelled = planets.filter((p) => p['mass_kind'] === 'M-R relationship').length;
-    const placeable = planets.filter((p) => placed(p[massField]) && placed(p[radiusField])).length;
     // SILENCE FIVE: of the dots actually drawn, how many carry a BOUND rather than a
-    // measurement — read off each dot's own row, never assumed from the window alone
+    // measurement — read off each dot's own row, never assumed from an axis
     const bounded = dots.filter((d) => (d.row as Row)['radius_state'] === 'limit' || (d.row as Row)['mass_state'] === 'limit').length;
-    return { calculatedRadius, calculatedMass, modelled, outside: placeable - dots.length, unplaceable: planets.length - placeable, bounded };
-  }, [planets, massField, radiusField, dots]);
+    // a planet the composite accepts NO pair for: there is nothing to place, on any curve
+    return { calculatedRadius, calculatedMass, modelled, unplaceable: planets.length - dots.length, bounded };
+  }, [planets, dots]);
 
-  /** The histogram's bins, over the MINTED rows the session handed over. */
+  /**
+   * The histogram's bins, over the MINTED rows the session handed over.
+   *
+   * Keyed on the LAYER ADDRESS, not the view id: the bars select under
+   * `spread~buckets` (that is the layer whose table they draw), so that is the
+   * clause `keepPredicate` must exclude as its own. Reading it under the frame's
+   * id would leave the histogram filtering itself.
+   */
   const bins = useMemo(() => {
-    const keep = keepPredicate(selFor(SPREAD_VIEW));
+    const keep = keepPredicate(selFor(SPREAD_ADDRESS));
     return radiiBins(derived, keep);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
   }, [derived, ...sel]);
@@ -243,8 +301,17 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
       caption: (
         <>
           {[
-            `${count(dots.length)} of ${count(planets.length)} planets, at the radius and mass the archive's composite ACCEPTS for them — mass up to ${count(MASS_RADIUS_WINDOW.mass.to)} Earth masses and radius up to ${String(MASS_RADIUS_WINDOW.radius.to)} Earth radii`,
-            assembled.outside === 0 ? null : `${count(assembled.outside)} planets are heavier or larger than that window and are NOT drawn — the encoding vocabulary has no log scale, so the window is declared in the def and counted here rather than hidden`,
+            `${count(dots.length)} of ${count(planets.length)} planets, at the radius and mass the archive's composite ACCEPTS for them`,
+            // the axes' NATURE, said in words: an axis ticked 1, 10, 100 is read as linear by anyone skimming it
+            `BOTH AXES ARE LOGARITHMIC (base 10, ticked at the powers of ten) — mass against radius is the log–log figure this field publishes, and it is declared on the view's frame, not chosen here`,
+            // SILENCE SIX: what the transform cannot place, counted with the library's own predicate.
+            // Said in BOTH directions on purpose: a logarithm has no place for zero or a negative
+            // number, and "none of these is one" is a fact a reader of a log axis needs as much as a
+            // count would be. (When it is not none, the chart prints the same number in the picture,
+            // because that is where the marks are missing from.)
+            unplottable === 0
+              ? 'and every one of them is placeable on that curve: no planet here has an accepted mass or radius of zero or below, the two things a logarithm cannot place, so nothing is left out of this picture'
+              : `${count(unplottable)} of those planets are NOT drawn: a logarithm has no place for an accepted mass or radius of zero or below, so the library folds the domain over the positive values and counts the rest — the number is printed in the picture too, because that is where the marks are missing from`,
             assembled.unplaceable === 0 ? null : `${count(assembled.unplaceable)} have no accepted mass-and-radius pair to place at all`,
             // SILENCE ONE, where it happens
             `the accepted numbers are an ASSEMBLY, not a publication: ${count(assembled.calculatedRadius)} of the radii and ${count(assembled.calculatedMass)} of the masses came from the archive itself rather than from a paper (orange), and the archive's own reflink columns say so`,
@@ -266,8 +333,10 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
           data={dots}
           xField={massField}
           yField={radiusField}
-          xLabel="accepted mass (Earth masses)"
-          yLabel="accepted radius (Earth radii)"
+          xLabel="accepted mass (Earth masses, log scale)"
+          yLabel="accepted radius (Earth radii, log scale)"
+          // the DEF's declaration, through the session's projection — this cell decides no curve
+          domain={{ ...(scatterTransform !== undefined ? { transform: scatterTransform } : {}) }}
           colorOf={colorOfProvenance}
           ariaLabel={desk.altShort(SCATTER_VIEW)}
           selection={selFor(SCATTER_ADDRESS)}
@@ -283,6 +352,9 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
     },
     {
       id: SPREAD_VIEW,
+      // the bars belong to the BUCKETS layer, whose table the aggregate mints — the desk's ✕
+      // and its clear follow that address, and so does the probe door's refusal sentence
+      clauseId: SPREAD_ADDRESS,
       weight: 4,
       caption: (
         <>
@@ -294,6 +366,9 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
                 missing <= 0 ? null : `the other ${count(missing)} planets are in NO bar: the act that cut this table reads only rows whose radius is a measurement (a bound is not one), so a planet no paper published a radius for has no row here at all`,
                 `${count(disagreeing)} of the ${count(derived.length)} disagree with themselves — two publications, two different radii${widest === null ? '' : `; the widest is ${widest.planet}, whose published radii span ${num(widest.spread)} Earth radii`}`,
                 'this table is not in the data: an aggregate act cut it at run time and two derive acts wrote its spread and its disagreement, all three on the log with their causes',
+                // THE VOICE, and its one honest limit
+                'click a bar to select those planets — the act lands on the log with its cause. Click it again to clear it. Before the aggregate act has landed there is no table under this picture, and the library refuses the same click in a sentence that names the act which mints it',
+                'the selection stays in this chart: its clause names `radii`, a column of the minted table and of no other, so this dashboard declares no edge out of the histogram rather than one that would filter the sheet on a column the sheet has not got',
               ]
                 .filter((s): s is string => s !== null)
                 .join(' · ')}
@@ -307,15 +382,19 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
           </div>
         ) : (
           <VizHistogram
-            viewId={SPREAD_VIEW}
+            viewId={SPREAD_ADDRESS}
             data={bins}
             field="radii"
             label="published radii per planet"
             countLabel="planets"
             ariaLabel={desk.altShort(SPREAD_VIEW)}
-            selection={selFor(SPREAD_VIEW)}
+            selection={selFor(SPREAD_ADDRESS)}
             width={width}
             height={height}
+            // an INTERVAL over the minted table's `radii` — the pair of bin edges the bar covers,
+            // which is what a bucket honestly is. It lands under the layer's address, so the probe
+            // door judges it against the MINTED table (and refuses it, by name, before the act)
+            onEmit={emit(SPREAD_ADDRESS, 'filter')}
           />
         ),
     },

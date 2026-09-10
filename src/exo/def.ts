@@ -63,7 +63,7 @@ const OPS = 1;
 // ── who drives what ──────────────────────────────────────────────────────────
 
 const MASS_RADIUS: ActorMeta = { actor: 'user', label: 'Mass and radius, as the archive accepts them', does: 'click a planet to read every value ever published for it; shift-click for several' };
-const SPREAD: ActorMeta = { actor: 'user', label: 'How many published radii each planet has', does: 'read it — a bar is a set of planets, and this demo declares no clause that can name one' };
+const SPREAD: ActorMeta = { actor: 'user', label: 'How many published radii each planet has', does: 'click a bar to select the planets measured that many times — but only once the act that mints this table has landed' };
 const BY_YEAR: ActorMeta = { actor: 'user', label: 'References by year', does: 'pick a year: every reference the archive dates to it' };
 // The SHEET: every measurement row the charts see, read through the same link
 // graph as any chart — its own clause excluded, the others' applied. Grain [] : one mark per row.
@@ -78,9 +78,19 @@ export const SCATTER_LAYER = 'planets';
 /** Where a click on a dot lands. */
 export const SCATTER_ADDRESS = layerAddress(SCATTER_VIEW, SCATTER_LAYER);
 
-/** The histogram over the table an ACT mints — see {@link EXO_ANALYSES} and the comment on {@link exoEncodings}. */
+/**
+ * The histogram over the table an ACT mints — see {@link EXO_ANALYSES} and the
+ * comment on {@link exoEncodings} — and the one layer under it, because naming
+ * that table is exactly what a layer is for.
+ */
 export const SPREAD_VIEW = 'spread';
+export const SPREAD_LAYER = 'buckets';
+/** Where a click on a bar lands. Before the aggregate act has landed, the probe door refuses it BY THIS ADDRESS and names the act. */
+export const SPREAD_ADDRESS = layerAddress(SPREAD_VIEW, SPREAD_LAYER);
 export const BY_YEAR_VIEW = 'by_year';
+export const BY_YEAR_LAYER = 'references';
+/** The by-year bar's layer address — named because {@link exoLinks} has to silence the default edges INTO it. */
+export const BY_YEAR_ADDRESS = layerAddress(BY_YEAR_VIEW, BY_YEAR_LAYER);
 export const SHEET_VIEW = 'sheet';
 
 /** The dashboard's DECLARED words — the def's prose entry and the page's fallback read the same constant. */
@@ -199,38 +209,78 @@ export const EXO_RELATIONS: readonly RelationDecl[] = [
   { from: { table: 'planets', column: 'radius_ref' }, to: { table: 'references', column: 'ref' }, label: 'where the composite took its accepted radius from' },
 ];
 
-// ── the scatter's window ─────────────────────────────────────────────────────
+// ── the scatter's axes ───────────────────────────────────────────────────────
 
 /**
- * THE WINDOW THE SCATTER DRAWS, and why there is one.
+ * THE SCATTER'S FRAME: both axes are LOGARITHMIC, base 10.
  *
- * Planet masses in this slice run from about 0.02 to 4,915 Earth masses. The
- * encoding vocabulary has exactly two scales — `discrete` and `continuous`
- * (`vizfootprint/src/data/types.ts` → `ColumnScale`) — and no log, so a linear
- * frame over the whole range puts every rocky planet in one pixel. The window
- * is declared HERE rather than chosen in the cell, and the cell's caption
- * COUNTS what it leaves out; a picture that quietly dropped the giants would be
- * the mistake this repository exists to refuse.
+ * Planet masses in this slice run from about 0.02 to 9,535 Earth masses and the
+ * radii from 0.3 to 87. Drawn linearly that is one picture of Jupiter and a
+ * smudge where every rocky planet is, which is why the field's own mass–radius
+ * diagram has been log–log since it had four points on it. Until the library
+ * had a transform this file declared a hand-typed WINDOW instead and the cell
+ * counted the giants it cut off; the window is gone, because a picture with two
+ * owners — a def that names a range and a cell that filters by it — is the
+ * mistake this repository exists to refuse.
+ *
+ * WHY THE FRAME OWNS IT AND NOT THE CELL. `transform` is not a resolution: a
+ * `mode` asks whether layers share a scale (meaningless with one layer), while
+ * `transform` asks WHAT THE AXIS IS, which a plain scatter needs exactly as
+ * much as a stack does — so the library keeps the frame legal on a one-layer
+ * view and narrows its refusals to `mode`. The declaration then travels to the
+ * chart the way every other declaration does: the session projects it verbatim
+ * (`overview().views[].frame`), and `web/src/exoCells.tsx` reads it from there.
+ * Nothing in the cell decides which curve an axis is drawn on.
+ *
+ * WHAT NO DECLARATION CAN DECIDE is the cells: a logarithm has no answer for 0
+ * or a negative number, and which planets those are is DATA. So the library
+ * folds the domain over the positive cells and COUNTS what it could not place
+ * (`ResolvedDomain.excluded`) — exclude and count, never silently drop. The
+ * chart prints that count in the picture the marks are missing from, and the
+ * caption says it again in the reader's own sentence.
+ *
+ * No `zero` here, and the def door would refuse one: a logarithmic axis has no
+ * zero to anchor at.
+ *
+ * `mode: 'shared'` is required rather than chosen. This view HAS a layer, and on
+ * a layered view the frame's shape asks every named channel how it resolves
+ * across them; with one layer there is nothing to resolve, so `shared` is both
+ * the default and the only honest answer. (A LAYERLESS view is where the library
+ * refuses `mode` and keeps the axis keys alone.) The rest of the resolution —
+ * `domain: 'union'`, `basis: 'table'`, `guide: 'merged'` — is the undeclared
+ * default, and typing it out would only give it a second owner.
  */
-export const MASS_RADIUS_WINDOW = { mass: { from: 0, to: 1_000 }, radius: { from: 0, to: 30 } } as const;
+export const SCATTER_FRAME = {
+  x: { mode: 'shared', transform: 'log' },
+  y: { mode: 'shared', transform: 'log' },
+} as const satisfies NonNullable<ViewEncodingDecl['frame']>;
 
 // ── the views, declared ──────────────────────────────────────────────────────
 
 /**
- * TWO of the four views declare an encoding, and the reason the other two do
- * not is worth reading.
+ * THREE of the four views declare an encoding, and each names a table the
+ * default one is not — which is the only thing a layer exists for.
  *
- * `mass_radius` reads `planets`, which is not the default table, so it declares
- * a one-LAYER frame: a layer is the only place a def may name a table other
- * than the default one, and it is judged against that table's own columns.
+ * `mass_radius` reads `planets`, so it declares a one-LAYER frame, judged
+ * against that table's own columns. Its frame also declares WHAT THE AXES ARE:
+ * mass against radius is the log-log figure this field publishes, and the
+ * library's `transform: 'log'` is the declaration that says so. See
+ * {@link SCATTER_FRAME} for why the frame — and not the cell — owns it.
  *
- * `spread` declares NO encoding, because it CANNOT: its table is minted by an
- * act at run time, and a layer's table must be declared under `data` — the def
- * door refuses a layer naming a table nobody declared, and it is right to. So
- * the histogram is a view with an actor, a grain and a capability, and the cell
- * reads the derived rows off the session. That is the honest shape of "a
- * picture of a table that does not exist until somebody asks for it", and the
- * def says so rather than pretending otherwise.
+ * `spread` reads the table the AGGREGATE MINTS, and can now say so: a layer's
+ * table may be a key of `data` **or** the name of a declared analysis that
+ * lands a table, because a definition that declares the act has already
+ * declared the table's name and its whole column list (`pl_name` from the
+ * `groupBy`, then the four measures' `as` names). Its columns are what the
+ * layer binds; the two DERIVED columns (`spread`, `disagrees`) are written by
+ * later acts and are read by the caption, never bound on an axis.
+ *
+ * WHEN that table exists is a different question, and the library answers it
+ * per cursor rather than at the door: before `radiiPerPlanet` has landed, a
+ * click on this view is refused as a typed `needs-act` gap naming the act
+ * ("…which the act \"radiiPerPlanet\" mints — it has not landed on this path").
+ * That refusal is why the histogram no longer declares `canProbe: false` — a
+ * chart a reader can see and can never click, with no sentence saying why.
  *
  * `sheet` declares none for the reason the other two demos' sheets declare
  * none: it shows rows, not a mark.
@@ -242,8 +292,16 @@ function exoEncodings(): readonly ViewEncodingDecl[] {
       chartKind: 'scatter',
       channels: ['x', 'y'],
       layers: [{ layerId: SCATTER_LAYER, table: 'planets', chartKind: 'scatter', channels: ['x', 'y'], initial: { x: 'pl_bmasse', y: 'pl_rade' }, label: 'Planets, as the composite table accepts them' }],
+      frame: SCATTER_FRAME,
     },
-    { viewId: BY_YEAR_VIEW, chartKind: 'bar', channels: ['category'], layers: [{ layerId: 'references', table: 'references', chartKind: 'bar', channels: ['category'], initial: { category: 'pub_year' }, label: 'References by year' }] },
+    {
+      viewId: SPREAD_VIEW,
+      chartKind: 'histogram',
+      channels: ['x'],
+      // the layer names the MINTED table — a histogram over `radii`, the count of published radii per planet
+      layers: [{ layerId: SPREAD_LAYER, table: RADII_PER_PLANET, chartKind: 'histogram', channels: ['x'], initial: { x: 'radii' }, label: 'Planets, grouped by how many radii were published for them' }],
+    },
+    { viewId: BY_YEAR_VIEW, chartKind: 'bar', channels: ['category'], layers: [{ layerId: BY_YEAR_LAYER, table: 'references', chartKind: 'bar', channels: ['category'], initial: { category: 'pub_year' }, label: 'References by year' }] },
   ];
 }
 
@@ -370,10 +428,14 @@ function exoSources(tables: ExoTables): Record<string, DataSourceDef> {
  * the other two demos' are.
  *
  * WHY not a constant: the long description states facts about the rows (how
- * many planets are drawn, how many the window leaves out), and `exoDef` accepts
- * any tables. A constant would tell a screen-reader user one population while
- * the caption beside it counts another — so the sighted reader would get the
- * counted truth and the blind reader a hard-coded claim.
+ * many planets a logarithmic axis can place, how many it cannot), and `exoDef`
+ * accepts any tables. A constant would tell a screen-reader user one population
+ * while the caption beside it counts another — so the sighted reader would get
+ * the counted truth and the blind reader a hard-coded claim.
+ *
+ * It says the axes are LOGARITHMIC out loud, in both the short and the long
+ * description. An axis labelled 1, 10, 100 is read as linear by anyone skimming
+ * it, and a screen-reader user never sees the tick spacing at all.
  *
  * The basis names columns of the DEFAULT table, which is where a prose basis is
  * judged: `pl_rade` and `pl_bmasse` are on `measurements` as well as on the
@@ -381,18 +443,22 @@ function exoSources(tables: ExoTables): Record<string, DataSourceDef> {
  */
 function scatterProse(tables: ExoTables): ProseDecl {
   const drawn = tables.planets.filter((p) => typeof p.pl_rade === 'number' && typeof p.pl_bmasse === 'number');
-  const inside = drawn.filter((p) => Number(p.pl_bmasse) <= MASS_RADIUS_WINDOW.mass.to && Number(p.pl_rade) <= MASS_RADIUS_WINDOW.radius.to);
+  // what a LOGARITHM cannot place: a mass or a radius of zero or below. The same predicate the
+  // chart draws by (`placeable`, vizfootprint-ui) and the library folds `excluded` with — counted
+  // here so the long description and the picture can never report two different numbers.
+  const placeable = drawn.filter((p) => Number(p.pl_bmasse) > 0 && Number(p.pl_rade) > 0);
   const calculated = tables.planets.filter((p) => p.radius_ref_kind === 'archive').length;
   return {
     viewId: SCATTER_VIEW,
     slots: {
       title: { text: 'Mass and radius, as the archive accepts them', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
-      altShort: { text: 'A scatter plot of accepted planet radius against accepted planet mass, one dot per planet.', author: { kind: 'human' }, levels: ['construction'] },
+      altShort: { text: 'A scatter plot of accepted planet radius against accepted planet mass, one dot per planet, on logarithmic axes.', author: { kind: 'human' }, levels: ['construction'] },
       altLong: {
         text:
           `One dot per planet, placed at the radius and mass the archive's composite table accepts for it. ` +
-          `${String(inside.length)} of the ${String(tables.planets.length)} planets are inside the drawn window (mass up to ${String(MASS_RADIUS_WINDOW.mass.to)} Earth masses, radius up to ${String(MASS_RADIUS_WINDOW.radius.to)} Earth radii); ` +
-          `${String(drawn.length - inside.length)} heavier or larger planets are outside it and ${String(tables.planets.length - drawn.length)} have no accepted pair to place at all. ` +
+          `BOTH AXES ARE LOGARITHMIC, base 10, ticked at the powers of ten — this is the log–log mass–radius diagram the field publishes, and the whole population fits on it rather than crowding into one corner of a linear frame. ` +
+          `${String(placeable.length)} of the ${String(tables.planets.length)} planets are drawn; ` +
+          `${String(drawn.length - placeable.length)} have an accepted mass or radius of zero or less, which a logarithm cannot place, and ${String(tables.planets.length - drawn.length)} have no accepted pair to place at all. ` +
           `The accepted numbers are an ASSEMBLY, not a publication: ${String(calculated)} of the radii come from the archive's own calculation rather than from a paper. ` +
           `Click a planet to see every value ever published for it.`,
         author: { kind: 'human' },
@@ -412,19 +478,71 @@ function scatterProse(tables: ExoTables): ProseDecl {
  * groups, a sheet row is a row — so both state their fold, which the def door
  * requires and the ledger prints.
  *
- * The histogram declares NO edge at all, and not by omission: its capability
- * says `canProbe: false`, and the def door refuses an edge out of a view with
- * no voice ("view \"spread\" does not emit point — its voice is silent"). One
- * declaration, in one place, and the library holds the rest to it: a bar of
- * that histogram is the SET of planets with the same number of published radii,
- * and this def declares no clause that can name a set of six thousand planets.
- * The cell's caption says the same thing in words.
+ * The histogram now HAS a voice — it emits an interval over the minted table's
+ * `radii` — and it still declares NO edge, for a reason that is about the data
+ * and not about the voice. Its clause names `radii`, a column of
+ * `radii_per_planet` and of nothing else: neither `measurements` (the sheet's
+ * table) nor `planets` (the scatter's) has such a column, and the library's
+ * crossfilter carries a clause by the column it names. An edge from here would
+ * filter a target on a column that target has not got.
+ *
+ * NOR does the minted relation help, and it is worth being exact about why. The
+ * aggregate's group column is `pl_name`, so the session MINTS the relation
+ * `radii_per_planet.pl_name → measurements.pl_name` — but a relation is a
+ * PERMISSION TO READ ACROSS (what an analysis's `reads` is granted by), not a
+ * join a clause is routed through: a clause on a layer of another table never
+ * enters the default table's window. The honest declaration is therefore no
+ * edge, and the cell's caption says so in words rather than inventing one.
+ *
+ * What a click on a bar DOES do is land a real commit with its cause, put the
+ * selection outline on that bucket, and stand in the ledger as the question
+ * somebody asked — which is what makes the refusal before the act meaningful.
+ *
+ * SO THE EDGES OUT OF IT ARE DECLARED OFF, one by one, and that is not a
+ * formality. The link layer's first law is that NOTHING IS IMPLICIT: the default
+ * rule (crossfilter — every voice filters every other view, self excluded) is
+ * MATERIALIZED into real edges, so the moment this histogram gained a voice the
+ * graph gained ten filter edges out of it, and each one would have handed a
+ * `radii` clause to a table that has no such column. The library proves it if
+ * you let it: the sheet's own window comes back
+ * `table "measurements" has no column "radii"`. A declared `none` replaces the
+ * default edge in place, and a declared `none` is a FACT the matrix shows —
+ * which is the difference between this dashboard saying the histogram's
+ * selection stays put and it merely happening to.
  */
 function exoLinks(): readonly LinkDecl[] {
   return [
     { source: SCATTER_ADDRESS, kind: 'point', target: SHEET_VIEW, response: 'filter', fold: 'every published solution for the picked planet, oldest first', label: 'a dot on the scatter is whose publications the sheet lists' },
     { source: BY_YEAR_VIEW, kind: 'point', target: SHEET_VIEW, response: 'filter', fold: 'the publications the archive dates to the picked year', label: 'a year on the bar is which publications the sheet keeps' },
+    ...spreadSilences(),
   ];
+}
+
+/**
+ * Every default edge out of the histogram, turned off by declaration.
+ *
+ * TWO SOURCES, because the graph writes the default rule out for the frame's id
+ * and for its LAYER's address alike, and only one of them can ever emit: the
+ * marks are the layer's, so a click lands at {@link SPREAD_ADDRESS}. The bare
+ * view id is silenced too, so nothing reading the matrix is told about a filter
+ * edge that could carry a clause if a caller ever spoke through it.
+ *
+ * FIVE TARGETS, which is every other place the default rule points at — the two
+ * other frames, their layers, and the sheet. Written as a fold over the two
+ * lists rather than ten literals: a target added to one of them is silenced by
+ * construction, and ten hand-typed records are ten chances to forget one.
+ */
+function spreadSilences(): readonly LinkDecl[] {
+  const targets = [SCATTER_VIEW, SCATTER_ADDRESS, BY_YEAR_VIEW, BY_YEAR_ADDRESS, SHEET_VIEW];
+  return [SPREAD_VIEW, SPREAD_ADDRESS].flatMap((source) =>
+    targets.map((target): LinkDecl => ({
+      source,
+      kind: 'interval',
+      target,
+      response: 'none',
+      label: 'a bucket of planets names `radii`, a column only the minted table has — this edge is off by declaration, not by accident',
+    })),
+  );
 }
 
 /**
@@ -456,15 +574,22 @@ export function exoDef(tables: ExoTables): DashboardDef {
     ],
     // The honest capability envelope. The scatter and the sheet can emit a point
     // (a planet, a row) and a match (shift-click) and nothing else — no interval,
-    // because neither axis of either is a range a reader brushes here. The
-    // histogram declares `canProbe: false`: every probe on it becomes a typed
-    // `guard-failed` gap rather than a clause nothing can answer, which is the
-    // same fact its two `none` links state from the other side.
+    // because neither axis of either is a range a reader brushes here.
+    //
+    // The histogram emits an INTERVAL and only an interval: a click on a bar is a
+    // bucket, a pair of bin edges over `radii`, which is what `VizHistogram`
+    // really emits — not a point, and never a match, because there is no identity
+    // in a bucket to hold several of. It used to declare `canProbe: false`, which
+    // made every probe a `guard-failed` gap: a chart a reader could see and could
+    // never click, with the DEFINITION as the reason. The library now answers the
+    // real question per cursor — the table this view draws is minted by an act, so
+    // before that act lands the click is a typed `needs-act` gap naming it — so
+    // the view keeps its voice and the door says why it cannot speak yet.
     capabilities: [
       { viewId: SCATTER_VIEW, canProbe: true, encodings: ['point', 'match'] },
       { viewId: BY_YEAR_VIEW, canProbe: true, encodings: ['point', 'match'] },
       { viewId: SHEET_VIEW, canProbe: true, encodings: ['point', 'match'] },
-      { viewId: SPREAD_VIEW, canProbe: false },
+      { viewId: SPREAD_VIEW, canProbe: true, encodings: ['interval'] },
     ],
     links: exoLinks(),
     // The encoding plane's HOUSE RULES, as data — the same sentences refuse a bad
@@ -493,10 +618,12 @@ export function exoDef(tables: ExoTables): DashboardDef {
         viewId: SPREAD_VIEW,
         slots: {
           title: { text: 'How many published radii each planet has', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
-          altShort: { text: 'A histogram of how many published radii each planet has, from one upward.', author: { kind: 'human' }, levels: ['construction'] },
+          altShort: { text: 'A histogram of how many published radii each planet has, from one upward. Click a bar to select those planets.', author: { kind: 'human' }, levels: ['construction'] },
           altLong: {
             text:
               'Each bar counts the planets with the same number of published radii. The table under it does not exist until an act cuts it: an aggregate over the published measurements, then two derived columns — the width of each planet\'s published range, and whether that width is above zero. ' +
+              'A bar CAN be clicked, and what happens depends on where you are in the history: before the aggregate act has landed there is no table under this picture, and the click is refused in a sentence naming the act that mints it; after the act has landed the same click selects the planets in that bucket, on the log, with its cause. ' +
+              'The selection stays here. Its clause names `radii`, which is a column of the minted table and of no other, so it reaches no other chart — this dashboard declares no edge out of the histogram rather than one that would filter the sheet on a column the sheet has not got. ' +
               'What it cannot show: a planet no paper published a radius for. The absence law drops such a row before the aggregate sees it, so those planets are in no bar at all, and the caption counts them instead of implying they are the leftmost bar.',
             author: { kind: 'human' },
             levels: ['construction'],

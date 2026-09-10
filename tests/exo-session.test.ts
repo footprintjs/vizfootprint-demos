@@ -21,7 +21,8 @@
  * one thing worth catching here.
  */
 import { describe, expect, it } from 'vitest';
-import { ACCEPTED_RADIUS_COLUMN, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, RADII_PER_PLANET, SCATTER_ADDRESS, SHEET_VIEW, SPREAD_COLUMN } from '../src/exo/def.js';
+import { ACCEPTED_RADIUS_COLUMN, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, RADII_PER_PLANET, SCATTER_ADDRESS, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN } from '../src/exo/def.js';
+import { SPREAD_BUCKET } from '../src/exo/session.js';
 import { buildExoSurfaceAsync } from '../src/exo/surface.js';
 import { exoRows } from '../src/exo/rows.js';
 import { loadExo } from '../src/exo/snapshot.js';
@@ -137,6 +138,27 @@ describe('the declared link is what fills the sheet', () => {
     await surface.session.dispatch({ verb: 'select', viewId: SCATTER_ADDRESS, field: 'pl_name', value: null, cause: { ...cause, intent: 'clear the planet' } });
     const all = await surface.session.viewQuery({ viewId: SHEET_VIEW, table: 'measurements', limit: 5 });
     expect(all.ok && all.count).toBe(tables.measurements.length);
+  });
+});
+
+describe('the histogram over a table an ACT mints — refused before it, landing after it', () => {
+  it('the boot collects the library\'s own refusal, and it names the act as the repair', () => {
+    // the sentence is the library's, kept verbatim: the view, the table, and the act to perform
+    expect(surface.mintedTableRefusal).toBe(`view "${SPREAD_ADDRESS}" draws "${RADII_PER_PLANET}", which the act "radiiPerPlanet" mints — it has not landed on this path`);
+    // it landed NOTHING: the log a reader walks holds the five acts and no sixth commit
+    expect(surface.session.log.records.filter((r) => r.viewId === SPREAD_ADDRESS)).toEqual([]);
+  });
+
+  it('the same gesture LANDS once the act has, and its clause stays on the minted table', async () => {
+    const gesture = { verb: 'filter' as const, viewId: SPREAD_ADDRESS, field: 'radii', range: [...SPREAD_BUCKET] as [number, number] };
+    const landed = await surface.session.dispatch({ ...gesture, cause: { requestedBy: 'user' as const, computedBy: 'user' as const, intent: 'the planets with one published radius' } });
+    expect(landed.ok).toBe(true);
+    // …and it reaches no other view: every default crossfilter edge out of the histogram is declared off,
+    // because a `radii` clause would filter a table that has no such column (the def says so in words)
+    expect(surface.session.clausesFor(SHEET_VIEW)).toEqual([]);
+    const sheet = await surface.session.viewQuery({ viewId: SHEET_VIEW, table: 'measurements', limit: 3 });
+    expect(sheet.ok).toBe(true);
+    await surface.session.dispatch({ ...gesture, range: null, cause: { requestedBy: 'user' as const, computedBy: 'user' as const, intent: 'clear the bucket' } });
   });
 });
 

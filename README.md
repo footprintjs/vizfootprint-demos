@@ -27,7 +27,11 @@ for what that costs and what it doesn't.
   per planet beside every number any paper ever published for it. Five declared
   ACTS do all the arithmetic — an aggregate that mints a table at run time, two
   derived columns on it, a bring-over and a delta — so the number a reader sees
-  and the commit that made it are the same thing.
+  and the commit that made it are the same thing. Mass against radius is drawn
+  on **logarithmic axes**, declared on the view's frame, with what a logarithm
+  cannot place counted rather than dropped; and the histogram over that minted
+  table **can be clicked** — before the act that mints it has landed, the same
+  click is refused in a sentence naming the act, which the page shows.
 
 All three run the real dashboard, the real ETL, the real definition — the one
 thing the published pages cannot do unattended is hold a server-side model

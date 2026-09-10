@@ -4,10 +4,12 @@
  *
  * `tests/exo-session.test.ts` proves the five acts land and what they leave
  * behind. This proves the last hop: that the cells turn those rows into marks,
- * that a planet outside the declared window is not drawn AND is counted, that
- * the histogram bins the MINTED rows rather than folding the measurements a
- * second time, and — the part this demo exists for — that the silences are in
- * front of the reader IN WORDS, where they happen.
+ * that the LOGARITHMIC axes the def declares really reach the chart (through the
+ * session's projection, which is the only path there is) and that what a
+ * logarithm cannot place is counted rather than dropped, that the histogram bins
+ * the MINTED rows rather than folding the measurements a second time, and — the
+ * part this demo exists for — that the silences are in front of the reader IN
+ * WORDS, where they happen.
  *
  * The cells are rendered to static markup — no browser, no DOM. What they need
  * is a `DeskProjection`, and the desk builds that internally, so the one below
@@ -21,13 +23,29 @@ import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { radiiBins, useExoCells, useExoSilences, type ExoDeskData } from '../web/src/exoCells.js';
 import type { Row } from '../web/src/derive.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/exo/absence.js';
-import { MASS_RADIUS_WINDOW } from '../src/exo/def.js';
+import { exoDef, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_VIEW } from '../src/exo/def.js';
+import { exoTables } from '../src/exo/etl.js';
 import { buildExoSurfaceAsync } from '../src/exo/surface.js';
 import { loadExo } from '../src/exo/snapshot.js';
+import { TINY_PS, TINY_PSCOMPPARS } from './exoFixture.js';
+
+/**
+ * THE VIEWS AS THE SESSION PROJECTS THEM — read off the DEF, so the stub
+ * carries the frame the real projection carries and nothing the def never said.
+ *
+ * It matters that this is derived and not typed: the cells learn which curve an
+ * axis is drawn on from `state.views[].frame`, which is the session echoing the
+ * def back verbatim. A stub with a hand-written frame would be testing a
+ * declaration this repository does not make.
+ */
+const PROJECTED_VIEWS = exoDef(exoTables(TINY_PS, TINY_PSCOMPPARS)).encodings!.map((e) => ({
+  viewId: e.viewId,
+  ...(e.frame !== undefined ? { frame: e.frame } : {}),
+}));
 
 /** A desk with nothing selected, nothing said and nothing to say — the quietest true projection. */
 const QUIET = {
-  state: { selections: [], links: [], cleared: [] },
+  state: { selections: [], links: [], cleared: [], views: PROJECTED_VIEWS },
   view: { emit: () => undefined, reencode: () => undefined },
   bound: (_viewId: string, _channel: string, fallback: string) => fallback,
   selFor: () => ({ clauses: new Map(), resolve: 'intersect', selfClauseId: null }),
@@ -98,23 +116,54 @@ async function buildRealData(): Promise<ExoDeskData> {
 }
 
 describe('the three cells over the committed slice', () => {
-  it('draws one dot per placeable planet inside the DECLARED window, and counts what it left out', async () => {
+  it('draws one dot per planet the archive accepts a PAIR for — no window, nothing dropped for being too big', async () => {
     const data = await realData();
     const cells = cellsOf(data);
     expect(cells.map((c) => c.id)).toEqual(['mass_radius', 'spread', 'by_year']);
     const html = renderToStaticMarkup(<>{cells[0]!.render({ width: 800, height: 520 })}</>);
-    const inside = data.planets.filter(
-      (p) =>
-        typeof p['pl_bmasse'] === 'number' &&
-        typeof p['pl_rade'] === 'number' &&
-        Number(p['pl_bmasse']) <= MASS_RADIUS_WINDOW.mass.to &&
-        Number(p['pl_rade']) <= MASS_RADIUS_WINDOW.radius.to,
-    ).length;
-    expect(count(html, 'circle')).toBe(inside);
-    // …and the ones outside it are in the caption, not hidden
+    const pairs = data.planets.filter((p) => typeof p['pl_bmasse'] === 'number' && typeof p['pl_rade'] === 'number');
+    // every planet with a pair whose two numbers a LOGARITHM can place is a circle; the rest are counted, never hidden
+    const placeable = pairs.filter((p) => Number(p['pl_bmasse']) > 0 && Number(p['pl_rade']) > 0).length;
+    expect(count(html, 'circle')).toBe(placeable);
+    // the giants are IN the picture now — the old hand-typed window cut them off at 1,000 Earth masses
+    expect(pairs.some((p) => Number(p['pl_bmasse']) > 1000)).toBe(true);
     const caption = textOf(cells[0]!.caption);
-    expect(caption).toContain('are heavier or larger than that window and are NOT drawn');
-    expect(caption).toContain('no log scale');
+    expect(caption).toContain('BOTH AXES ARE LOGARITHMIC');
+    expect(caption).not.toContain('window');
+  }, 120_000);
+
+  it('draws the DECLARED curve, and gets it from the session\'s projection of the def — not from a constant in the cell', async () => {
+    const data = await realData();
+    const html = renderToStaticMarkup(<>{cellsOf(data)[0]!.render({ width: 800, height: 520 })}</>);
+    // decade ticks: a logarithmic x axis over 0.02 … 4,915 Earth masses is labelled at the powers of ten
+    for (const decade of ['0.1', '10', '1000']) expect(html).toContain(`>${decade}<`);
+    // …and with the frame gone from the projection the same cell draws the linear axis it always drew,
+    // which is what proves the declaration is doing the work and nothing here is hard-coded
+    const linear = { ...QUIET, state: { ...QUIET.state, views: [{ viewId: SCATTER_VIEW }, { viewId: SPREAD_VIEW }] } } as unknown as DeskProjection;
+    const drawn = renderToStaticMarkup(<>{cellsOf(data, linear)[0]!.render({ width: 800, height: 520 })}</>);
+    expect(drawn).not.toBe(html);
+    expect(textOf(cellsOf(data, linear)[0]!.caption)).not.toContain('a logarithm has no place for');
+  }, 120_000);
+
+  it('counts the dots a LOGARITHM cannot place, in the caption and in the picture — exclude and count, never silently drop', async () => {
+    const data = await realData();
+    const cells = cellsOf(data);
+    const pairs = data.planets.filter((p) => typeof p['pl_bmasse'] === 'number' && typeof p['pl_rade'] === 'number');
+    const unplottable = pairs.filter((p) => !(Number(p['pl_bmasse']) > 0) || !(Number(p['pl_rade']) > 0)).length;
+    const caption = textOf(cells[0]!.caption);
+    const html = renderToStaticMarkup(<>{cells[0]!.render({ width: 800, height: 520 })}</>);
+    if (unplottable === 0) {
+      // this slice has no such planet, so the chart claims none — and the caption says the
+      // absence out loud rather than falling silent, because a reader of a log axis needs to
+      // know whether anything was left out as much as they would need a count
+      expect(html).not.toContain('vzf-excluded-note');
+      expect(caption).not.toContain('are NOT drawn');
+      expect(caption).toContain('every one of them is placeable on that curve');
+    } else {
+      expect(caption).toContain(`${unplottable.toLocaleString('en-US')} of those planets are NOT drawn`);
+      expect(html).toContain('vzf-excluded-note');
+      expect(html).toContain(`${unplottable} value`); // the library's own words, inside the picture
+    }
   }, 120_000);
 
   it('says how much of the composite came from NO paper — the fact the demo exists for', async () => {
@@ -132,12 +181,7 @@ describe('the three cells over the committed slice', () => {
     const cells = cellsOf(data);
     const html = renderToStaticMarkup(<>{cells[0]!.render({ width: 800, height: 520 })}</>);
     const bounded = data.planets.filter(
-      (p) =>
-        typeof p['pl_bmasse'] === 'number' &&
-        typeof p['pl_rade'] === 'number' &&
-        Number(p['pl_bmasse']) <= MASS_RADIUS_WINDOW.mass.to &&
-        Number(p['pl_rade']) <= MASS_RADIUS_WINDOW.radius.to &&
-        (p['radius_state'] === 'limit' || p['mass_state'] === 'limit'),
+      (p) => typeof p['pl_bmasse'] === 'number' && typeof p['pl_rade'] === 'number' && (p['radius_state'] === 'limit' || p['mass_state'] === 'limit'),
     ).length;
     expect(bounded).toBeGreaterThan(0);
     expect(count(html, 'circle')).toBeGreaterThan(bounded); // the bounds are among, not the whole of, the dots drawn
@@ -165,6 +209,30 @@ describe('the three cells over the committed slice', () => {
     expect(caption).toContain('a bound is not one');
     // and it says where the table came from, because the table is not in the data
     expect(caption).toContain('an aggregate act cut it at run time');
+  }, 120_000);
+
+  it('gives the histogram a real voice: the bars select under the LAYER address, and the caption says what a click does and where it stops', async () => {
+    const data = await realData();
+    const spread = cellsOf(data).find((c) => c.id === 'spread')!;
+    // the clause lives at the layer's address, because that is the layer whose (minted) table the bars draw
+    expect(spread.clauseId).toBe(SPREAD_ADDRESS);
+    const caption = textOf(spread.caption);
+    expect(caption).toContain('click a bar to select those planets');
+    // …and both honest limits: the refusal before the act, and the clause that reaches nothing else
+    expect(caption).toContain('refuses the same click in a sentence that names the act which mints it');
+    expect(caption).toContain('the selection stays in this chart');
+  }, 120_000);
+
+  it('a click on a bar really dispatches — an INTERVAL, at the layer address, under an intent that names the field the gesture was on', async () => {
+    const data = await realData();
+    const emitted: { viewId: string; emission: unknown; intent: string }[] = [];
+    const spy = { ...QUIET, view: { ...QUIET.view, emit: (viewId: string, emission: unknown, intent: string) => void emitted.push({ viewId, emission, intent }) } } as unknown as DeskProjection;
+    const chart = cellsOf(data, spy).find((c) => c.id === 'spread')!.render({ width: 800, height: 400 });
+    // the chart element's own props, unrendered: this is the wiring, and the markup cannot show it
+    const props = (chart as React.ReactElement<{ readonly viewId: string; readonly onEmit?: (e: unknown) => void }>).props;
+    expect(props.viewId).toBe(SPREAD_ADDRESS);
+    props.onEmit!({ rawValue: [1, 2], encoding: { kind: 'interval', field: 'radii' } });
+    expect(emitted).toEqual([{ viewId: SPREAD_ADDRESS, emission: { rawValue: [1, 2], encoding: { kind: 'interval', field: 'radii' } }, intent: 'filter radii' }]);
   }, 120_000);
 
   it('reads the DERIVED disagreement column — never a fold of its own', async () => {

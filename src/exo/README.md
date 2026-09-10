@@ -13,7 +13,7 @@ the data**.
 | `etl.ts` | the parse: two CSVs → `measurements`, `planets`, `references` | yes |
 | `slice.ts` | which rows and columns are committed, what that loses, and the provenance object | yes |
 | `def.ts` | layers 2–4 as data: three tables with their silences, three relations, the views, the FIVE acts, the links, the house rules, the prose | yes |
-| `session.ts` | one live session over the def, with the five acts landed in dependency order | yes |
+| `session.ts` | one live session over the def: one refused gesture, then the five acts landed in dependency order | yes |
 | `surface.ts` | the same session with the committed CSVs as its default | **no — node only** |
 | `rows.ts` | the one payload a page draws from | yes |
 | `http.ts` | the same two files `via: 'http'`, for a page with no disk | yes |
@@ -88,6 +88,57 @@ keeps a state off every magnitude channel) and every act that must not read a
 bound says so in its own record. The gap is written down in `absence.ts` ·
 `CARRIES_NOTE`, not worked around in silence: **there is no per-column absence
 declaration**, and a table like this one needs three.
+
+## The scatter is a log–log figure, and there is no window any more
+
+Mass against radius is the diagram this field publishes, and it has been log–log
+since it had four points on it: masses in this slice run 0.02 to 9,535 Earth
+masses and radii 0.3 to 87, so a linear frame is one picture of Jupiter and a
+smudge where every rocky planet is. Until the library had a scale transform this
+def declared a hand-typed **window** (mass to 1,000, radius to 30) and the cell
+filtered by it and counted the giants it cut off. Both are gone. `def.ts` ·
+`SCATTER_FRAME` declares `transform: 'log'` on the view's frame — a transform is
+not a resolution, so the frame is legal on a one-layer view and this is where an
+axis's nature belongs — the session projects that declaration verbatim, and
+`web/src/exoCells.tsx` · `transformOf` reads it off the projection. **No curve is
+chosen in a cell.**
+
+What a declaration cannot decide is the cells: a logarithm has no answer for 0 or
+a negative number, and which planets those are is data. So the library folds the
+domain over the positive values and **counts what it could not place** — exclude
+and count, never silently drop. The chart prints that count inside the picture
+the marks are missing from; the caption says it again in words, counted with the
+library's own `placeable` predicate so the two can never disagree.
+
+## The histogram over a table no file holds — refused, then clickable
+
+The histogram draws `radii_per_planet`, which the `radiiPerPlanet` aggregate
+**mints at run time**. It used to declare `canProbe: false`: a chart a reader
+could see and could never click, with the *definition* as the reason. Now a
+layer may name a table an act mints — the definition that declares the act has
+already declared the table's name and its whole column list — and the library
+answers the real question per cursor instead:
+
+```
+needs-act   view "spread~buckets" draws "radii_per_planet",
+            which the act "radiiPerPlanet" mints — it has not landed on this path
+```
+
+`needs-act`, not `guard-failed`, because the repair is to perform the act rather
+than to re-read the definition. The page's own boot makes that gesture before it
+lands anything (`session.ts` · `probeTheMintedTable`), keeps the sentence and
+shows it in the honesty line, then lands the acts — a visitor arrives after the
+acts and could otherwise only be *told* about a refusal.
+
+**And every default edge out of it is declared off.** The link layer's first law
+is that nothing is implicit: the default crossfilter rule is materialized into
+real edges, so the moment this view gained a voice the graph gained ten filter
+edges out of it — each one handing a `radii` clause to a table that has no such
+column (`table "measurements" has no column "radii"`, which is what the sheet's
+own window answers if you let it). The aggregate's minted relation does not help:
+a relation is a permission to read across, not a join a clause is routed through.
+So `def.ts` · `spreadSilences` declares `response: 'none'` on all ten, because a
+declared `none` is a fact the matrix shows and an absent edge is only a silence.
 
 ## What the histogram cannot show, and why the caption counts it
 

@@ -22,10 +22,12 @@ import {
   EXO_ANALYSES,
   EXO_RELATIONS,
   EXO_VIEWS,
-  MASS_RADIUS_WINDOW,
   RADII_PER_PLANET,
   SCATTER_ADDRESS,
+  SCATTER_FRAME,
+  SPREAD_ADDRESS,
   SPREAD_COLUMN,
+  SPREAD_VIEW,
   exoDef,
 } from '../src/exo/def.js';
 import { TINY_PS, TINY_PSCOMPPARS } from './exoFixture.js';
@@ -131,14 +133,34 @@ describe('what the views can and cannot say, declared', () => {
     expect(SCATTER_ADDRESS).toBe('mass_radius~planets');
   });
 
-  it('the histogram declares NO encoding and no voice — its table does not exist until an act cuts it', () => {
+  it('the histogram names the table an ACT mints, and keeps its voice — a chart a reader can see and never click is the thing this replaced', () => {
     const def = exoDef(TINY);
-    expect(def.encodings?.map((e) => e.viewId)).toEqual(['mass_radius', 'by_year']);
-    expect(def.capabilities?.find((c) => c.viewId === 'spread')).toEqual({ viewId: 'spread', canProbe: false });
-    // …and it declares no edge at all: the def door refuses an edge out of a view with no voice
-    expect(def.links?.filter((l) => l.source === 'spread')).toEqual([]);
-    const speaking = { ...def, links: [...(def.links ?? []), { source: 'spread', kind: 'point' as const, target: 'sheet', response: 'none' as const }] };
-    expect(validateDashboardDef(speaking).join(' ')).toMatch(/does not emit point — its voice is silent/);
+    expect(def.encodings?.map((e) => e.viewId)).toEqual(['mass_radius', 'spread', 'by_year']);
+    // a LAYER is the only place a def may name a table other than its own, and a minted one is now allowed there
+    const spread = def.encodings?.find((e) => e.viewId === SPREAD_VIEW);
+    expect(spread?.layers).toEqual([
+      { layerId: 'buckets', table: RADII_PER_PLANET, chartKind: 'histogram', channels: ['x'], initial: { x: 'radii' }, label: 'Planets, grouped by how many radii were published for them' },
+    ]);
+    expect(SPREAD_ADDRESS).toBe('spread~buckets');
+    // it EMITS an interval and only an interval — a bucket is a pair of bin edges, never a point and never a match
+    expect(def.capabilities?.find((c) => c.viewId === SPREAD_VIEW)).toEqual({ viewId: SPREAD_VIEW, canProbe: true, encodings: ['interval'] });
+    // and binding a column the act does not mint is refused against the MINTED column list, by name
+    const ghost = { ...spread!, layers: [{ ...spread!.layers![0]!, initial: { x: 'spread' } }] };
+    expect(validateDashboardDef({ ...def, encodings: [ghost] }).join(' ')).toMatch(/"spread" is not a column of the table/);
+  });
+
+  it('every default edge out of the histogram is declared OFF — nothing implicit, and a `radii` clause reaches no table that has no such column', () => {
+    const def = exoDef(TINY);
+    const off = def.links?.filter((l) => l.response === 'none') ?? [];
+    // the default rule (crossfilter) materializes an edge for the frame's id AND its layer's address alike
+    expect([...new Set(off.map((l) => l.source))]).toEqual([SPREAD_VIEW, SPREAD_ADDRESS]);
+    expect(off.every((l) => l.kind === 'interval')).toBe(true);
+    // every other place the default rule points at: the two other frames, their layers, and the sheet
+    const targets = ['mass_radius', 'mass_radius~planets', 'by_year', 'by_year~references', 'sheet'];
+    for (const source of [SPREAD_VIEW, SPREAD_ADDRESS]) {
+      expect(off.filter((l) => l.source === source).map((l) => String(l.target)).sort()).toEqual([...targets].sort());
+    }
+    expect(off.every((l) => typeof l.label === 'string' && l.label.includes('radii'))).toBe(true);
   });
 
   it('the two edges that DO carry a clause state their fold, because both cross grains', () => {
@@ -147,8 +169,12 @@ describe('what the views can and cannot say, declared', () => {
     expect(carrying.every((l) => typeof l.fold === 'string' && l.fold.length > 10)).toBe(true);
   });
 
-  it('the drawn window is declared, never chosen in a cell', () => {
-    expect(MASS_RADIUS_WINDOW).toEqual({ mass: { from: 0, to: 1000 }, radius: { from: 0, to: 30 } });
+  it('the scatter declares LOGARITHMIC axes on its frame, and no hand-typed window anywhere', () => {
+    expect(SCATTER_FRAME).toEqual({ x: { mode: 'shared', transform: 'log' }, y: { mode: 'shared', transform: 'log' } });
+    expect(exoDef(TINY).encodings?.find((e) => e.viewId === 'mass_radius')?.frame).toBe(SCATTER_FRAME);
+    // the def door refuses a zero beside a logarithm: an axis of factors has none to anchor at
+    const zeroed = { viewId: 'mass_radius', chartKind: 'scatter', channels: ['x', 'y'], frame: { y: { mode: 'shared' as const, transform: 'log' as const, zero: true } }, layers: [{ layerId: 'planets', table: 'planets', chartKind: 'scatter', channels: ['x', 'y'], initial: { x: 'pl_bmasse', y: 'pl_rade' } }] };
+    expect(validateDashboardDef({ ...exoDef(TINY), encodings: [zeroed] }).join(' ')).toMatch(/a logarithmic axis has no zero/);
   });
 
   it('the house rules refuse the same way at build and in the picker', () => {
