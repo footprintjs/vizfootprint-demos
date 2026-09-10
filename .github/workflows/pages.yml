@@ -1,4 +1,4 @@
-# THE DEPLOY — the two demos as a static site on GitHub Pages.
+# THE DEPLOY — the three demos as a static site on GitHub Pages.
 #
 # This repository depends on `vizfootprint` through `file:` links to a SIBLING
 # checkout, so the job's first act is to put that sibling where the links say
@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: footprintjs/vizfootprint
-          ref: 8f0ec06bb4bd924dbe4bd9108bf296d011ab1e21
+          ref: ade1f924fa3bfd2f679ff2bd72dd357ea99fb82d
           path: vizfootprint
 
       # the Story tab's scroll lens, the third `file:` sibling — `npm install`

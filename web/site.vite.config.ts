@@ -1,13 +1,13 @@
 /**
- * THE STATIC SITE'S BUILD — the two demos as pages that stand alone.
+ * THE STATIC SITE'S BUILD — the three demos as pages that stand alone.
  *
  * On GitHub Pages there is no process, so nothing may point at `/api`. Each
  * desk declares its tables `via: 'http'` at the committed CSVs and fetches
  * them like any other asset; this config's only jobs are to say where the site
  * will be mounted and to put those files where the pages will look.
  *
- * Three pages, one deployable: the index that offers the two demos, and a desk
- * each. They are one build rather than three because the index links to its
+ * Four pages, one deployable: the index that offers the three demos, and a desk
+ * each. They are one build rather than four because the index links to its
  * siblings by relative path, which is what makes the whole site movable.
  *
  * ── The base ────────────────────────────────────────────────────────────────
@@ -24,8 +24,8 @@
  * carrier requires.
  *
  * ── NOT single-file ─────────────────────────────────────────────────────────
- * The story page carries its data inline and is one file on purpose. These two
- * carry 17.5 MB between them; inlining that would be a file nobody can open. The
+ * The story page carries its data inline and is one file on purpose. These
+ * three carry 27.8 MB between them; inlining that would be a file nobody can open. The
  * data is copied beside the pages instead, which is exactly the case the
  * library's story-page ceiling tells a host to reach for `via: 'http'` for.
  */
@@ -132,6 +132,6 @@ export default defineConfig({
   build: {
     outDir: OUT,
     emptyOutDir: true,
-    rollupOptions: { input: { index: path.join(SITE, 'index.html'), nndss: path.join(SITE, 'nndss', 'index.html'), grid: path.join(SITE, 'grid', 'index.html') } },
+    rollupOptions: { input: { index: path.join(SITE, 'index.html'), nndss: path.join(SITE, 'nndss', 'index.html'), grid: path.join(SITE, 'grid', 'index.html'), exo: path.join(SITE, 'exo', 'index.html') } },
   },
 });

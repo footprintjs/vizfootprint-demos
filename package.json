@@ -2,7 +2,7 @@
   "name": "vizfootprint-demo",
   "version": "0.0.1",
   "private": true,
-  "description": "vizfootprint on public data \u2014 CDC's NNDSS weekly notifiable-disease tables, reproduced as a provenance-first dashboard with the interaction grammar on screen.",
+  "description": "vizfootprint on public data — CDC's NNDSS weekly notifiable-disease tables, EIA's hourly electric grid, and the NASA Exoplanet Archive, reproduced as provenance-first dashboards with the interaction grammar on screen.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -25,6 +25,11 @@
     "grid:generate": "tsx scripts/grid-generate.ts",
     "grid:dev": "vite --config web/grid.vite.config.ts",
     "grid:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/grid.vite.config.ts",
+    "data:exo": "node data/exo/fetch.mjs",
+    "exo:generate": "tsx scripts/exo-generate.ts",
+    "exo:capture": "tsx scripts/exo-capture.ts",
+    "exo:dev": "vite --config web/exo.vite.config.ts",
+    "exo:page": "tsc --noEmit -p web/tsconfig.json && vite build --config web/exo.vite.config.ts",
     "site:build": "tsc --noEmit -p web/tsconfig.json && vite build --config web/site.vite.config.ts",
     "site:dev": "vite --config web/site.vite.config.ts"
   },

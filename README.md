@@ -11,7 +11,7 @@ on CDC's own bytes.
 
 ## Live: <https://footprintjs.github.io/vizfootprint-demos/>
 
-A static build of both demos, published from this repo by
+A static build of all three demos, published from this repo by
 `.github/workflows/pages.yml` on every push to `main` — no server behind it,
 which is exactly the point; see [Publish it](#publish-it--a-static-site-no-server-at-all)
 for what that costs and what it doesn't.
@@ -22,8 +22,14 @@ for what that costs and what it doesn't.
 - **[Grid](https://footprintjs.github.io/vizfootprint-demos/grid/)** — three
   weeks of the US electric grid, hour by hour, as the sparse directed network
   62 balancing authorities actually trade power over.
+- **[Exoplanets](https://footprintjs.github.io/vizfootprint-demos/exo/)** — the
+  same fact, published twice: the NASA Exoplanet Archive's one accepted number
+  per planet beside every number any paper ever published for it. Five declared
+  ACTS do all the arithmetic — an aggregate that mints a table at run time, two
+  derived columns on it, a bring-over and a delta — so the number a reader sees
+  and the commit that made it are the same thing.
 
-Both run the real dashboard, the real ETL, the real definition — the one
+All three run the real dashboard, the real ETL, the real definition — the one
 thing the published pages cannot do unattended is hold a server-side model
 key, so the **analyst** panel asks each visitor for their own (kept in that
 browser only, sent only to Anthropic, and entirely optional — without one the
@@ -48,12 +54,14 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | `data/nndss/graph/` | 1 · data | the disease co-occurrence graph derived from the snapshot by `npm run graph:generate` — `nodes` / `edges` tables the def joins with two relations, with provenance and a byte-stability promise |
 | `data/geo/` | 1 · data | US state boundaries (Census-derived, via `us-atlas`), converted and committed with provenance |
 | `src/nndss/` | 1–5 | flags → absence, CSV → tables, the declared dashboard, the declared analyses, the surface, the scripted proposals, the analyst |
+| `data/exo/` | 1 · data | the two TAP queries, the two committed archive tables, the fetch's own record and the provenance the ETL's counts fill in |
+| `src/exo/` | 1–4 | the archive's limit flags → absence, two CSVs → three tables, the declared dashboard, the FIVE declared acts, the surface, the card |
 | `src/source/` | wire | the http carrier — the one the library has but does not export; its README says why |
 | `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors |
 | `web/` | 3, 4, 6 | the front door, the cockpit, the Grammar panel, the jump box, the Analyst panel |
-| `web/site/` | 3, 4, 6 | the STATIC site: an index and the two desks, each reading its tables over http with no server behind it |
+| `web/site/` | 3, 4, 6 | the STATIC site: an index and the three desks, each reading its tables over http with no server behind it |
 | `web/story/` | 6 | the SINGLE-FILE story page: its entry, its desk, and the captured desk it carries |
-| `scripts/` | — | `story-capture.ts` — the desk's story, off a running server |
+| `scripts/` | — | `story-capture.ts` — the CDC desk's story, off a running server; `exo-capture.ts` — the exoplanet walk, taken IN PROCESS because that demo has no server |
 | `tests/` | — | vitest |
 
 ## What you see
@@ -216,6 +224,18 @@ npm run web:dev         # http://localhost:5291
 npm test
 ```
 
+The other two demos have their own commands. The grid desk is served
+(`npm run grid:dev`); the exoplanet desk was built for the static site and has
+no server, so its dev command serves the static page and answers the committed
+data from the repository itself:
+
+```
+npm run data:exo        # the two TAP queries → data/exo/{ps.csv, pscomppars.csv, FETCH.json}
+npm run exo:generate    # read them back through the ETL → data/exo/PROVENANCE.json
+npm run exo:capture     # walk the desk in process → web/site/exo/walk.json (the card's `walked` reader)
+npm run exo:dev         # http://localhost:5294/exo/
+```
+
 `vizfootprint-ui` and `vizfootprint-studio` are `file:` links to the sibling
 checkout; rebuild them (`cd ../vizfootprint && npm run build:ui && npm run
 build -w vizfootprint-studio`) after any library change.
@@ -234,10 +254,9 @@ reads it from GitHub's own `configure-pages` action and passes it as
 `SITE_BASE`, so the deployed site is always mounted at wherever this
 repository actually lives.
 
-`dist/site/` is three pages and 18.5 MB — 1.0 MB of code and 17.5 MB of
-tables: an index that offers the two demos, a desk each, and `data/` copied in
-beside them. There is no server behind it and
-nothing in it points at one.
+`dist/site/` is four pages and 31 MB — 2.8 MB of code and 27.8 MB of tables:
+an index that offers the three demos, a desk each, and `data/` copied in beside
+them. There is no server behind it and nothing in it points at one.
 
 **How a desk gets its rows without a server.** The library's source layer is a
 declaration, not a fetch call: a table says a **format**, a **via** and an
@@ -252,11 +271,11 @@ same code the server runs.
 
 | | served | static |
 |---|---|---|
-| the definition | `nndssDef` / `gridDef` | the same |
-| the session | built in the server process | built in your browser |
+| the definition | `nndssDef` / `gridDef` / `exoDef` | the same |
+| the session | built in the server process | built in your browser (the exoplanet desk has no served twin: it was built for the static site) |
 | the tables | `via: 'file'`, off disk | `via: 'http'`, off the site |
 | the desk's session view | `pollingSource('/api/state')` | `sessionSource(session)` |
-| the rows payload | `nndssRows` / `gridRows` | the same |
+| the rows payload | `nndssRows` / `gridRows` / `exoRows` | the same |
 
 **What a reader loses, said rather than degraded.** Each static desk opens
 with the sentence: no **analyst** (it needs a model key and a process to hold
@@ -373,6 +392,28 @@ Grid data: U.S. Energy Information Administration — see
 [`data/grid/README.md`](data/grid/README.md) for the acknowledgement EIA asks
 for, which names the publication (the January–June 2025 six-month file) as
 well as the month this repo downloaded it.
+
+Exoplanets: the **NASA Exoplanet Archive**, queried over its TAP service — two
+tables, one row per published measurement and one row per planet. The archive
+publishes **no licence** for them; it asks for an acknowledgement, and this
+repository carries it verbatim, from the archive's own
+[Acknowledging the NASA Exoplanet Archive in Publications](https://exoplanetarchive.ipac.caltech.edu/docs/acknowledge.html)
+page:
+
+> This research has made use of the NASA Exoplanet Archive, which is operated
+> by the California Institute of Technology, under contract with the National
+> Aeronautics and Space Administration under the Exoplanet Exploration Program.
+
+The same page asks that work using data from a specific literature reference
+acknowledge that reference directly, and that the archive be cited as
+Christiansen et al. (2025), its published overview paper. The persistent
+identifiers come from the archive's own
+[DOI page](https://exoplanetarchive.ipac.caltech.edu/docs/doi.html): the
+Planetary Systems Table is `10.26133/NEA12` and the Planetary Systems Composite
+Parameters Table is `10.26133/NEA13`. Neither is composed here and no DOI is
+invented. See [`data/exo/README.md`](data/exo/README.md) for the slice's one
+judgement (published-confirmed solutions only, candidates dropped) and what it
+loses.
 
 ## Cases per hundred thousand people
 

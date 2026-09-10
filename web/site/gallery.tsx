@@ -2,7 +2,7 @@
  * THE FRONT PAGE'S GALLERY — what each surface covers, read off a file the
  * build wrote, never off a list somebody typed into this page.
  *
- * The page you are reading used to carry two hand-written cards: a heading, a
+ * The page you are reading once carried hand-written cards: a heading, a
  * sentence, and a row of numbers per desk. Every one of those numbers was a
  * fact about a build that could change without this file changing. Now the
  * cards are the studio's `DemoGallery` over `data/cards.json`, and that file
@@ -54,7 +54,7 @@ function Gallery(): JSX.Element {
   if (state.status === 'broken') {
     return (
       <p className="note broken" role="alert">
-        The gallery could not read its cards — {state.sentence}. The two desks above still open; nothing here was going to be typed in the cards' place.
+        The gallery could not read its cards — {state.sentence}. The three desks above still open; nothing here was going to be typed in the cards' place.
       </p>
     );
   }

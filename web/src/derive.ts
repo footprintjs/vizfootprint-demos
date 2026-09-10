@@ -27,8 +27,15 @@
 import { filtersHere } from 'vizfootprint-ui';
 import type { RenderSelection } from 'vizfootprint-ui';
 
-/** A row of either demo table, as the wire carries it. */
-export type Row = Readonly<Record<string, string | number | null | undefined>>;
+/**
+ * A row of any demo table, as the wire carries it.
+ *
+ * `boolean` is in the list because a DERIVED column can be one: the exoplanet
+ * demo's `disagrees` is `r_max > r_min`, and the op grammar yields a real
+ * boolean (`vizfootprint/src/derive/ops.ts` · `gt`). A type that stopped at
+ * strings and numbers would have forced every reader of such a column to cast.
+ */
+export type Row = Readonly<Record<string, string | number | boolean | null | undefined>>;
 
 /** One bar: a category and how many rows carry it. */
 export interface CategoryCount {

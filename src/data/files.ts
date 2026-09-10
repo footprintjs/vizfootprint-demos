@@ -36,6 +36,16 @@ export const GRID_FILES = {
 } as const;
 
 /**
+ * The exoplanet demo's files, by the table each one becomes. `ps.csv` is one row
+ * per PUBLISHED MEASUREMENT and `pscomppars.csv` one row per PLANET — the same
+ * facts twice, which is what that demo is about.
+ */
+export const EXO_FILES = {
+  measurements: 'data/exo/ps.csv',
+  planets: 'data/exo/pscomppars.csv',
+} as const;
+
+/**
  * What a static build must carry, beyond the tables themselves.
  *
  * The provenance records ride along because a dashboard that says where its
@@ -44,7 +54,7 @@ export const GRID_FILES = {
  * to travel with the file it covers — publishing the boundaries without it
  * would break the one condition that made publishing them lawful.
  */
-export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json'] as const;
+export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json', 'data/exo/PROVENANCE.json', 'data/exo/FETCH.json'] as const;
 
 /** Everything the built site needs under `data/` — the tables and the papers that must travel with them. */
-export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...SITE_PROVENANCE_FILES];
+export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...Object.values(EXO_FILES), ...SITE_PROVENANCE_FILES];

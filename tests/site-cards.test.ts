@@ -16,12 +16,13 @@
  *    filter over it narrows to surfaces and refuses in a sentence.
  *
  * `tests/cards.test.ts` pins the CDC demo's own two cards; this suite pins what
- * the SITE does with them beside the grid's.
+ * the SITE does with them beside the grid's and the exoplanet desk's.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { chipsOf, choicesOf, narrowRefusal, narrowTo } from 'vizfootprint-studio/cards';
 import type { DemoSurface, FeatureChip } from 'vizfootprint-studio/cards';
 import { SITE_DATA_FILES } from '../src/data/files.js';
+import { exoSurfaces } from '../src/exo/cards.js';
 import { gridSurfaces } from '../src/grid/cards.js';
 import { NNDSS_GESTURES, nndssSurfaces } from '../src/nndss/cards.js';
 import { SITE_HREFS, loadSiteCardsInput, siteCards, siteSurfaces } from '../src/site/cards.js';
@@ -37,13 +38,14 @@ let handedOver: readonly DemoSurface[];
 let cdcDesk: DemoSurface;
 let cdcStory: DemoSurface;
 let gridDesk: DemoSurface;
+let exoDesk: DemoSurface;
 
 beforeAll(() => {
   const input = loadSiteCardsInputOnce();
   cards = siteCards(input, () => BUILT_AT);
   shipped = readSiteCards(JSON.parse(JSON.stringify(cards)));
-  handedOver = [...nndssSurfaces(input.nndss), ...gridSurfaces(input.grid)];
-  [cdcDesk, cdcStory, gridDesk] = cards.surfaces as readonly [DemoSurface, DemoSurface, DemoSurface];
+  handedOver = [...nndssSurfaces(input.nndss), ...gridSurfaces(input.grid), ...exoSurfaces(input.exo)];
+  [cdcDesk, cdcStory, gridDesk, exoDesk] = cards.surfaces as readonly [DemoSurface, DemoSurface, DemoSurface, DemoSurface];
 }, 120_000);
 
 const idsOf = (surface: DemoSurface): readonly string[] => chipsOf(surface).map((chip) => chip.id);
@@ -54,16 +56,18 @@ const onlyOn = (a: DemoSurface, b: DemoSurface): readonly string[] => {
 };
 
 describe('the surfaces the site publishes', () => {
-  it('is three cards — two CDC surfaces and one grid desk — never one card per demo', () => {
-    expect(cards.surfaces.map((s) => `${s.demo} / ${s.surface}`)).toEqual(['CDC NNDSS weekly / desk', 'CDC NNDSS weekly / story page', 'US grid, hour by hour / desk']);
+  it('is four cards — two CDC surfaces, one grid desk and one exoplanet desk — never one card per demo', () => {
+    expect(cards.surfaces.map((s) => `${s.demo} / ${s.surface}`)).toEqual(['CDC NNDSS weekly / desk', 'CDC NNDSS weekly / story page', 'US grid, hour by hour / desk', 'Exoplanets, published twice / desk']);
     expect(cdcDesk.demo).toBe(cdcStory.demo);
     expect(cdcDesk.declares.revision).not.toBe(cdcStory.declares.revision);
     expect(gridDesk.declares.revision).not.toBe(cdcDesk.declares.revision);
+    expect(exoDesk.declares.revision).not.toBe(gridDesk.declares.revision);
   });
 
-  it('links the two desks where this site puts them, and the story page nowhere — it is not published here', () => {
+  it('links the three desks where this site puts them, and the story page nowhere — it is not published here', () => {
     expect(cdcDesk.href).toBe('./nndss/');
     expect(gridDesk.href).toBe('./grid/');
+    expect(exoDesk.href).toBe('./exo/');
     expect(cdcStory.href).toBeUndefined();
     // the link table is the ONLY thing the site adds, and it names surfaces by the pair a card is named by
     expect(SITE_HREFS[cdcDesk.demo]?.[cdcDesk.surface]).toBe(cdcDesk.href);
@@ -172,6 +176,21 @@ describe('every chip is traceable to a reader or to the hand table — none type
     expect(gridDesk.byHand).toBeUndefined();
     expect(idsOf(gridDesk).every((id) => id.startsWith('declares:'))).toBe(true);
   });
+
+  it('the exoplanet desk carries no hand table, and its walked chips are the commits `exo:capture` really left', () => {
+    expect(exoDesk.byHand).toBeUndefined();
+    // the five acts, the planet it picked and the sort it landed — and NOTHING for the
+    // two reads of that walk: a `why` and an `export` land no commit, so no reader can
+    // vouch for them and no chip claims them (`web/site/exo/walk.json` → `reads`)
+    expect(idsOf(exoDesk).filter((id) => id.startsWith('walked:')).sort()).toEqual(['walked:selection:point', 'walked:verb:analyze', 'walked:verb:navigate', 'walked:verb:select'].sort());
+    expect(exoDesk.walked?.commits).toBe(7);
+    expect(exoDesk.walked?.families.analysis).toBe(5);
+  });
+
+  it('the exoplanet desk is the only surface that declares an AGGREGATE — the act that mints a table at run time', () => {
+    expect(narrowTo(shipped.surfaces, 'declares:builtin:aggregate').map((s) => `${s.demo} / ${s.surface}`)).toEqual(['Exoplanets, published twice / desk']);
+    expect(exoDesk.declares.analyses.map((a) => a.builtin).filter((b) => b !== undefined).sort()).toEqual(['aggregate', 'bringOver', 'derive', 'derive', 'derive']);
+  });
 });
 
 describe('the file the page fetches', () => {
@@ -206,14 +225,14 @@ describe('the filter over the shipped cards', () => {
     expect(narrowTo(shipped.surfaces, 'declares:selection:neighbourhood')).toHaveLength(2);
     expect(narrowTo(shipped.surfaces, 'walked:verb:describe').map((s) => s.surface)).toEqual(['story page']);
     expect(narrowTo(shipped.surfaces, 'by hand:unwired:annotate').map((s) => `${s.demo} / ${s.surface}`)).toEqual(['CDC NNDSS weekly / desk']);
-    expect(narrowTo(shipped.surfaces, null)).toHaveLength(3);
+    expect(narrowTo(shipped.surfaces, null)).toHaveLength(4);
   });
 
   it('offers only choices that land somewhere, and refuses the rest in a sentence', () => {
     const choices = choicesOf(shipped.surfaces);
     expect(choices.length).toBeGreaterThan(0);
     for (const choice of choices) expect(narrowTo(shipped.surfaces, choice.id).length).toBe(choice.surfaces);
-    expect(narrowRefusal(shipped.surfaces, 'declares:chart:sunburst')).toBe(`no surface here carries "declares:chart:sunburst" — ${String(choices.length)} features are on offer across 3 surfaces`);
+    expect(narrowRefusal(shipped.surfaces, 'declares:chart:sunburst')).toBe(`no surface here carries "declares:chart:sunburst" — ${String(choices.length)} features are on offer across 4 surfaces`);
     expect(narrowRefusal(shipped.surfaces, 'declares:chart:network')).toBeNull();
   });
 });

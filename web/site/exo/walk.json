@@ -1,0 +1,478 @@
+{
+  "from": "in process — this demo has no served host, so the walk is taken through the same session builder the page uses",
+  "capturedAt": "2026-09-10T17:39:40.991Z",
+  "planet": "TRAPPIST-1 e",
+  "log": [
+    {
+      "id": "s1",
+      "parent": null,
+      "viewId": "analysis:radiiPerPlanet",
+      "actorMeta": {
+        "actor": "system"
+      },
+      "kind": "point",
+      "field": "__analysis__",
+      "value": {
+        "id": "radiiPerPlanet",
+        "table": "measurements",
+        "def": {
+          "builtin": "aggregate",
+          "name": "radii_per_planet",
+          "table": "measurements",
+          "ops": 1,
+          "groupBy": [
+            "pl_name"
+          ],
+          "measures": [
+            {
+              "as": "radii",
+              "expr": {
+                "op": "count",
+                "args": [
+                  {
+                    "col": "pl_name"
+                  }
+                ]
+              }
+            },
+            {
+              "as": "refs",
+              "expr": {
+                "op": "countDistinct",
+                "args": [
+                  {
+                    "col": "ref"
+                  }
+                ]
+              }
+            },
+            {
+              "as": "r_min",
+              "expr": {
+                "op": "min",
+                "args": [
+                  {
+                    "col": "pl_rade"
+                  }
+                ]
+              }
+            },
+            {
+              "as": "r_max",
+              "expr": {
+                "op": "max",
+                "args": [
+                  {
+                    "col": "pl_rade"
+                  }
+                ]
+              }
+            }
+          ],
+          "where": {
+            "op": "eq",
+            "args": [
+              {
+                "col": "radius_state"
+              },
+              {
+                "lit": "present"
+              }
+            ]
+          },
+          "id": "radiiPerPlanet"
+        }
+      },
+      "clientViewIds": [
+        "analysis:radiiPerPlanet"
+      ],
+      "predicateSQL": "(\"__analysis__\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "system",
+        "computedBy": "system",
+        "intent": "cut one row per planet from the publications that MEASURED a radius (a bound is not a measurement): how many radii, how many papers, and the smallest and largest of them"
+      },
+      "ts": 0,
+      "data": {
+        "measurements": "inline:13651164-b5eb3254"
+      }
+    },
+    {
+      "id": "s2",
+      "parent": "s1",
+      "viewId": "analysis:radiusSpread",
+      "actorMeta": {
+        "actor": "system"
+      },
+      "kind": "point",
+      "field": "__analysis__",
+      "value": {
+        "id": "radiusSpread",
+        "table": "radii_per_planet",
+        "def": {
+          "builtin": "derive",
+          "table": "radii_per_planet",
+          "name": "spread",
+          "column": {
+            "ops": 1,
+            "kind": "row",
+            "expr": {
+              "op": "sub",
+              "args": [
+                {
+                  "col": "r_max"
+                },
+                {
+                  "col": "r_min"
+                }
+              ]
+            }
+          },
+          "id": "radiusSpread"
+        }
+      },
+      "clientViewIds": [
+        "analysis:radiusSpread"
+      ],
+      "predicateSQL": "(\"__analysis__\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "system",
+        "computedBy": "system",
+        "intent": "derive the width of each planet's published radius range (largest minus smallest)"
+      },
+      "ts": 1,
+      "data": {
+        "radii_per_planet": "inline:13651164-b5eb3254"
+      }
+    },
+    {
+      "id": "s3",
+      "parent": "s2",
+      "viewId": "analysis:radiusDisagrees",
+      "actorMeta": {
+        "actor": "system"
+      },
+      "kind": "point",
+      "field": "__analysis__",
+      "value": {
+        "id": "radiusDisagrees",
+        "table": "radii_per_planet",
+        "def": {
+          "builtin": "derive",
+          "table": "radii_per_planet",
+          "name": "disagrees",
+          "column": {
+            "ops": 1,
+            "kind": "row",
+            "expr": {
+              "op": "gt",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "col": "r_max"
+                    },
+                    {
+                      "col": "r_min"
+                    }
+                  ]
+                },
+                {
+                  "lit": 0
+                }
+              ]
+            }
+          },
+          "id": "radiusDisagrees"
+        }
+      },
+      "clientViewIds": [
+        "analysis:radiusDisagrees"
+      ],
+      "predicateSQL": "(\"__analysis__\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "system",
+        "computedBy": "system",
+        "intent": "derive whether a planet's publications disagree at all (that width above zero)"
+      },
+      "ts": 2,
+      "data": {
+        "radii_per_planet": "inline:13651164-b5eb3254"
+      }
+    },
+    {
+      "id": "s4",
+      "parent": "s3",
+      "viewId": "analysis:acceptedRadius",
+      "actorMeta": {
+        "actor": "system"
+      },
+      "kind": "point",
+      "field": "__analysis__",
+      "value": {
+        "id": "acceptedRadius",
+        "table": "measurements",
+        "def": {
+          "builtin": "bringOver",
+          "table": "measurements",
+          "from": "planets",
+          "columns": [
+            "pl_rade"
+          ],
+          "id": "acceptedRadius"
+        }
+      },
+      "clientViewIds": [
+        "analysis:acceptedRadius"
+      ],
+      "predicateSQL": "(\"__analysis__\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "system",
+        "computedBy": "system",
+        "intent": "bring the composite's accepted radius across the relation onto every published measurement"
+      },
+      "ts": 3,
+      "data": {
+        "measurements": "inline:13651164-b5eb3254"
+      }
+    },
+    {
+      "id": "s5",
+      "parent": "s4",
+      "viewId": "analysis:radiusDelta",
+      "actorMeta": {
+        "actor": "system"
+      },
+      "kind": "point",
+      "field": "__analysis__",
+      "value": {
+        "id": "radiusDelta",
+        "table": "measurements",
+        "def": {
+          "builtin": "derive",
+          "table": "measurements",
+          "name": "delta",
+          "column": {
+            "ops": 1,
+            "kind": "row",
+            "expr": {
+              "op": "if",
+              "args": [
+                {
+                  "op": "eq",
+                  "args": [
+                    {
+                      "col": "radius_state"
+                    },
+                    {
+                      "lit": "present"
+                    }
+                  ]
+                },
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "col": "pl_rade"
+                    },
+                    {
+                      "col": "pl_name_pl_rade"
+                    }
+                  ]
+                },
+                {
+                  "lit": null
+                }
+              ]
+            }
+          },
+          "id": "radiusDelta"
+        }
+      },
+      "clientViewIds": [
+        "analysis:radiusDelta"
+      ],
+      "predicateSQL": "(\"__analysis__\" IN ([object Object]))",
+      "cause": {
+        "requestedBy": "system",
+        "computedBy": "system",
+        "intent": "derive each publication's distance from the accepted radius — and nothing at all where the published radius is a bound"
+      },
+      "ts": 4,
+      "data": {
+        "measurements": "inline:13651164-b5eb3254"
+      }
+    },
+    {
+      "id": "s6",
+      "parent": "s5",
+      "viewId": "mass_radius~planets",
+      "actorMeta": {
+        "actor": "user",
+        "label": "Planets, as the composite table accepts them"
+      },
+      "kind": "point",
+      "field": "pl_name",
+      "value": "TRAPPIST-1 e",
+      "clientViewIds": [
+        "mass_radius~planets"
+      ],
+      "predicateSQL": "(\"pl_name\" IN ('TRAPPIST-1 e'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "read every published value for TRAPPIST-1 e"
+      },
+      "ts": 5,
+      "data": {
+        "measurements": "inline:13651164-b5eb3254"
+      }
+    },
+    {
+      "id": "s7",
+      "parent": "s6",
+      "viewId": "layout:sheet:measurements",
+      "actorMeta": {
+        "actor": "system",
+        "label": "layout"
+      },
+      "kind": "point",
+      "field": "sort",
+      "value": "[{\"field\":\"pl_pubdate\",\"dir\":\"asc\"}]",
+      "clientViewIds": [
+        "layout:sheet:measurements"
+      ],
+      "predicateSQL": "(\"sort\" IN ('[{\"field\":\"pl_pubdate\",\"dir\":\"asc\"}]'))",
+      "cause": {
+        "requestedBy": "user",
+        "computedBy": "user",
+        "intent": "sort the published values by date, oldest first"
+      },
+      "ts": 6,
+      "data": {
+        "measurements": "inline:13651164-b5eb3254"
+      }
+    }
+  ],
+  "bookmarks": [
+    {
+      "id": "b1",
+      "label": "every published radius for TRAPPIST-1 e",
+      "commitId": "s7",
+      "at": "s7",
+      "ts": 6,
+      "by": "user",
+      "madeAt": "2026-09-10T17:39:40.978Z"
+    }
+  ],
+  "saved": [],
+  "reads": {
+    "why": {
+      "question": {
+        "kind": "selection",
+        "viewId": "mass_radius~planets"
+      },
+      "answer": {
+        "ok": true,
+        "targetKind": "selection",
+        "key": "mass_radius~planets",
+        "threaded": false,
+        "viz": {
+          "commitId": "s6"
+        },
+        "agent": null,
+        "kernel": null,
+        "commits": [
+          {
+            "tier": "viz",
+            "id": "s6",
+            "kind": "declaring"
+          }
+        ],
+        "misses": [
+          {
+            "tier": "agent",
+            "missing": "no-agent-tier"
+          },
+          {
+            "tier": "kernel",
+            "missing": "no-kernel-snapshot"
+          }
+        ],
+        "flags": {
+          "kernelRunIdAvailable": false
+        }
+      }
+    },
+    "export": {
+      "names": {
+        "body": "measurements.csv",
+        "receipt": "measurements.receipt.json"
+      },
+      "receipt": {
+        "kind": "vizfootprint-export",
+        "table": "measurements",
+        "viewId": "sheet",
+        "version": "inline:13651164-b5eb3254",
+        "cursor": "s7",
+        "sort": [
+          {
+            "field": "pl_pubdate",
+            "dir": "asc"
+          }
+        ],
+        "columns": [
+          "measurement_id",
+          "pl_name",
+          "hostname",
+          "ref",
+          "ref_label",
+          "pl_refname",
+          "pl_pubdate",
+          "pub_year",
+          "default_flag",
+          "pl_orbper",
+          "pl_rade",
+          "pl_radeerr1",
+          "pl_radeerr2",
+          "radius_state",
+          "radius_bound",
+          "pl_bmasse",
+          "pl_bmasseerr1",
+          "pl_bmasseerr2",
+          "mass_state",
+          "mass_bound",
+          "mass_kind",
+          "disc_year",
+          "discoverymethod",
+          "sy_dist",
+          "pl_name_pl_rade",
+          "delta"
+        ],
+        "positional": true,
+        "count": 5,
+        "exported": {
+          "start": 0,
+          "rows": 5
+        },
+        "truncated": false,
+        "ceiling": 200000,
+        "clauses": [
+          {
+            "from": "mass_radius~planets",
+            "response": "filter",
+            "clause": {
+              "kind": "point",
+              "field": "pl_name",
+              "value": "TRAPPIST-1 e"
+            }
+          }
+        ],
+        "at": "2026-09-10T17:39:40.991Z"
+      },
+      "bodyBytes": 1816,
+      "firstLine": "measurement_id,pl_name,hostname,ref,ref_label,pl_refname,pl_pubdate,pub_year,default_flag,pl_orbper,pl_rade,pl_radeerr1,pl_radeerr2,radius_state,radius_bound,pl_bmasse,pl_bmasseerr1,pl_bmasseerr2,mass_state,mass_bound,mass_kind,disc_year,discoverymethod,sy_dist,pl_name_pl_rade,delta"
+    }
+  }
+}
