@@ -27,6 +27,7 @@ import { createBrowserDesk } from '../../../src/nndss/browserDesk.js';
 import { keyStore } from '../../../src/nndss/key.js';
 import type { NndssSurface } from '../../../src/nndss/session.js';
 import { AnalystPanel, type AnalystHost } from '../../src/AnalystPanel.js';
+import { asServedRecording } from '../../src/ServedLens.js';
 import { KeyGate } from '../../src/KeyGate.js';
 
 export function BrowserAnalyst({ surface, desk }: { readonly surface: NndssSurface; readonly desk: DeskProjection }): JSX.Element {
@@ -47,6 +48,11 @@ export function BrowserAnalyst({ surface, desk }: { readonly surface: NndssSurfa
       load: () => Promise.resolve(analyst.wire()),
       send: (message) => analyst.send(message).then(() => undefined),
       clear: () => Promise.resolve(analyst.forget()),
+      // the desk is in this page, so the recording is a lookup — no wire, no copy
+      recording: (turn) => {
+        const kept = analyst.recording(turn);
+        return Promise.resolve(kept === undefined ? null : asServedRecording(kept));
+      },
     }),
     [analyst],
   );

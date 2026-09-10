@@ -11,12 +11,15 @@
 import { ProseText } from 'vizfootprint-ui';
 import { useEffect, useState } from 'react';
 import { droppedOf, whyDroppedNote } from './derive.js';
+import { ServedLens, type ServedRecording } from './ServedLens.js';
 
 export interface ActivityStep {
   readonly tool: string;
   readonly args: Record<string, unknown>;
   readonly result: unknown;
 }
+/** Whether a turn's recording exists — the wire says which, never silently nothing (`src/nndss/reply.ts` is the owner of this shape). */
+export type RecordingStatus = { readonly kind: 'kept' } | { readonly kind: 'off' } | { readonly kind: 'lost'; readonly why: string };
 export interface TranscriptLine {
   readonly role: 'user' | 'analyst' | 'error';
   readonly text: string;
@@ -25,6 +28,10 @@ export interface TranscriptLine {
   readonly refs?: readonly TranscriptRef[];
   /** What was lost reading this reply, in plain words — shown under it, because a silent drop is not honest about what the analyst cited. */
   readonly note?: string;
+  /** An analyst line: the turn it answered — the key its recording is read back by. */
+  readonly correlationId?: string;
+  /** An analyst line: whether what the model was served on this turn can be shown. */
+  readonly recording?: RecordingStatus;
 }
 export interface AnalystWire {
   readonly mode: 'mock' | 'live';
@@ -108,6 +115,33 @@ function frameAct(step: ActivityStep): Omit<FramedAct, 'note'> {
 
 const OUTCOME_COLOR: Record<FramedAct['outcome'], string> = { landed: '#2f7d5b', refused: '#a83a3a', read: '#5f6f83' };
 
+/**
+ * The door to what the model was served on one turn. `kept` opens the Why
+ * Lens under the reply (its Served tab reads the receipt the agent committed
+ * per call against the request it rebuilds from the log); `off` and `lost`
+ * say so in one quiet line — the same restraint a dropped citation gets.
+ */
+function ServedControl(props: { readonly turn: string; readonly status: RecordingStatus; readonly open: boolean; readonly onToggle: (turn: string) => void }): JSX.Element {
+  if (props.status.kind !== 'kept') {
+    return (
+      <div style={{ marginTop: 4, fontSize: 11, opacity: 0.65 }} title="what the model was served on this turn cannot be shown">
+        {props.status.kind === 'off' ? 'recording off — what the model was served is not kept on this desk' : `recording lost — ${props.status.why}`}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => props.onToggle(props.turn)}
+      aria-expanded={props.open}
+      style={{ marginTop: 6, marginLeft: 6, font: 'inherit', fontSize: 11.5, padding: '2px 8px', borderRadius: 6, border: '1px solid #d8dee4', background: props.open ? '#eef2f6' : '#fff', cursor: 'pointer' }}
+      title="Open the Why Lens on this turn — its Served tab shows what the model was served on each call, checked row by row against the receipt the agent committed"
+    >
+      {props.open ? 'Hide what was served' : 'What was served'}
+    </button>
+  );
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const body = (await res.json()) as T & { error?: string };
@@ -128,6 +162,8 @@ export interface AnalystHost {
   send(message: string): Promise<void>;
   /** Forget the conversation; the commits stay in the log. */
   clear(): Promise<AnalystWire>;
+  /** One turn's recording, for the Why Lens — `null` when none is kept for that turn. Rejects only when the host could not be reached. */
+  recording(turn: string): Promise<ServedRecording | null>;
 }
 
 /** The served host: the doors this repository's own server opens. */
@@ -137,6 +173,13 @@ export const servedHost: AnalystHost = {
     await fetchJson('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message }) });
   },
   clear: () => fetchJson<AnalystWire>('/api/analyst', { method: 'DELETE' }),
+  recording: async (turn) => {
+    const res = await fetch(`/api/analyst/recording?turn=${encodeURIComponent(turn)}`);
+    if (res.status === 404) return null; // the door's own sentence for "none kept" — not a failure to reach it
+    const body = (await res.json()) as ServedRecording & { error?: string };
+    if (!res.ok) throw new Error(body.error ?? `/api/analyst/recording answered ${String(res.status)}`);
+    return body;
+  },
 };
 
 export function AnalystPanel(props: {
@@ -161,7 +204,22 @@ export function AnalystPanel(props: {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // the ONE turn whose lens is open — the lens holds the cursor, this panel only holds which turn
+  const [served, setServed] = useState<{ readonly turn: string; readonly recording: ServedRecording } | null>(null);
+  const [servedProblem, setServedProblem] = useState<string | null>(null);
   const host = props.host ?? servedHost;
+
+  const toggleServed = async (turn: string): Promise<void> => {
+    setServedProblem(null);
+    if (served?.turn === turn) return setServed(null);
+    try {
+      const recording = await host.recording(turn);
+      if (recording === null) setServedProblem(`no recording is kept for ${turn}`);
+      else setServed({ turn, recording });
+    } catch (e: unknown) {
+      setServedProblem(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const load = async (): Promise<void> => {
     const w = await host.load();
@@ -236,6 +294,9 @@ export function AnalystPanel(props: {
                   + Add to dashboard
                 </button>
               ) : null}
+              {line.role === 'analyst' && line.recording !== undefined && line.correlationId !== undefined ? (
+                <ServedControl turn={line.correlationId} status={line.recording} open={served?.turn === line.correlationId} onToggle={(turn) => void toggleServed(turn)} />
+              ) : null}
               {line.role === 'user' && line.context ? (
                 <div style={{ marginTop: 4, fontSize: 11, opacity: 0.6, whiteSpace: 'pre-wrap' }} title="what rode with this message, from the record">
                   {line.context.split('\n').slice(1).join('\n')}
@@ -261,8 +322,14 @@ export function AnalystPanel(props: {
                 })}
               </ol>
             ) : null}
+            {served !== null && line.role === 'analyst' && served.turn === line.correlationId ? <ServedLens turn={served.turn} recording={served.recording} /> : null}
           </div>
         ))}
+        {servedProblem === null ? null : (
+          <div role="alert" style={{ fontSize: 12, color: '#a83a3a' }}>
+            {servedProblem}
+          </div>
+        )}
         {busy ? <div style={{ opacity: 0.7 }}>the analyst is working — acts land in the log as they happen…</div> : null}
       </div>
       {problem === null ? null : (
@@ -280,6 +347,7 @@ export function AnalystPanel(props: {
               void (async () => {
                 try {
                   const w = await host.clear();
+                  setServed(null); setServedProblem(null); // a cleared chat holds no recording open
                   setWire(w);
                   setProblem(null);
                   props.onTurn(0);

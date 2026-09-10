@@ -123,6 +123,24 @@ the browser afterwards, the way every other cell does.
   its prose. Ask it to "save this as a beat" and it names a checkpoint.
   Without a key it runs one scripted turn; with `ANTHROPIC_API_KEY` in `.env`
   it is live (Anthropic over fetch, no SDK).
+  - **What the model was served.** The acts under a reply say what the analyst
+    *did*; they cannot say what it was *told*. Since agentfootprint 9.88 the
+    agent commits a **receipt** per LLM call — hashes of the system text, every
+    message and every tool schema, salted with the run; the schema rows check out from 9.89, which exports the digest they were hashed with — and the desk keeps a
+    **recording** of every turn (what `recordRun` froze, detached, one per
+    turn, beside the reasoning trace). A recording is large — roughly 20 MB for one scripted turn — and the desk holds every turn's until the chat is cleared, so a long session should set `NNDSS_KEEP_RECORDING=0` on the served desk or `keepRecording: false` in the browser desk to keep none. Press **What was served** under a reply
+    and the Why Lens (`agentfootprint-lens`) opens on that turn; its **Served**
+    tab, at the lens's own cursor, shows the request rebuilt from the log with
+    each row checked against the receipt — Verified where the hashes agree, a
+    named gap with its cause where the log cannot say. One cursor: the lens
+    walks the turn, the desk only says which turn. The recording is a reader's
+    copy — the reply is the same bytes with it on or off. The dial:
+    `NNDSS_KEEP_RECORDING=0` on the served desk, `keepRecording: false` on
+    `createBrowserDesk` / `createNndssAnalyst`; a turn whose recording is off
+    or lost says so on its line. Over the wire it is one door,
+    `GET /api/analyst/recording?turn=turn-N`, read when asked and never on a
+    poll. `tests/served.test.ts` proves a receipt per call and every hashed row
+    Verified on the scripted turn.
 - **Grammar** — the verbs off the wire (the library's own list), each with the
   gesture that produces it here; per view: driver, what it emits, which
   channels it may rebind and what they are bound to now; the wiring word

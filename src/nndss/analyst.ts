@@ -16,7 +16,7 @@
  * key of its own accord.
  */
 import { Agent, defineTool, isPaused } from 'agentfootprint';
-import { agentThinkingTrace } from 'agentfootprint/observe';
+import { agentThinkingTrace, recordRun, type Recording } from 'agentfootprint/observe';
 import { browserAnthropic, mock, type LLMProvider, type LLMRequest, type LLMResponse } from 'agentfootprint/providers';
 import type { VizToolResult, VizToolsPort } from 'vizfootprint/agent';
 import { NNDSS_ANALYSIS_IDS } from './analyses.js';
@@ -59,16 +59,33 @@ export interface AnalystOptions {
   readonly model?: string;
   readonly onActivity?: (step: ActivityStep) => void;
   readonly maxIterations?: number;
+  /**
+   * Keep a recording of every turn — the run's snapshot, its events and its
+   * chart, frozen the way `recordRun` freezes them — so the Why Lens can show
+   * what the model was served on each call, receipt beside it. ON by default,
+   * the way the agent's own `recordReceipt` is; `false` keeps nothing. The
+   * reply is the same bytes either way: a recording is a reader's copy, never
+   * a hand on the run.
+   */
+  readonly keepRecording?: boolean;
 }
 export interface TurnResult {
   readonly text: string;
   readonly correlationId: string;
+  /** This turn's recording, detached — absent when the dial is off, or when the turn's bytes would not freeze (`recordingLost` says why). */
+  readonly recording?: Recording;
+  /** The dial was on and no recording could be kept: the reason, in the library's words. */
+  readonly recordingLost?: string;
 }
 export interface NndssAnalyst {
   /** One turn: the person's message in (with what is on screen, from the record), the analyst's grounded reply out (acts land meanwhile). */
   send(message: string, context?: string): Promise<TurnResult>;
   /** The last turn's reasoning trace (AgentThinkingUI shape). */
   trace(): unknown;
+  /** The last turn's recording (what `recordRun` froze, detached), beside the trace. Absent under `keepRecording: false`. */
+  recording(): Recording | undefined;
+  /** Whether turns are being recorded — the dial as this analyst holds it. */
+  readonly keepsRecording: boolean;
   /** The tool names the agent was given — the fixed surface, for the panel. */
   readonly tools: readonly string[];
   /** Forget the conversation so far (the session's commits stay — a chat is not the record). */
@@ -182,12 +199,17 @@ export function createNndssAnalyst(port: VizToolsPort, options: AnalystOptions =
   const transcript: string[] = [];
   let turn = 0;
   let lastTask = '';
+  const keepsRecording = options.keepRecording !== false;
+  let last: Pick<TurnResult, 'recording' | 'recordingLost'> = {};
   return {
     tools: tools.map((t) => t.schema.name),
+    keepsRecording,
     trace: () => think.getTrace({ task: lastTask }),
+    recording: () => last.recording,
     reset: () => {
       transcript.length = 0;
       lastTask = '';
+      last = {};
       think.clear();
     },
     async send(userMessage: string, context?: string): Promise<TurnResult> {
@@ -199,8 +221,19 @@ export function createNndssAnalyst(port: VizToolsPort, options: AnalystOptions =
       transcript.push(`User: ${userMessage}`);
       lastTask = userMessage;
       think.clear();
-      const result = await agent.run({ message }, { correlationId });
-      if (isPaused(result)) return { text: 'The run paused unexpectedly (no confirmation gate is wired).', correlationId };
+      // one recorder per turn, started BEFORE run() the way recordRun asks — a
+      // recording begun mid-run has no beginning; stopped in the finally so a
+      // turn that threw still leaves its partial recording (a crash report)
+      // and never leaves a listener behind for the next turn to share
+      const recorder = keepsRecording ? recordRun(agent) : undefined;
+      let result: Awaited<ReturnType<typeof agent.run>>;
+      try {
+        result = await agent.run({ message }, { correlationId });
+      } finally {
+        last = recorder === undefined ? {} : freeze(recorder);
+        recorder?.stop();
+      }
+      if (isPaused(result)) return { text: 'The run paused unexpectedly (no confirmation gate is wired).', correlationId, ...last };
       const text = String(result);
       // WHY the envelope is READ before it is remembered: `text` is the whole
       // two-key JSON object SYSTEM asks for, and slicing that at 300 characters
@@ -210,9 +243,26 @@ export function createNndssAnalyst(port: VizToolsPort, options: AnalystOptions =
       const said = readReply(text);
       const words = said.kind === 'envelope' && typeof said.value.text === 'string' ? said.value.text : text;
       transcript.push(`Analyst: ${words.slice(0, 300)}`);
-      return { text, correlationId };
+      return { text, correlationId, ...last };
     },
   };
+}
+
+/**
+ * Freeze one turn's recording and DETACH it. `toRecording()` hands back the
+ * runner's own snapshot and structure by reference ("serialize to detach", its
+ * own words), and the lens reads a recording back from text —
+ * `observeRecording(JSON.parse(json))` — so text is the library's own detach
+ * and the one shape proven to read back. A recording that will not freeze is
+ * reported, not thrown: the reply must be the same bytes with the dial on and
+ * off, and an observer's failure is never the analyst's.
+ */
+function freeze(recorder: ReturnType<typeof recordRun>): Pick<TurnResult, 'recording' | 'recordingLost'> {
+  try {
+    return { recording: JSON.parse(JSON.stringify(recorder.toRecording())) as Recording };
+  } catch (error) {
+    return { recordingLost: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /**

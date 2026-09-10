@@ -10,6 +10,7 @@
  * the environment there, the visitor's own browser here (`./key.ts`). Both
  * hand it to `chooseDriver`, and neither goes looking for one.
  */
+import type { Recording } from 'agentfootprint/observe';
 import type { NndssSurface } from './session.js';
 import { chooseDriver, createNndssAnalyst, type ActivityStep } from './analyst.js';
 import { analystWire, forgetConversation, runTurn, type AnalystWire, type DrivenDesk } from './turn.js';
@@ -22,6 +23,13 @@ export interface BrowserDesk {
   send(message: string): Promise<AnalystWire>;
   /** Forget the conversation. Every commit the analyst landed stays in the log. */
   forget(): AnalystWire;
+  /** A turn's recording by its `correlationId` — what `GET /api/analyst/recording?turn=` answers on the served desk. Undefined = none kept for that turn. */
+  recording(turn: string): Recording | undefined;
+}
+
+export interface BrowserDeskOptions {
+  /** Keep a recording of every turn for the Why Lens. Default `true`; `false` keeps none and the wire says `off`. */
+  readonly keepRecording?: boolean;
 }
 
 /**
@@ -38,19 +46,23 @@ export interface BrowserDesk {
  * `fetchImpl` is for tests only — the seam that lets one read the request the
  * live driver makes without a network.
  */
-export function createBrowserDesk(surface: NndssSurface, key: string | undefined, fetchImpl?: typeof fetch): BrowserDesk {
+export function createBrowserDesk(surface: NndssSurface, key: string | undefined, fetchImpl?: typeof fetch, options: BrowserDeskOptions = {}): BrowserDesk {
   const driver = chooseDriver(key, fetchImpl);
   const activity: ActivityStep[] = [];
+  const keepRecording = options.keepRecording !== false;
   const desk: DrivenDesk = {
-    analyst: createNndssAnalyst(surface.port, { provider: driver.provider, ...(driver.model !== undefined ? { model: driver.model } : {}), onActivity: (step) => activity.push(step) }),
+    analyst: createNndssAnalyst(surface.port, { provider: driver.provider, ...(driver.model !== undefined ? { model: driver.model } : {}), onActivity: (step) => activity.push(step), keepRecording }),
     mode: driver.mode,
     ...(driver.model !== undefined ? { model: driver.model } : {}),
     activity,
+    // the one dial, two consequences: the analyst freezes a recording and the desk has somewhere to keep it — or neither
+    ...(keepRecording ? { recordings: new Map<string, Recording>() } : {}),
     transcript: [] as TranscriptLine[],
     turnActive: false,
   };
   return {
     wire: () => analystWire(desk),
+    recording: (turn) => desk.recordings?.get(turn),
     async send(message: string): Promise<AnalystWire> {
       // the outcome's own words are already in the transcript — a failed turn
       // is an `error` line the panel shows, not an exception the page must catch

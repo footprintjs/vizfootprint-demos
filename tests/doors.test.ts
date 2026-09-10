@@ -73,6 +73,16 @@ describe('a door that is not there', () => {
   });
 });
 
+describe('GET /api/analyst/recording — one turn, whole, or a sentence', () => {
+  it('a desk that keeps no recordings says so; a desk that keeps them answers the turn it has and names the one it has not', async () => {
+    const none = await openDesk();
+    expect(await ask(none, 'GET', '/api/analyst/recording?turn=turn-1')).toEqual({ status: 404, body: { error: 'this desk keeps no recordings (NNDSS_KEEP_RECORDING=0)' } });
+    const desk = { ...(await openDesk()), recordings: new Map([['turn-1', { snapshot: { commitLog: [] }, events: [], structure: null }]]) } as unknown as Desk;
+    expect(await ask(desk, 'GET', '/api/analyst/recording?turn=turn-1')).toEqual({ status: 200, body: { snapshot: { commitLog: [] }, events: [], structure: null } });
+    expect(await ask(desk, 'GET', '/api/analyst/recording?turn=turn-2')).toEqual({ status: 404, body: { error: 'no recording is kept for turn "turn-2"' } });
+  });
+});
+
 describe('GET /api/rows serves the graph the surface froze', () => {
   it('does not narrow under a live selection, and never refuses about a column nobody asked for', async () => {
     const desk = await openDesk();

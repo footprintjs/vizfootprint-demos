@@ -20,6 +20,7 @@
  *   POST /api/reset        a fresh surface (a session is cheap)
  *   GET  /api/geo          US state boundaries (Census-derived, pre-projected) for the map view
  *   GET  /api/analyst      the analyst's transcript, its acts, its mode (mock | live)
+ *   GET  /api/analyst/recording?turn=turn-N   one turn's recording, for the Why Lens (what the model was served, receipt beside it)
  *   DELETE /api/analyst    clear the chat (the analyst forgets; its commits stay)
  *   POST /api/chat         one analyst turn — acts land as agent-badged commits meanwhile
  *
@@ -38,6 +39,7 @@ import type { InteractionSession, ViewQuery } from 'vizfootprint/session';
 import type { SortSpec } from 'vizfootprint/data';
 import { openSource } from 'vizfootprint/source';
 import { fileSource } from 'vizfootprint/source/file';
+import type { Recording } from 'agentfootprint/observe';
 import { chooseDriver, createNndssAnalyst, type ActivityStep, type NndssAnalyst } from '../src/nndss/analyst.js';
 import { analystWire, forgetConversation, runTurn } from '../src/nndss/turn.js';
 import type { NndssTables } from '../src/nndss/etl.js';
@@ -188,6 +190,8 @@ export interface Desk {
   readonly model?: string;
   /** The acts of the turn in flight — ONE array for the desk's life, mutated in place (the analyst's closure holds it). */
   readonly activity: ActivityStep[];
+  /** One recording per turn for the Why Lens (`GET /api/analyst/recording?turn=`). Absent under `NNDSS_KEEP_RECORDING=0`. */
+  readonly recordings?: Map<string, Recording>;
   /** Provenance of the tables the desk was built from — what the snapshot's carrier vouched for (the def declares the ETL'd tables inline, so the overview's own `sources` is empty). */
   readonly provenance: Readonly<Record<string, { readonly format: string; readonly via: string; readonly at?: string; readonly version: string; readonly retrievedAt: string; readonly rows: number }>>;
   turnActive: boolean;
@@ -203,13 +207,27 @@ export interface Desk {
 export async function createDesk(tables?: NndssTables, activity: ActivityStep[] = [], provenance: Desk['provenance'] = {}, graph?: NndssGraph): Promise<Desk> {
   const surface = await buildNndssSurfaceAsync(tables, graph);
   const driver = chooseDriver(process.env['ANTHROPIC_API_KEY']);
+  // the recording dial, the way this process takes every dial: from its environment. ON unless told `0`.
+  const keepRecording = process.env['NNDSS_KEEP_RECORDING'] !== '0';
   const analyst = createNndssAnalyst(surface.port, {
     provider: driver.provider,
     // the driver already decided this: absent in mock, because nothing is asked of a model
     ...(driver.model !== undefined ? { model: driver.model } : {}),
     onActivity: (step) => activity.push(step),
+    keepRecording,
   });
-  return { surface, proposals: [], analyst, mode: driver.mode, ...(driver.model !== undefined ? { model: driver.model } : {}), activity, turnActive: false, transcript: [], provenance };
+  return {
+    surface,
+    proposals: [],
+    analyst,
+    mode: driver.mode,
+    ...(driver.model !== undefined ? { model: driver.model } : {}),
+    activity,
+    ...(keepRecording ? { recordings: new Map<string, Recording>() } : {}),
+    turnActive: false,
+    transcript: [],
+    provenance,
+  };
 }
 
 class BodyRefusal extends Error {
@@ -546,6 +564,16 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
     }
     if (req.method === 'GET' && door === 'proposals') return sendJson(res, 200, { proposals: desk.proposals, ledger: (await session.overview()).fdr }), true;
     if (req.method === 'GET' && door === 'analyst') return sendJson(res, 200, analystWire(desk)), true;
+    // one turn's recording, whole, for the Why Lens — read when asked, never on the wire every poll
+    if (req.method === 'GET' && door === 'analyst/recording') {
+      const turn = url.searchParams.get('turn') ?? '';
+      const recording = desk.recordings?.get(turn);
+      if (recording === undefined) {
+        const why = desk.recordings === undefined ? 'this desk keeps no recordings (NNDSS_KEEP_RECORDING=0)' : `no recording is kept for turn "${turn}"`;
+        return sendJson(res, 404, { error: why }), true;
+      }
+      return sendJson(res, 200, recording), true;
+    }
     // the data checks: the declarations judged against the real data — sentences, never thrown
     if (req.method === 'GET' && door === 'lint') return sendJson(res, 200, { checks: await desk.surface.dashboard.lintData() }), true;
     // clear the chat window: the analyst forgets the conversation; every commit it landed stays in the log
@@ -625,6 +653,7 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         desk.proposals = [];
         desk.analyst = fresh.analyst;
         desk.transcript = [];
+        desk.recordings?.clear(); // a fresh desk keeps no recording of the chat it forgot — the door must not serve turn-N of a conversation that no longer exists
         return sendJson(res, 200, { ok: true }), true;
       }
       default:

@@ -37,7 +37,18 @@ export interface TranscriptLine {
   readonly refs?: readonly TranscriptRef[];
   /** An analyst line: what was lost reading the reply — shown quietly under it, never in silence. */
   readonly note?: string;
+  /** An analyst line: the turn it answered (`turn-N`) — the key a kept recording is read back by. */
+  readonly correlationId?: string;
+  /** An analyst line: whether what the model was served on this turn can be shown. Absent on lines older than the recording. */
+  readonly recording?: RecordingStatus;
 }
+
+/**
+ * Whether a turn's recording exists — the wire says which, never silently
+ * nothing: `kept` (read it back by the line's `correlationId`), `off` (the
+ * desk's dial), or `lost` with the library's own reason.
+ */
+export type RecordingStatus = { readonly kind: 'kept' } | { readonly kind: 'off' } | { readonly kind: 'lost'; readonly why: string };
 
 /** How many recent acts the on-screen block carries — the number the disclosure below is measured against. */
 const RECENT_ACTS = 6;

@@ -29,7 +29,8 @@
     "site:dev": "vite --config web/site.vite.config.ts"
   },
   "dependencies": {
-    "agentfootprint": "^9.82.0",
+    "agentfootprint": "^9.89.0",
+    "agentfootprint-lens": "^0.47.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "storydeck": "file:../storydeck",

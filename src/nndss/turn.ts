@@ -15,9 +15,10 @@
  * A failed turn is an OUTCOME, not an exception: both hosts have to show the
  * person the same sentence, and one of them has no status code to put it in.
  */
+import type { Recording } from 'agentfootprint/observe';
 import type { InteractionSession } from 'vizfootprint/session';
-import type { ActivityStep, NndssAnalyst } from './analyst.js';
-import { onScreenNow, parseReply, type TranscriptLine, type TranscriptRef } from './reply.js';
+import type { ActivityStep, NndssAnalyst, TurnResult } from './analyst.js';
+import { onScreenNow, parseReply, type RecordingStatus, type TranscriptLine, type TranscriptRef } from './reply.js';
 
 /** Asks the panel offers on an empty transcript — each exercises a different verb. */
 export const SUGGESTIONS = [
@@ -31,6 +32,13 @@ export interface TurnDesk {
   readonly analyst: NndssAnalyst;
   /** ONE array for the desk's life, mutated in place — the analyst's own closure holds it. */
   readonly activity: ActivityStep[];
+  /**
+   * One recording per turn, by the turn's `correlationId` — what the Why Lens
+   * opens to show what the model was served. Kept OFF the wire: a recording is
+   * the turn's whole log, and the panel reads one when asked, never all on
+   * every poll. Absent on a desk that keeps none.
+   */
+  readonly recordings?: Map<string, Recording>;
   transcript: TranscriptLine[];
   turnActive: boolean;
 }
@@ -77,7 +85,7 @@ export async function runTurn(desk: TurnDesk, session: InteractionSession, messa
     const known = { commits: new Set(session.commits('anywhere').map((r) => r.id)), bookmarks: new Set(session.bookmarkViews().map((c) => c.id)) };
     const reply = parseReply(turn.text, known, desk.activity);
     const said = { text: reply.text, refs: reply.refs, ...(reply.note !== undefined ? { note: reply.note } : {}) };
-    desk.transcript.push({ role: 'analyst', ...said, activity: [...desk.activity] });
+    desk.transcript.push({ role: 'analyst', ...said, activity: [...desk.activity], correlationId: turn.correlationId, recording: keepRecording(desk, turn) });
     return { ok: true, ...said, correlationId: turn.correlationId, activity: [...desk.activity] };
   } catch (error) {
     const text = error instanceof Error ? error.message : String(error);
@@ -88,10 +96,24 @@ export async function runTurn(desk: TurnDesk, session: InteractionSession, messa
   }
 }
 
-/** Forget the conversation. The commits the analyst landed stay in the log — a chat is not the record. */
+/**
+ * Put the turn's recording on the desk, and say on the line what happened to
+ * it. A desk without a `recordings` map keeps none, whatever the analyst
+ * froze — the map is the desk's dial, the analyst's `keepRecording` is the
+ * analyst's, and either one off is `off` on the wire.
+ */
+function keepRecording(desk: TurnDesk, turn: TurnResult): RecordingStatus {
+  if (turn.recordingLost !== undefined) return { kind: 'lost', why: turn.recordingLost };
+  if (turn.recording === undefined || desk.recordings === undefined) return { kind: 'off' };
+  desk.recordings.set(turn.correlationId, turn.recording);
+  return { kind: 'kept' };
+}
+
+/** Forget the conversation. The commits the analyst landed stay in the log — a chat is not the record. The recordings go with the chat: they are the chat's, not the record's. */
 export function forgetConversation(desk: TurnDesk): void {
   desk.transcript.length = 0;
   desk.activity.length = 0;
+  desk.recordings?.clear();
   desk.analyst.reset();
 }
 
