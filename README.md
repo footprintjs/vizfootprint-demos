@@ -61,7 +61,7 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | `data/exo/` | 1 · data | the two TAP queries, the two committed archive tables, the fetch's own record and the provenance the ETL's counts fill in |
 | `src/exo/` | 1–4 | the archive's limit flags → absence, two CSVs → three tables, the declared dashboard, the FIVE declared acts, the surface, the card |
 | `src/source/` | wire | the http carrier — the one the library has but does not export; its README says why |
-| `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors |
+| `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors, and the Sheet's two: `GET /api/window` (one window of rows) and `POST /api/find` (where the next match is — the body is the library's `FindQuery`); the grid desk answers the same two under `/api/grid/`. Each parses strictly and answers the session verbatim: a query the door cannot read is a 400 with a sentence, never a default |
 | `web/` | 3, 4, 6 | the front door, the cockpit, the Grammar panel, the jump box, the Analyst panel |
 | `web/site/` | 3, 4, 6 | the STATIC site: an index and the three desks, each reading its tables over http with no server behind it |
 | `web/story/` | 6 | the SINGLE-FILE story page: its entry, its desk, and the captured desk it carries |

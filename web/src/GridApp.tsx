@@ -129,7 +129,7 @@ export function GridApp(): JSX.Element {
       }}
       data={{
         table: 'hourly',
-        sheet: (columns) => httpSheetData({ endpoint: '/api/grid/window', table: 'hourly', columns }),
+        sheet: (columns) => httpSheetData({ endpoint: '/api/grid/window', findEndpoint: '/api/grid/find', table: 'hourly', columns }),
         checks,
         checksError,
       }}

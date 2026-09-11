@@ -11,6 +11,8 @@
  *                         the absence vocabulary
  *   GET  /api/summary      the front door's figures — what this snapshot holds, counted
  *   GET  /api/window       ONE window of rows for the Sheet (the session's view-query port)
+ *   POST /api/find         WHERE the next match is, in the Sheet's order (the session's find
+ *                         port) — the body is the library's `FindQuery`, the answer its result
  *   GET  /api/proposals    what beat 1 already did here (survives a reload)
  *   POST /api/dispatch     a human gesture → a user-badged commit
  *   POST /api/seek | bookmark | paths | compare | bring-over | undo
@@ -35,7 +37,7 @@ import { LINK_KINDS, LINK_ON_CLEAR, responsesFor } from 'vizfootprint/def';
 import type { LinkKind } from 'vizfootprint/def';
 import { DASHBOARD_WORDS, NNDSS_VIEWS } from '../src/nndss/def.js';
 import { nndssRows } from '../src/nndss/rows.js';
-import type { InteractionSession, ViewQuery } from 'vizfootprint/session';
+import type { FindQuery, InteractionSession, ViewQuery } from 'vizfootprint/session';
 import type { SortSpec } from 'vizfootprint/data';
 import { openSource } from 'vizfootprint/source';
 import { fileSource } from 'vizfootprint/source/file';
@@ -55,6 +57,25 @@ function isSortSpec(value: unknown): value is SortSpec {
   const spec = value as { field?: unknown; dir?: unknown; absent?: unknown };
   return typeof spec.field === 'string' && spec.field !== '' && (spec.dir === 'asc' || spec.dir === 'desc') && (spec.absent === undefined || spec.absent === 'first' || spec.absent === 'last');
 }
+
+/**
+ * The ONE grammar a sort list has on either door. The window's `?sort=` and the
+ * find's `sort` field carry the same list, and a find's position is only a
+ * window's offset when both doors read the order the same way — so the shape
+ * and its sentence live here once, and each door prefixes the field as it
+ * spells it (`sort=` off a query string, `sort` off a body).
+ */
+const isSortList = (value: unknown): value is SortSpec[] => Array.isArray(value) && value.every(isSortSpec);
+const SORT_SHAPE = 'must be a list of {field, dir: "asc" | "desc", absent?: "first" | "last"} — nothing else';
+
+/**
+ * The ONE shape a column list has on either door: a non-empty list of non-empty
+ * names. What LEAVING IT OUT means differs per port (a window shows every
+ * column at the cursor; a find looks in the text ones), so that half of the
+ * sentence is the door's.
+ */
+const isColumnList = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every((n) => typeof n === 'string' && n !== '');
+const COLUMNS_SHAPE = 'must be a non-empty JSON list of column names';
 
 /**
  * A whole number of rows, or the sentence saying what arrived instead.
@@ -100,10 +121,8 @@ export function windowQueryOf(params: URLSearchParams): ViewQuery | { readonly e
     } catch {
       return { error: 'columns= is not JSON — send a list like ["jurisdiction","cases"]' };
     }
-    if (!Array.isArray(names) || names.length === 0 || !names.every((n) => typeof n === 'string' && n !== '')) {
-      return { error: 'columns= must be a non-empty JSON list of column names — or leave it out for every column the cursor sees' };
-    }
-    query.columns = names as string[];
+    if (!isColumnList(names)) return { error: `columns= ${COLUMNS_SHAPE} — or leave it out for every column the cursor sees` };
+    query.columns = names;
   }
   const sort = params.get('sort');
   if (sort !== null) {
@@ -113,7 +132,7 @@ export function windowQueryOf(params: URLSearchParams): ViewQuery | { readonly e
     } catch {
       return { error: 'sort= is not JSON — send a list like [{"field":"cases","dir":"desc"}]' };
     }
-    if (!Array.isArray(parsed) || !parsed.every(isSortSpec)) return { error: 'sort= must be a list of {field, dir: "asc" | "desc", absent?: "first" | "last"} — nothing else' };
+    if (!isSortList(parsed)) return { error: `sort= ${SORT_SHAPE}` };
     query.sort = parsed;
   }
   const offset = params.get('offset');
@@ -138,6 +157,84 @@ export async function answerWindow(session: Pick<InteractionSession, 'viewQuery'
   const query = windowQueryOf(params);
   if ('error' in query) return { status: 400, body: { error: query.error } };
   return { status: 200, body: await session.viewQuery(query) };
+}
+
+// ── the find door: WHERE the next match is, parsed just as strictly ──────────
+
+/**
+ * The most characters one find may look for. A person typed it into a box and
+ * a cell holds words, not documents — the same reason `WINDOW_LIMIT_MAX` caps a
+ * window: an open door must not be asked to scan the whole table for a novel.
+ */
+export const FIND_TEXT_MAX = 1000;
+
+/** The fields the library's `FindQuery` declares — the ONLY ones the find door reads. Any other is refused, never dropped. */
+const FIND_FIELDS: readonly string[] = ['table', 'viewId', 'columns', 'sort', 'text', 'from', 'direction'];
+
+/** What arrived, quoted back in a refusal — `nothing` when the field was not sent at all. */
+const arrived = (value: unknown): string => (value === undefined ? 'nothing' : JSON.stringify(value));
+
+/**
+ * A POST body → the session's `FindQuery`. The window door's law, applied to a
+ * body: every field the library declares is judged, nothing else is read, and a
+ * body the door cannot read is REFUSED with a sentence — never quietly turned
+ * into a default find, and never coerced (`from: "5"` is a string, not a row).
+ *
+ * WHY an unknown key is refused here when the window door never sees one: a
+ * query string is a bag the door picks named parts from, but this body IS the
+ * `FindQuery` — a `dir` typed where `direction` was meant would otherwise be
+ * dropped on the floor, and the find answered as if it had never been typed.
+ *
+ * The engine judges an empty text, `from` and `direction` again in its own
+ * words (the library's `badFindReason`): that is an ANSWER to a find it was
+ * asked. This is the door declining to ask.
+ */
+export function findQueryOf(body: Record<string, unknown>): FindQuery | { readonly error: string } {
+  const unknown = Object.keys(body).filter((k) => !FIND_FIELDS.includes(k));
+  if (unknown.length > 0) return { error: `no field ${unknown.map((k) => `"${k}"`).join(', ')} on a find — the fields are ${FIND_FIELDS.join(', ')}` };
+  const query: { table?: string; viewId?: string; columns?: string[]; sort?: SortSpec[] } = {};
+  const table = body['table'];
+  if (table !== undefined) {
+    if (typeof table !== 'string' || table === '') return { error: 'table must name a declared table — or leave it out for the default one' };
+    query.table = table;
+  }
+  const viewId = body['viewId'];
+  if (viewId !== undefined) {
+    if (typeof viewId !== 'string' || viewId === '') return { error: 'viewId must name a declared view — or leave it out for every live clause' };
+    query.viewId = viewId;
+  }
+  const columns = body['columns'];
+  if (columns !== undefined) {
+    if (!isColumnList(columns)) return { error: `columns ${COLUMNS_SHAPE} — or leave it out for the text columns the cursor sees` };
+    query.columns = columns;
+  }
+  const sort = body['sort'];
+  if (sort !== undefined) {
+    if (!isSortList(sort)) return { error: `sort ${SORT_SHAPE}` };
+    query.sort = sort;
+  }
+  const text = body['text'];
+  if (text === undefined) return { error: 'text is missing — a find needs something to look for' };
+  if (typeof text !== 'string') return { error: `text must be a string — got ${arrived(text)}` };
+  if (text.trim() === '') return { error: 'text was empty — a find needs something to look for' };
+  if (text.length > FIND_TEXT_MAX) return { error: `text is ${String(text.length)} characters — a find looks for at most ${String(FIND_TEXT_MAX)}` };
+  const from = body['from'];
+  if (typeof from !== 'number' || !Number.isSafeInteger(from) || from < 0) return { error: `from must be a whole number of rows at or above zero — got ${arrived(from)}` };
+  const direction = body['direction'];
+  if (direction !== 'forward' && direction !== 'backward') return { error: `direction must be "forward" or "backward" — got ${arrived(direction)}` };
+  return { ...query, text, from, direction };
+}
+
+/**
+ * The find door itself: a refusal with its sentence, or the session's own
+ * `FindInViewResult`, verbatim. A miss (`position: null`) and a refused view
+ * (`ok: false`) are both ANSWERS, and both ride out as 200 — the 400 is for a
+ * body the door could not read.
+ */
+export async function answerFind(session: Pick<InteractionSession, 'findInView'>, body: Record<string, unknown>): Promise<{ readonly status: number; readonly body: unknown }> {
+  const query = findQueryOf(body);
+  if ('error' in query) return { status: 400, body: { error: query.error } };
+  return { status: 200, body: await session.findInView(query) };
 }
 /**
  * The committed US state boundaries (data/geo, with their provenance) — read
@@ -543,7 +640,7 @@ export function summaryOf(desk: Desk): Record<string, unknown> {
 }
 
 /** The doors that answer a POST — data, so the method check can tell a wrong VERB from a wrong DOOR. */
-const POST_DOORS: ReadonlySet<string> = new Set(['refresh', 'dispatch', 'seek', 'bookmark', 'paths', 'saved', 'compare', 'bring-over', 'undo', 'proposals', 'chat', 'reset']);
+const POST_DOORS: ReadonlySet<string> = new Set(['refresh', 'find', 'dispatch', 'seek', 'bookmark', 'paths', 'saved', 'compare', 'bring-over', 'undo', 'proposals', 'chat', 'reset']);
 
 export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerResponse): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost');
@@ -608,6 +705,11 @@ export async function serveDoors(desk: Desk, req: IncomingMessage, res: ServerRe
         const unknown = (named ?? []).filter((t) => !declared.has(t));
         if (unknown.length > 0) return sendJson(res, 400, { error: `no table ${unknown.map((t) => `"${t}"`).join(', ')} is declared — the tables are ${[...declared].join(', ')}` }), true;
         return sendJson(res, 200, await desk.surface.dashboard.refresh(named)), true;
+      }
+      // the Sheet's find: where the next match is, answered by the session's find port verbatim (a POST: the body is the `FindQuery`)
+      case 'find': {
+        const answer = await answerFind(session, body);
+        return sendJson(res, answer.status, answer.body), true;
       }
       case 'dispatch': {
         const action = userAction(body);

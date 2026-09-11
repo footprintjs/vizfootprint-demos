@@ -110,6 +110,16 @@ describe('the grid doors have the CDC doors\' manners', () => {
     expect((body['rows'] as unknown[]).length).toBe(2);
   });
 
+  it('answers the sheet\'s find off the session\'s own port — through the CDC doors\' one parser, so a bad body gets the same sentence here', async () => {
+    const desk = await openDesk();
+    // `authority` is a text column of `hourly`; BBB's two hours sit at positions 2 and 3 in source order
+    const hit = await ask(desk, 'POST', '/api/grid/find', { table: 'hourly', text: 'BBB', from: 0, direction: 'forward' });
+    expect(hit.status).toBe(200);
+    expect(hit.body).toMatchObject({ ok: true, position: 2, ordinal: 1, matches: 2 });
+    expect(await ask(desk, 'POST', '/api/grid/find', { table: 'hourly', text: '', from: 0, direction: 'forward' })).toEqual({ status: 400, body: { error: 'text was empty — a find needs something to look for' } });
+    expect(await ask(desk, 'GET', '/api/grid/find')).toEqual({ status: 405, body: { error: 'find is POST' } });
+  });
+
   it('a path that is not ours is not ours — `serveGridDoors` answers false and the CDC doors get their turn', async () => {
     const desk = await openDesk();
     const req = Readable.from(['']) as unknown as IncomingMessage;

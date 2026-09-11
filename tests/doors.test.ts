@@ -2,11 +2,12 @@
  * THE DOORS' OWN MANNERS — the parts of `serveDoors` that are about the wire
  * rather than about the session.
  *
- * Three claims: a mistyped GET is a missing DOOR and not a wrong VERB (a client
+ * Four claims: a mistyped GET is a missing DOOR and not a wrong VERB (a client
  * told to change its method goes after the wrong bug); the rows door serves the
- * graph read ONCE at build, so a live selection cannot narrow it; and a chat
- * turn that throws before its own `try` does not leave the desk wedged with a
- * flag saying a turn is in flight forever.
+ * graph read ONCE at build, so a live selection cannot narrow it; the find door
+ * is MOUNTED as a POST that answers the session's find port verbatim and a body
+ * it cannot read with a 400; and a chat turn that throws before its own `try`
+ * does not leave the desk wedged with a flag saying a turn is in flight forever.
  */
 import { describe, expect, it } from 'vitest';
 import { Readable } from 'node:stream';
@@ -38,7 +39,11 @@ const TABLES = {
 
 /** One request/response pair, answered — the status and the parsed body. */
 async function ask(desk: Desk, method: string, path: string, body?: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
-  const req = Readable.from([body === undefined ? '' : JSON.stringify(body)]) as unknown as IncomingMessage;
+  // BUFFERS, the way node's http server yields a body — the door concatenates
+  // buffers, so a harness handing it strings would be testing a different door
+  // (a string chunk made `readJson` throw, and every POST here was a 500 before
+  // its door was ever reached)
+  const req = Readable.from([Buffer.from(body === undefined ? '' : JSON.stringify(body))]) as unknown as IncomingMessage;
   req.method = method;
   req.url = path;
   req.headers = {};
@@ -70,6 +75,25 @@ describe('a door that is not there', () => {
     expect(await ask(desk, 'GET', '/api/geo/')).toEqual({ status: 404, body: { error: 'no door "geo/"' } });
     // …and a real POST door asked with the wrong verb still says so
     expect(await ask(desk, 'GET', '/api/dispatch')).toEqual({ status: 405, body: { error: 'dispatch is POST' } });
+  });
+});
+
+describe('POST /api/find — the Sheet\'s find, mounted', () => {
+  it('answers the session\'s find port verbatim: a hit on the one row, and a miss with an honest zero', async () => {
+    const desk = await openDesk();
+    const hit = await ask(desk, 'POST', '/api/find', { table: 'cells', viewId: 'sheet', text: 'Texas', from: 0, direction: 'forward' });
+    expect(hit.status).toBe(200);
+    expect(hit.body).toMatchObject({ ok: true, position: 0, ordinal: 1, matches: 1 });
+    const miss = await ask(desk, 'POST', '/api/find', { table: 'cells', viewId: 'sheet', text: 'Ohio', from: 0, direction: 'forward' });
+    expect(miss.body).toMatchObject({ ok: true, position: null, matches: 0 });
+  });
+
+  it('a body it cannot read is a 400 with the parser\'s sentence, and a GET at the door says it is POST', async () => {
+    const desk = await openDesk();
+    expect(await ask(desk, 'POST', '/api/find', { text: 'Texas', from: 0, direction: 'sideways' })).toEqual({ status: 400, body: { error: 'direction must be "forward" or "backward" — got "sideways"' } });
+    // a key the library's `FindQuery` never declared is refused at the door, not dropped on the way to the session
+    expect(await ask(desk, 'POST', '/api/find', { text: 'Texas', from: 0, direction: 'forward', limit: 50 })).toEqual({ status: 400, body: { error: 'no field "limit" on a find — the fields are table, viewId, columns, sort, text, from, direction' } });
+    expect(await ask(desk, 'GET', '/api/find')).toEqual({ status: 405, body: { error: 'find is POST' } });
   });
 });
 
@@ -117,12 +141,17 @@ describe('a chat turn that throws before its own try', () => {
       throw new Error('the walk fell over');
     };
     const failed = await ask(desk, 'POST', '/api/chat', { message: 'hello' });
-    expect(failed.status).toBe(500);
+    // a failed turn is an OUTCOME (`runTurn` catches it and both hosts show the
+    // same sentence), and the door's status for one is 502 — with the walk's own
+    // words, which proves the body reached the chat door at all
+    expect(failed.status).toBe(502);
+    expect(failed.body['error']).toBe('the walk fell over');
     expect(desk.turnActive).toBe(false);
     // the second attempt fails the same way rather than being turned away with
     // "the analyst is mid-turn" over a turn that is not running
     const again = await ask(desk, 'POST', '/api/chat', { message: 'hello again' });
-    expect(again.status).toBe(500);
+    expect(again.status).toBe(502);
+    expect(again.body['error']).toBe('the walk fell over');
     expect(again.body['error']).not.toContain('mid-turn');
   });
 });

@@ -193,7 +193,8 @@ export function App(): JSX.Element {
         // the TABLE is the desk's second argument, never a name written here: it
         // asks for `cells` and for every table an act CUT, and a port pinned to
         // one name would answer the wrong rows under the right tab
-        sheet: (columns, table) => httpSheetData({ endpoint: '/api/window', table, columns }),
+        // two doors, one port: the window off GET /api/window, the find off POST /api/find — leave the second out and the Sheet's Ctrl+F says so
+        sheet: (columns, table) => httpSheetData({ endpoint: '/api/window', findEndpoint: '/api/find', table, columns }),
         checks,
         checksError,
         onRefresh: refreshSources,

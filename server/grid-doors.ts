@@ -13,6 +13,9 @@
  *                               can put the reading rule to both demos
  *   GET  /api/grid/window       ONE window of rows for the Sheet (the session's
  *                               view-query port, verbatim)
+ *   POST /api/grid/find         WHERE the next match is, in the Sheet's order (the
+ *                               session's find port, verbatim — the body is the
+ *                               library's `FindQuery`)
  *   GET  /api/grid/lint         the declarations judged against the real data
  *   POST /api/grid/dispatch     a human gesture → a user-badged commit
  *   POST /api/grid/seek | bookmark | paths | compare | bring-over | undo | saved
@@ -20,9 +23,9 @@
  *
  * WHY a sibling file and not a second mode of `doors.ts`: that file's desk
  * carries an analyst, a proposal ledger and a transcript, and none of those is
- * this demo's. What the two really share — the window parser and the gesture
- * parser — is IMPORTED from there, so the two demos cannot drift on the two
- * things a client actually sends.
+ * this demo's. What the two really share — the window parser, the find parser
+ * and the gesture parser — is IMPORTED from there, so the two demos cannot
+ * drift on the three things a client actually sends.
  *
  * One surface per server, single-user — the honest scope of a demo.
  */
@@ -34,7 +37,7 @@ import { gridRows } from '../src/grid/rows.js';
 import type { ContrastGraph } from '../src/grid/rows.js';
 import type { GridTables } from '../src/grid/etl.js';
 import { buildGridSurfaceAsync, type GridSurface } from '../src/grid/surface.js';
-import { answerWindow, userAction } from './doors.js';
+import { answerFind, answerWindow, userAction } from './doors.js';
 
 /** Where the grid's doors live — a prefix, so the CDC doors keep theirs. */
 export const GRID_API_ROOT = '/api/grid';
@@ -212,7 +215,7 @@ async function pathsAction(session: InteractionSession, body: Record<string, unk
 }
 
 /** The doors that only answer a POST — so a GET at one of them says "wrong verb", not "no such door". */
-const POST_DOORS = new Set(['dispatch', 'seek', 'bookmark', 'paths', 'compare', 'bring-over', 'undo', 'saved', 'reset']);
+const POST_DOORS = new Set(['find', 'dispatch', 'seek', 'bookmark', 'paths', 'compare', 'bring-over', 'undo', 'saved', 'reset']);
 
 /**
  * One request. Answers `true` when it handled it, `false` when the path is not
@@ -240,6 +243,11 @@ export async function serveGridDoors(desk: GridDesk, req: IncomingMessage, res: 
     }
     const body = await readJson(req);
     switch (door) {
+      // the Sheet's find, through the SAME door function the CDC desk answers with
+      case 'find': {
+        const answer = await answerFind(session, body);
+        return sendJson(res, answer.status, answer.body), true;
+      }
       case 'dispatch': {
         const action = userAction(body);
         if ('error' in action) return sendJson(res, 400, { ok: false, error: action.error }), true;
