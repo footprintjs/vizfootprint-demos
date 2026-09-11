@@ -173,12 +173,20 @@ async function land(session: InteractionSession, analysisId: string, table: stri
  * narrows in the browser afterwards the way every other cell does.
  *
  * WHY it must not be re-read per request: a view's clause reaches EVERY table,
- * and the graph's two share almost no column with the other three. With a
- * disease selected on the bar, the edges window is REFUSED ("table \"edges\" has
- * no column \"disease\""); with a node selected on the network itself, the nodes
- * window narrows to one row while all 105 edges still come — a node-link whose
- * links point at nodes that are not there, handed over as "nothing was
- * refused". Both are a plain browser reload away on a long-lived session.
+ * and the graph's two share almost no column with the other three. With a node
+ * selected on the network itself, the nodes window narrows to one row while all
+ * 105 edges still come — a node-link whose links point at nodes that are not
+ * there, handed over as "nothing was refused". That is a plain browser reload
+ * away on a long-lived session, and it is this law's whole reason.
+ *
+ * It is no longer the OTHER reason. A disease selected on the bar used to make
+ * the edges window fail outright ("table \"edges\" has no column \"disease\""),
+ * because an engine asked to judge a column the table has not got refused the
+ * whole read. The library now NARROWS such a clause and reports it on the window
+ * (`ReachingClause.narrowed`), so that read succeeds and the clause is listed as
+ * having filtered nothing — see the library's `src/session/README.md` and
+ * `../exo/README.md`, where deleting the demo's workaround for the old
+ * behaviour was the point of a whole packet.
  *
  * A refusal is REPORTED, not thrown: the committed rows come back with the
  * library's sentence beside them, and the cell says it cannot draw rather than

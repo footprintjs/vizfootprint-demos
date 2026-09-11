@@ -8,7 +8,7 @@
  * that lives inside a render function cannot be. `tests/derive.test.ts` reads
  * this file; `App.tsx` calls it and does the drawing.
  *
- * Four laws live here:
+ * Five laws live here:
  *
  *   1. `emitIntent` — the words a commit is filed under name the field the
  *      GESTURE was on, read off the emission itself. A hard-coded "pick
@@ -17,10 +17,13 @@
  *      LINK GRAPH. Reading `state.selections` directly is reading a clause the
  *      person may have switched off — the log then says the link is off while
  *      the view moves anyway.
- *   3. `categoryCounts` — one pass over the rows, whatever the number of bars.
+ *   3. `judgedHere` — a clause naming a column these rows have not got filtered
+ *      NOTHING at the library's read door, so it must drop nothing in a host's
+ *      own fold either. A reported library gap, with its own WHY below.
+ *   4. `categoryCounts` — one pass over the rows, whatever the number of bars.
  *      A pass per bar is O(categories × rows): 70 jurisdictions over 90,300
  *      cells is 6.3 million comparisons on every selection change.
- *   4. `columnVocabulary` — the categories a column offers, counted once and
+ *   5. `columnVocabulary` — the categories a column offers, counted once and
  *      CAPPED, because a column with 900 distinct values is not a bar chart
  *      and pretending otherwise costs ~766 ms per keystroke of interaction.
  */
@@ -89,6 +92,47 @@ export function arrivesFrom(selection: RenderSelection, sourceViewIds: readonly 
     const clause = selection.clauses.get(id);
     return filtersHere(clause) && clause.value !== null; // `null` is the one spelling of cleared, whatever the kind
   });
+}
+
+/**
+ * THE CLAUSES THESE ROWS CAN JUDGE — and a LIBRARY GAP, reported here rather
+ * than paraphrased away.
+ *
+ * The library's READ door narrows a clause whose column the target's table has
+ * not got: the window still lists it, carrying
+ * `ReachingClause.narrowed = { column, reason }`, and the sheet prints the
+ * reason (`vizfootprint` · `src/session/README.md`, "A sentence about a column
+ * these rows do not have is not a claim about these rows"). The RENDER tier
+ * does not. `selectionForView` compiles every clause an arriving edge carries
+ * into a row predicate and `keepPredicate` folds them all, with no column list
+ * to judge against — so the exoplanet histogram's `radii` interval reaching a
+ * table of planets or of references drops EVERY row, while the sheet reading
+ * the same clause correctly filters nothing. Two tiers, two answers, and the
+ * blank chart is the wrong one.
+ *
+ * So a host that folds its own marks has to ask the read door's question for
+ * itself, and this is that question and nothing else: the clause's column,
+ * against the columns actually in hand. It states no reason and invents no
+ * sentence — the reason belongs to the library, which already says it where a
+ * reader meets the rows.
+ *
+ * It refuses ON EVIDENCE, NEVER ON IGNORANCE, exactly as the library's own
+ * `tablesCanReach` does: with no row to read columns off, nothing is dropped.
+ * The evidence is the FIRST row's own keys — the rows a chart folds come from
+ * one table through one parse or one act, so they carry the same keys, and a
+ * key present with a null value is still a column this table has (which is the
+ * distinction `in` keeps and a value check would lose).
+ *
+ * DELETE THIS the moment the render tier narrows too (either
+ * `selectionForView` taking the columns it is folding over, or the library
+ * exporting `unjudgeableColumn` for a host to call).
+ */
+export function judgedHere(selection: RenderSelection, rows: readonly Row[]): RenderSelection {
+  const sample = rows[0];
+  if (sample === undefined) return selection;
+  const judgeable = (field: string): boolean => field in sample;
+  const clauses = new Map([...selection.clauses].filter(([, c]) => (c.fields === undefined ? judgeable(c.field) : c.fields.every(judgeable))));
+  return clauses.size === selection.clauses.size ? selection : { ...selection, clauses };
 }
 
 // ── 3 · the bars, in one pass ───────────────────────────────────────────────

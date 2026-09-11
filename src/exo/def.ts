@@ -89,8 +89,6 @@ export const SPREAD_LAYER = 'buckets';
 export const SPREAD_ADDRESS = layerAddress(SPREAD_VIEW, SPREAD_LAYER);
 export const BY_YEAR_VIEW = 'by_year';
 export const BY_YEAR_LAYER = 'references';
-/** The by-year bar's layer address — named because {@link exoLinks} has to silence the default edges INTO it. */
-export const BY_YEAR_ADDRESS = layerAddress(BY_YEAR_VIEW, BY_YEAR_LAYER);
 export const SHEET_VIEW = 'sheet';
 
 /** The dashboard's DECLARED words — the def's prose entry and the page's fallback read the same constant. */
@@ -470,7 +468,8 @@ function scatterProse(tables: ExoTables): ProseDecl {
 }
 
 /**
- * Where the links go, and where they deliberately do not.
+ * WHERE THE LINKS GO — two declared edges, and nothing declared about the
+ * histogram at all.
  *
  * The two declared edges are the demo's story: a planet picked on the scatter
  * is whose publications the sheet lists, and a year picked on the bar is which
@@ -478,71 +477,44 @@ function scatterProse(tables: ExoTables): ProseDecl {
  * groups, a sheet row is a row — so both state their fold, which the def door
  * requires and the ledger prints.
  *
- * The histogram now HAS a voice — it emits an interval over the minted table's
- * `radii` — and it still declares NO edge, for a reason that is about the data
- * and not about the voice. Its clause names `radii`, a column of
- * `radii_per_planet` and of nothing else: neither `measurements` (the sheet's
- * table) nor `planets` (the scatter's) has such a column, and the library's
- * crossfilter carries a clause by the column it names. An edge from here would
- * filter a target on a column that target has not got.
+ * THE HISTOGRAM DECLARES NOTHING, AND THAT IS NOW THE WHOLE DECLARATION. It has
+ * a voice — an interval over the minted table's `radii` — so the crossfilter
+ * default materializes real filter edges out of it to every other view, and
+ * `radii` is a column of `radii_per_planet` and of nothing else. This file used
+ * to answer that with ten hand-declared `response: 'none'` edges
+ * (`spreadSilences`) plus prose of its own explaining the silence, because the
+ * library used to REFUSE the whole read when a clause named a column the table
+ * had not got — one gesture here killed the sheet's window and the export with
+ * it.
  *
- * NOR does the minted relation help, and it is worth being exact about why. The
- * aggregate's group column is `pl_name`, so the session MINTS the relation
- * `radii_per_planet.pl_name → measurements.pl_name` — but a relation is a
- * PERMISSION TO READ ACROSS (what an analysis's `reads` is granted by), not a
- * join a clause is routed through: a clause on a layer of another table never
- * enters the default table's window. The honest declaration is therefore no
- * edge, and the cell's caption says so in words rather than inventing one.
+ * It does not any more, so neither do we. The library NARROWS a clause its
+ * table cannot judge, reports it on the window as
+ * `ReachingClause.narrowed = { column, reason }`, and names the acting view by
+ * the label this def declares (`ReachingClause.fromLabel`) — see the library's
+ * `src/session/README.md`, "A sentence about a column these rows do not have is
+ * not a claim about these rows". Ten declarations and two paraphrases were the
+ * demo re-deriving what the library now states at every read, so they are gone:
+ * the read succeeds, the export walks, the clause is still LISTED, and the
+ * reason is the library's own sentence rather than ours — printed under the
+ * sheet's rows by the library's own grid (`vizfootprint-ui` · `narrowedSaid`),
+ * which is why the layer's declared `label` is the name a reader sees there.
+ *
+ * What the DEMO still knows, and the library cannot: a bucket is a set of
+ * PLANETS, and the other two charts and the sheet are about planets too — so a
+ * clause from here reaching them is expected rather than broken, and the only
+ * thing that cannot travel is the column it happens to be phrased in. That
+ * sentence is in the histogram's caption (`web/src/exoCells.tsx`) and nothing
+ * about judgeability is retyped beside it.
  *
  * What a click on a bar DOES do is land a real commit with its cause, put the
  * selection outline on that bucket, and stand in the ledger as the question
  * somebody asked — which is what makes the refusal before the act meaningful.
- *
- * SO THE EDGES OUT OF IT ARE DECLARED OFF, one by one, and that is not a
- * formality. The link layer's first law is that NOTHING IS IMPLICIT: the default
- * rule (crossfilter — every voice filters every other view, self excluded) is
- * MATERIALIZED into real edges, so the moment this histogram gained a voice the
- * graph gained ten filter edges out of it, and each one would have handed a
- * `radii` clause to a table that has no such column. The library proves it if
- * you let it: the sheet's own window comes back
- * `table "measurements" has no column "radii"`. A declared `none` replaces the
- * default edge in place, and a declared `none` is a FACT the matrix shows —
- * which is the difference between this dashboard saying the histogram's
- * selection stays put and it merely happening to.
  */
 function exoLinks(): readonly LinkDecl[] {
   return [
     { source: SCATTER_ADDRESS, kind: 'point', target: SHEET_VIEW, response: 'filter', fold: 'every published solution for the picked planet, oldest first', label: 'a dot on the scatter is whose publications the sheet lists' },
     { source: BY_YEAR_VIEW, kind: 'point', target: SHEET_VIEW, response: 'filter', fold: 'the publications the archive dates to the picked year', label: 'a year on the bar is which publications the sheet keeps' },
-    ...spreadSilences(),
   ];
-}
-
-/**
- * Every default edge out of the histogram, turned off by declaration.
- *
- * TWO SOURCES, because the graph writes the default rule out for the frame's id
- * and for its LAYER's address alike, and only one of them can ever emit: the
- * marks are the layer's, so a click lands at {@link SPREAD_ADDRESS}. The bare
- * view id is silenced too, so nothing reading the matrix is told about a filter
- * edge that could carry a clause if a caller ever spoke through it.
- *
- * FIVE TARGETS, which is every other place the default rule points at — the two
- * other frames, their layers, and the sheet. Written as a fold over the two
- * lists rather than ten literals: a target added to one of them is silenced by
- * construction, and ten hand-typed records are ten chances to forget one.
- */
-function spreadSilences(): readonly LinkDecl[] {
-  const targets = [SCATTER_VIEW, SCATTER_ADDRESS, BY_YEAR_VIEW, BY_YEAR_ADDRESS, SHEET_VIEW];
-  return [SPREAD_VIEW, SPREAD_ADDRESS].flatMap((source) =>
-    targets.map((target): LinkDecl => ({
-      source,
-      kind: 'interval',
-      target,
-      response: 'none',
-      label: 'a bucket of planets names `radii`, a column only the minted table has — this edge is off by declaration, not by accident',
-    })),
-  );
 }
 
 /**
@@ -623,7 +595,7 @@ export function exoDef(tables: ExoTables): DashboardDef {
             text:
               'Each bar counts the planets with the same number of published radii. The table under it does not exist until an act cuts it: an aggregate over the published measurements, then two derived columns — the width of each planet\'s published range, and whether that width is above zero. ' +
               'A bar CAN be clicked, and what happens depends on where you are in the history: before the aggregate act has landed there is no table under this picture, and the click is refused in a sentence naming the act that mints it; after the act has landed the same click selects the planets in that bucket, on the log, with its cause. ' +
-              'The selection stays here. Its clause names `radii`, which is a column of the minted table and of no other, so it reaches no other chart — this dashboard declares no edge out of the histogram rather than one that would filter the sheet on a column the sheet has not got. ' +
+              'Nothing else on the dashboard moves when you click a bar, and not because anything is switched off: this dashboard declares no edge out of the histogram, so the default rule carries the bucket to every other view — which is right, since a bucket is a set of planets and the rest of this dashboard is about planets. What cannot travel is the column the bucket is phrased in: `radii` is a column of the minted table and of nothing else, so every other view keeps all of its rows, and the sheet prints the library\u2019s own sentence for that under them. ' +
               'What it cannot show: a planet no paper published a radius for. The absence law drops such a row before the aggregate sees it, so those planets are in no bar at all, and the caption counts them instead of implying they are the leftmost bar.',
             author: { kind: 'human' },
             levels: ['construction'],

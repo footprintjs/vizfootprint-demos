@@ -58,7 +58,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { VizBar, VizHistogram, VizScatter, keepPredicate, placeable, type ChartDomain, type HistogramBinDatum, type ScaleKind, type ScatterDatum, type SessionViewState } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection, DeskSilence } from 'vizfootprint-studio/desk';
-import { categoryCounts, emitIntent, pickedFrom, type Row } from './derive.js';
+import { categoryCounts, emitIntent, judgedHere, pickedFrom, type Row } from './derive.js';
 import { DISAGREES_COLUMN, SCATTER_ADDRESS, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, BY_YEAR_VIEW } from '../../src/exo/def.js';
 
 export { SCATTER_VIEW, SCATTER_ADDRESS, SPREAD_VIEW, SPREAD_ADDRESS, BY_YEAR_VIEW };
@@ -250,7 +250,9 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
    * id would leave the histogram filtering itself.
    */
   const bins = useMemo(() => {
-    const keep = keepPredicate(selFor(SPREAD_ADDRESS));
+    // judgedHere: a clause naming a column these rows have not got filtered NOTHING at the
+    // read door, so it must drop nothing here either (`../src/derive.ts` · judgedHere)
+    const keep = keepPredicate(judgedHere(selFor(SPREAD_ADDRESS), derived));
     return radiiBins(derived, keep);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
   }, [derived, ...sel]);
@@ -277,7 +279,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
 
   /** References per year — one pass, whatever the number of bars. */
   const yearBars = useMemo(() => {
-    const keep = keepPredicate(selFor(BY_YEAR_VIEW));
+    const keep = keepPredicate(judgedHere(selFor(BY_YEAR_VIEW), references));
     return categoryCounts(references, yearField, keep);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
   }, [references, yearField, ...sel]);
@@ -339,7 +341,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
           domain={{ ...(scatterTransform !== undefined ? { transform: scatterTransform } : {}) }}
           colorOf={colorOfProvenance}
           ariaLabel={desk.altShort(SCATTER_VIEW)}
-          selection={selFor(SCATTER_ADDRESS)}
+          selection={judgedHere(selFor(SCATTER_ADDRESS), planets)}
           columns={columns}
           fits={desk.fitsOf(SCATTER_VIEW)}
           encoding={shown[SCATTER_VIEW] ?? {}}
@@ -368,7 +370,13 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
                 'this table is not in the data: an aggregate act cut it at run time and two derive acts wrote its spread and its disagreement, all three on the log with their causes',
                 // THE VOICE, and its one honest limit
                 'click a bar to select those planets — the act lands on the log with its cause. Click it again to clear it. Before the aggregate act has landed there is no table under this picture, and the library refuses the same click in a sentence that names the act which mints it',
-                'the selection stays in this chart: its clause names `radii`, a column of the minted table and of no other, so this dashboard declares no edge out of the histogram rather than one that would filter the sheet on a column the sheet has not got',
+                // WHAT THE DEMO KNOWS AND THE LIBRARY CANNOT. This dashboard declares no edge out of
+                // the histogram, so the crossfilter default sends the bucket to every other view — which
+                // is right, because a bucket IS a set of planets and the rest of this dashboard is about
+                // planets. The one thing that cannot travel is the COLUMN the bucket is phrased in. Why
+                // that is not a broken read is the library's own sentence, printed under the sheet's rows
+                // where a reader meets the rows it did not filter; nothing here restates it.
+                'a bucket is a set of PLANETS, and the other charts and the sheet are about planets too — so this selection reaching them is expected, not broken. What cannot travel is the column it is phrased in: `radii` is a column of the minted table and of nothing else, and the sheet prints the library\u2019s own sentence for that under its rows',
               ]
                 .filter((s): s is string => s !== null)
                 .join(' · ')}
@@ -388,7 +396,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
             label="published radii per planet"
             countLabel="planets"
             ariaLabel={desk.altShort(SPREAD_VIEW)}
-            selection={selFor(SPREAD_ADDRESS)}
+            selection={judgedHere(selFor(SPREAD_ADDRESS), derived)}
             width={width}
             height={height}
             // an INTERVAL over the minted table's `radii` — the pair of bin edges the bar covers,
@@ -420,7 +428,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
           data={yearBars}
           field={yearField}
           colorOf={colorOfYear}
-          selection={selFor(BY_YEAR_VIEW)}
+          selection={judgedHere(selFor(BY_YEAR_VIEW), references)}
           columns={columns}
           fits={desk.fitsOf(BY_YEAR_VIEW)}
           encoding={shown[BY_YEAR_VIEW] ?? {}}

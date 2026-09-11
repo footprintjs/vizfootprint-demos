@@ -192,6 +192,19 @@ describe('every chip is traceable to a reader or to the hand table — none type
     expect(exoDesk.walked?.families.analysis).toBe(5);
   });
 
+  it('the exoplanet desk declares TWO link edges — the derived count the ten deleted silences used to inflate to twelve', () => {
+    // The def used to carry ten `response: 'none'` edges out of the histogram, because a clause
+    // naming a column the target's table has not got made the library refuse the whole read. It
+    // narrows and reports instead, so the workaround is gone — and this chip is READ off the def,
+    // never typed, which is why it moved on its own (`src/exo/README.md`).
+    expect(exoDesk.declares.links.declared).toBe(2);
+    expect(exoDesk.declares.links.responses).toEqual(['filter']);
+    expect(exoDesk.declares.links.kinds).toEqual(['point']);
+    expect(idsOf(exoDesk)).not.toContain('declares:link:interval');
+    // the two that remain both state their fold, because both cross grains
+    expect(exoDesk.declares.links.statesFold).toBe(true);
+  });
+
   it('the exoplanet desk is the only surface that declares an AGGREGATE — the act that mints a table at run time', () => {
     expect(narrowTo(shipped.surfaces, 'declares:builtin:aggregate').map((s) => `${s.demo} / ${s.surface}`)).toEqual(['Exoplanets, published twice / desk']);
     expect(exoDesk.declares.analyses.map((a) => a.builtin).filter((b) => b !== undefined).sort()).toEqual(['aggregate', 'bringOver', 'derive', 'derive', 'derive']);

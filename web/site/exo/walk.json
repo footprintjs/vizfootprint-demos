@@ -1,6 +1,6 @@
 {
   "from": "in process — this demo has no served host, so the walk is taken through the same session builder the page uses",
-  "capturedAt": "2026-09-10T23:08:08.956Z",
+  "capturedAt": "2026-09-11T03:28:40.781Z",
   "planet": "TRAPPIST-1 e",
   "log": [
     {
@@ -391,7 +391,7 @@
       "at": "s8",
       "ts": 7,
       "by": "user",
-      "madeAt": "2026-09-10T23:08:08.943Z"
+      "madeAt": "2026-09-11T03:28:40.767Z"
     }
   ],
   "saved": [],
@@ -506,6 +506,22 @@
         "ceiling": 200000,
         "clauses": [
           {
+            "from": "spread~buckets",
+            "response": "filter",
+            "clause": {
+              "kind": "interval",
+              "field": "radii",
+              "value": [
+                1,
+                2
+              ]
+            },
+            "narrowed": {
+              "column": "radii",
+              "reason": "table \"measurements\" has no column \"radii\" — a sentence about a column these rows do not have is not a claim about these rows"
+            }
+          },
+          {
             "from": "mass_radius~planets",
             "response": "filter",
             "clause": {
@@ -515,7 +531,7 @@
             }
           }
         ],
-        "at": "2026-09-10T23:08:08.956Z"
+        "at": "2026-09-11T03:28:40.781Z"
       },
       "bodyBytes": 1816,
       "firstLine": "measurement_id,pl_name,hostname,ref,ref_label,pl_refname,pl_pubdate,pub_year,default_flag,pl_orbper,pl_rade,pl_radeerr1,pl_radeerr2,radius_state,radius_bound,pl_bmasse,pl_bmasseerr1,pl_bmasseerr2,mass_state,mass_bound,mass_kind,disc_year,discoverymethod,sy_dist,pl_name_pl_rade,delta"

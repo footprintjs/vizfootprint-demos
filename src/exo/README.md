@@ -130,15 +130,41 @@ lands anything (`session.ts` · `probeTheMintedTable`), keeps the sentence and
 shows it in the honesty line, then lands the acts — a visitor arrives after the
 acts and could otherwise only be *told* about a refusal.
 
-**And every default edge out of it is declared off.** The link layer's first law
-is that nothing is implicit: the default crossfilter rule is materialized into
-real edges, so the moment this view gained a voice the graph gained ten filter
-edges out of it — each one handing a `radii` clause to a table that has no such
-column (`table "measurements" has no column "radii"`, which is what the sheet's
-own window answers if you let it). The aggregate's minted relation does not help:
-a relation is a permission to read across, not a join a clause is routed through.
-So `def.ts` · `spreadSilences` declares `response: 'none'` on all ten, because a
-declared `none` is a fact the matrix shows and an absent edge is only a silence.
+**And it declares no edge at all — the library carries the rest.** The link
+layer's first law is that nothing is implicit: the default crossfilter rule is
+materialized into real edges, so the moment this view gained a voice the graph
+gained filter edges out of it, each one handing a `radii` clause to a table that
+has no such column. The aggregate's minted relation does not help: a relation is
+a permission to read across, not a join a clause is routed through.
+
+This file used to describe ten hand-declared `response: 'none'` edges
+(`def.ts` · `spreadSilences`), because the library once REFUSED the whole read
+when a clause named a column the table had not got — one click here killed the
+sheet's window and the export with it. It no longer does. A read now NARROWS the
+clauses its table cannot judge and reports each one on the window as
+`ReachingClause.narrowed = { column, reason }`, naming the acting view by the
+label this def declares (`ReachingClause.fromLabel`). So the ten declarations
+and the two paraphrases beside them are gone: the window succeeds, the export
+walks, the clause is still listed, and the sentence a reader meets is the
+library's own, printed under the sheet's rows by the library's grid:
+
+```
+the selection from Planets, grouped by how many radii were published for them
+filtered nothing here · table "measurements" has no column "radii" — a sentence
+about a column these rows do not have is not a claim about these rows
+```
+
+What the demo still says for itself is the part the library cannot know: a
+bucket is a set of PLANETS and the rest of this dashboard is about planets, so
+the selection reaching them is expected rather than broken — only the column it
+is phrased in cannot travel.
+
+**One gap this uncovered, reported and not papered over.** The narrowing is a
+READ-door law. The render tier (`vizfootprint-ui` · `selectionForView`) compiles
+every arriving clause into a row predicate with no column list to judge against,
+so the same `radii` interval that filters nothing in the sheet drops every row
+of a chart that folds its own marks. `web/src/derive.ts` · `judgedHere` asks the
+read door's question on the host's behalf until the library asks it there too.
 
 ## What the histogram cannot show, and why the caption counts it
 

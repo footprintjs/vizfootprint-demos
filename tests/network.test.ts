@@ -214,11 +214,21 @@ describe('a surface with no graph says so, and starts anyway', () => {
     expect(surface.layoutRefusals).toEqual([]);
     expect(surface.graphRows.refused).toBeNull();
     expect(surface.graphRows.nodes).toHaveLength(3);
-    // a view's clause reaches EVERY table, and `edges` has no `disease` column —
-    // so a live selection makes the same read refuse. The frozen one does not move.
+    // A view's clause reaches EVERY table, and `edges` has no `disease` column. That used to
+    // REFUSE this read outright — the sentence this test asserted. The library now NARROWS the
+    // one clause the table cannot judge and REPORTS it on the window, so the read succeeds, the
+    // clause is still listed, and it filtered nothing.
     await surface.session.dispatch({ verb: 'select', viewId: 'diseases', field: 'disease', value: 'Measles', cause: { requestedBy: 'user', computedBy: 'user', intent: 'pick a disease' } });
     const live = await graphRowsAt(surface.session, TINY);
-    expect(live.refused).toContain('no column "disease"');
+    expect(live.refused).toBeNull();
+    expect(live.edges).toHaveLength(TINY.edges.length);
+    const window = await surface.session.viewQuery({ table: 'edges', limit: TINY.edges.length });
+    const narrowed = window.ok ? window.clauses.find((c) => c.narrowed !== undefined) : undefined;
+    expect(narrowed?.narrowed?.column).toBe('disease');
+    expect(narrowed?.narrowed?.reason).toContain('no column "disease"');
+    // …which is why the frozen read still has to exist: the NODES window really does narrow under
+    // a node selection, and a node-link drawn from it would point at nodes that are not there
+    // (`src/nndss/session.ts` · `graphRowsAt`). The frozen one does not move.
     expect(surface.graphRows.refused).toBeNull();
     expect(surface.graphRows.edges).toHaveLength(2);
   });

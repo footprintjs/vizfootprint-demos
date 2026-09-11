@@ -20,10 +20,11 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
+import { selectionForView, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
 import { radiiBins, useExoCells, useExoSilences, type ExoDeskData } from '../web/src/exoCells.js';
 import type { Row } from '../web/src/derive.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/exo/absence.js';
-import { exoDef, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_VIEW } from '../src/exo/def.js';
+import { exoDef, BY_YEAR_VIEW, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_VIEW } from '../src/exo/def.js';
 import { exoTables } from '../src/exo/etl.js';
 import { buildExoSurfaceAsync } from '../src/exo/surface.js';
 import { loadExo } from '../src/exo/snapshot.js';
@@ -67,6 +68,27 @@ const QUIET = {
   // WHY the cast: the same reason `tests/grid-cells.test.tsx` gives — `DeskProjection`
   // is built by a hook the studio does not export, so a stub is the only way in from
   // outside, and naming every member is what keeps it an honest one.
+} as unknown as DeskProjection;
+
+/**
+ * A DESK WITH A BUCKET LIVE ON THE HISTOGRAM — the gesture whose clause the
+ * crossfilter default now carries to every other view, because this def deleted
+ * the ten `response: 'none'` edges that used to stop it.
+ *
+ * `selFor` is built with the LIBRARY's own `selectionForView` over a real
+ * crossfilter `filter` edge into whichever consumer asks, so this stub cannot
+ * disagree with what the session hands the desk about what arrives where.
+ */
+const BUCKET: SelectionView = { viewId: SPREAD_ADDRESS, kind: 'interval', field: 'radii', value: [1, 2], commitId: 'bucket' };
+const crossfilterInto = (target: string): LinkGraphView => ({
+  default: 'crossfilter',
+  views: [],
+  edges: [{ id: `${SPREAD_ADDRESS}->${target}`, source: SPREAD_ADDRESS, target, kind: 'interval', response: 'filter', origin: 'default' }],
+});
+const WITH_BUCKET = {
+  ...QUIET,
+  state: { ...QUIET.state, selections: [BUCKET] },
+  selFor: (self: string | null) => selectionForView([BUCKET], self, 'intersect', crossfilterInto(self ?? ''), []),
 } as unknown as DeskProjection;
 
 const ABSENCE = { field: ABSENCE_FIELD, states: [...ABSENCE_STATES] };
@@ -218,9 +240,36 @@ describe('the three cells over the committed slice', () => {
     expect(spread.clauseId).toBe(SPREAD_ADDRESS);
     const caption = textOf(spread.caption);
     expect(caption).toContain('click a bar to select those planets');
-    // …and both honest limits: the refusal before the act, and the clause that reaches nothing else
+    // …and both honest limits: the refusal before the act, and what a bucket's clause can and
+    // cannot carry. The caption says ONLY what the demo knows — that a bucket is a set of planets
+    // and the rest of the dashboard is about planets, so the selection reaching them is expected.
+    // Why that reach filters nothing is the LIBRARY's sentence, printed under the sheet's rows
+    // (`ReachingClause.narrowed`), and this caption must never restate it.
     expect(caption).toContain('refuses the same click in a sentence that names the act which mints it');
-    expect(caption).toContain('the selection stays in this chart');
+    expect(caption).toContain('a bucket is a set of PLANETS');
+    expect(caption).toContain('this selection reaching them is expected, not broken');
+    expect(caption).toContain('the sheet prints the library\u2019s own sentence for that under its rows');
+    // the reason itself is NOWHERE in the demo's words — that is the whole point of the packet
+    expect(caption).not.toContain('is not a claim about these rows');
+    expect(caption).not.toContain('has no column');
+  }, 120_000);
+
+  it("a bucket's clause changes no other chart — the render tier made to agree with the read door", async () => {
+    const data = await realData();
+    const barsOf = (desk: DeskProjection): number =>
+      count(renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 })}</>), 'rect');
+    // The bucket names `radii`, a column only the minted table has. The library's READ door
+    // narrows such a clause and filters nothing; `web/src/derive.ts` · `judgedHere` makes the
+    // host's own fold answer the same, because `selectionForView` compiles every arriving clause
+    // into a predicate with no columns to judge against — without it every bar here would vanish.
+    expect(barsOf(QUIET)).toBeGreaterThan(0);
+    expect(barsOf(WITH_BUCKET)).toBe(barsOf(QUIET));
+    // and the histogram itself still draws every bucket: its own clause is self-excluded, so the
+    // bars a reader sees are the whole minted table whichever bar is outlined
+    const barsOfSpread = (desk: DeskProjection): number =>
+      count(renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === SPREAD_VIEW)!.render({ width: 800, height: 400 })}</>), 'rect');
+    expect(barsOfSpread(WITH_BUCKET)).toBe(barsOfSpread(QUIET));
+    expect(barsOfSpread(QUIET)).toBeGreaterThanOrEqual(radiiBins(data.derived, () => true).length);
   }, 120_000);
 
   it('a click on a bar really dispatches — an INTERVAL, at the layer address, under an intent that names the field the gesture was on', async () => {

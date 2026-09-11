@@ -21,7 +21,8 @@
  * one thing worth catching here.
  */
 import { describe, expect, it } from 'vitest';
-import { ACCEPTED_RADIUS_COLUMN, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, RADII_PER_PLANET, SCATTER_ADDRESS, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN } from '../src/exo/def.js';
+import { exportFromSession } from 'vizfootprint/session';
+import { ACCEPTED_RADIUS_COLUMN, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, RADII_PER_PLANET, SCATTER_ADDRESS, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, exoDef } from '../src/exo/def.js';
 import { SPREAD_BUCKET } from '../src/exo/session.js';
 import { buildExoSurfaceAsync } from '../src/exo/surface.js';
 import { exoRows } from '../src/exo/rows.js';
@@ -31,6 +32,12 @@ import { loadExo } from '../src/exo/snapshot.js';
 const PLANET = 'TRAPPIST-1 e';
 
 const tables = loadExo();
+/**
+ * The name a reader sees the histogram called in the library's own sentence —
+ * READ OFF THE DEF, never retyped: `ReachingClause.fromLabel` resolves the
+ * declared label at the acting address, and the acting address is the layer.
+ */
+const SPREAD_LAYER_LABEL = exoDef(tables).encodings?.find((e) => e.viewId === SPREAD_VIEW)?.layers?.[0]?.label;
 const surface = await buildExoSurfaceAsync(tables);
 
 describe('the five acts land as commits, and nothing refuses', () => {
@@ -149,15 +156,45 @@ describe('the histogram over a table an ACT mints — refused before it, landing
     expect(surface.session.log.records.filter((r) => r.viewId === SPREAD_ADDRESS)).toEqual([]);
   });
 
-  it('the same gesture LANDS once the act has, and its clause stays on the minted table', async () => {
+  it('the same gesture LANDS once the act has, and the sheet NARROWS its clause instead of dying on it', async () => {
     const gesture = { verb: 'filter' as const, viewId: SPREAD_ADDRESS, field: 'radii', range: [...SPREAD_BUCKET] as [number, number] };
     const landed = await surface.session.dispatch({ ...gesture, cause: { requestedBy: 'user' as const, computedBy: 'user' as const, intent: 'the planets with one published radius' } });
     expect(landed.ok).toBe(true);
-    // …and it reaches no other view: every default crossfilter edge out of the histogram is declared off,
-    // because a `radii` clause would filter a table that has no such column (the def says so in words)
-    expect(surface.session.clausesFor(SHEET_VIEW)).toEqual([]);
+
+    // The demo declares NO edge out of the histogram, so the crossfilter default carries the
+    // bucket to the sheet — and the clause names `radii`, which `measurements` has not got.
+    // This used to be the break the demo worked around with ten `response: 'none'` edges: the
+    // engine refused the WHOLE read. It now narrows the one clause it cannot judge and reports it.
+    const reaching = surface.session.clausesFor(SHEET_VIEW);
+    expect(reaching.map((c) => c.from)).toEqual([SPREAD_ADDRESS]);
+
     const sheet = await surface.session.viewQuery({ viewId: SHEET_VIEW, table: 'measurements', limit: 3 });
     expect(sheet.ok).toBe(true);
+    // it filtered NOTHING: every row of the table is still in the window's count
+    expect(sheet.ok && sheet.count).toBe(tables.measurements.length);
+    // …and the clause is still LISTED, narrowed, naming the column and the DECLARED label of the
+    // acting layer — so a reader is told what was ignored rather than left with a silent full table
+    const narrowed = sheet.ok ? sheet.clauses.find((c) => c.from === SPREAD_ADDRESS) : undefined;
+    expect(narrowed?.narrowed?.column).toBe('radii');
+    expect(narrowed?.narrowed?.reason).toBe('table "measurements" has no column "radii" — a sentence about a column these rows do not have is not a claim about these rows');
+    expect(narrowed?.fromLabel).toBe(SPREAD_LAYER_LABEL);
+    // Those two are the whole of what the sheet's own status line prints — the library's grid
+    // composes `the selection from <fromLabel> filtered nothing here \u00b7 <reason>` from them
+    // (`vizfootprint-ui` · `narrowedSaid`, reachable only through the Sheet the desk renders, which
+    // is why the composition itself cannot be pinned from here). `src/exo/README.md` quotes the
+    // finished line; these two assertions are what keep that quote from rotting.
+
+    // AND THE EXPORT WALKS. This is the door the demo LOST when the read was refused outright:
+    // a receipt is a read, so a clause it cannot judge must narrow there too, not kill it.
+    const exported = await exportFromSession(surface.session, { table: 'measurements', viewId: SHEET_VIEW, format: 'csv' });
+    expect(exported.ok).toBe(true);
+    expect(exported.ok && exported.receipt.exported.rows).toBe(tables.measurements.length);
+    // the receipt carries the narrowing too — and deliberately not the declared label, which a
+    // def can rename (`vizfootprint` · `src/session/export.ts`)
+    const onReceipt = exported.ok ? exported.receipt.clauses?.find((c) => c.from === SPREAD_ADDRESS) : undefined;
+    expect(onReceipt?.narrowed?.column).toBe('radii');
+    expect(onReceipt?.fromLabel).toBeUndefined();
+
     await surface.session.dispatch({ ...gesture, range: null, cause: { requestedBy: 'user' as const, computedBy: 'user' as const, intent: 'clear the bucket' } });
   });
 });

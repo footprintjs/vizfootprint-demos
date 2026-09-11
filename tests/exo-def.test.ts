@@ -149,18 +149,15 @@ describe('what the views can and cannot say, declared', () => {
     expect(validateDashboardDef({ ...def, encodings: [ghost] }).join(' ')).toMatch(/"spread" is not a column of the table/);
   });
 
-  it('every default edge out of the histogram is declared OFF — nothing implicit, and a `radii` clause reaches no table that has no such column', () => {
+  it('the histogram declares NO edge at all any more — the ten `response: \'none\'` silences are gone, because the library narrows what it cannot judge', () => {
     const def = exoDef(TINY);
-    const off = def.links?.filter((l) => l.response === 'none') ?? [];
-    // the default rule (crossfilter) materializes an edge for the frame's id AND its layer's address alike
-    expect([...new Set(off.map((l) => l.source))]).toEqual([SPREAD_VIEW, SPREAD_ADDRESS]);
-    expect(off.every((l) => l.kind === 'interval')).toBe(true);
-    // every other place the default rule points at: the two other frames, their layers, and the sheet
-    const targets = ['mass_radius', 'mass_radius~planets', 'by_year', 'by_year~references', 'sheet'];
-    for (const source of [SPREAD_VIEW, SPREAD_ADDRESS]) {
-      expect(off.filter((l) => l.source === source).map((l) => String(l.target)).sort()).toEqual([...targets].sort());
-    }
-    expect(off.every((l) => typeof l.label === 'string' && l.label.includes('radii'))).toBe(true);
+    // This def used to carry ten hand-declared `none` edges out of the histogram (`spreadSilences`),
+    // because a `radii` clause reaching a table without that column made the library refuse the
+    // WHOLE read. It narrows and reports instead (`tests/exo-session.test.ts` walks the read and the
+    // export), so the workaround is deleted and the link list is the two edges the demo means.
+    expect(def.links?.filter((l) => l.response === 'none')).toEqual([]);
+    expect(def.links?.length).toBe(2);
+    expect(def.links?.every((l) => l.source !== SPREAD_VIEW && l.source !== SPREAD_ADDRESS)).toBe(true);
   });
 
   it('the two edges that DO carry a clause state their fold, because both cross grains', () => {

@@ -29,6 +29,7 @@ import {
   columnVocabulary,
   emitIntent,
   droppedOf,
+  judgedHere,
   noteRefs,
   pickedFrom,
   whyDroppedNote,
@@ -127,6 +128,35 @@ describe('pickedFrom / arrivesFrom — defect 7: a link set to "none" is ignored
   it('an IS-NULL clause is live, a cleared one is not', () => {
     const isNull = selectionForView([{ viewId: 'kinds', kind: 'point', field: 'kind', value: null, commitId: 'c3' }], 'kinds', 'intersect', graph());
     expect(arrivesFrom(isNull, ['kinds']), 'null means IS NULL — a real clause, but not an area chosen').toBe(false);
+  });
+});
+
+describe('judgedHere — the READ door narrows an unjudgeable clause; the render tier does not, so the host asks', () => {
+  /** The exoplanet break, in miniature: an interval on `radii`, a column only the minted table has. */
+  const BUCKET: SelectionView = { viewId: 'spread~buckets', kind: 'interval', field: 'radii', value: [1, 2], commitId: 'c3' };
+  const intervalEdge: LinkEdgeView = { id: 'spread->scatter', source: 'spread~buckets', target: 'scatter', kind: 'interval', response: 'filter', origin: 'default' };
+  const PLANETS: Row[] = [{ pl_name: 'TRAPPIST-1 e', pl_rade: 0.92 }, { pl_name: 'Kepler-22 b', pl_rade: 2.4 }];
+
+  it('without it, a clause the rows cannot judge drops EVERY row — which is the blank chart', () => {
+    const sel = selectionForView([BUCKET], 'scatter', 'intersect', graph(intervalEdge));
+    expect(PLANETS.filter(keepPredicate(sel))).toEqual([]);
+  });
+
+  it('with it, the clause is dropped from the fold and the rows are left alone — the read door\'s own answer', () => {
+    const sel = judgedHere(selectionForView([BUCKET], 'scatter', 'intersect', graph(intervalEdge)), PLANETS);
+    expect([...sel.clauses.keys()]).toEqual([]);
+    expect(PLANETS.filter(keepPredicate(sel))).toEqual(PLANETS);
+  });
+
+  it('a clause the rows CAN judge is untouched, and the selection object is the same one', () => {
+    const sel = selectionForView([PICKED_DISEASE], 'map', 'intersect', graph(edge('diseases', 'map', 'filter')));
+    expect(judgedHere(sel, CELLS)).toBe(sel); // no copy when nothing was dropped
+    expect(CELLS.filter(keepPredicate(judgedHere(sel, CELLS))).length).toBe(CELLS.filter(keepPredicate(sel)).length);
+  });
+
+  it('refuses on EVIDENCE, never on ignorance: with no row to read columns off, nothing is dropped', () => {
+    const sel = selectionForView([BUCKET], 'scatter', 'intersect', graph(intervalEdge));
+    expect(judgedHere(sel, [])).toBe(sel);
   });
 });
 
