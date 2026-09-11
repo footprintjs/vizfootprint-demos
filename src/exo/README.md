@@ -159,12 +159,16 @@ bucket is a set of PLANETS and the rest of this dashboard is about planets, so
 the selection reaching them is expected rather than broken — only the column it
 is phrased in cannot travel.
 
-**One gap this uncovered, reported and not papered over.** The narrowing is a
-READ-door law. The render tier (`vizfootprint-ui` · `selectionForView`) compiles
-every arriving clause into a row predicate with no column list to judge against,
-so the same `radii` interval that filters nothing in the sheet drops every row
-of a chart that folds its own marks. `web/src/derive.ts` · `judgedHere` asks the
-read door's question on the host's behalf until the library asks it there too.
+**One gap this uncovered, reported — and then closed where it belonged.** The
+narrowing was a READ-door law only: the render tier (`vizfootprint-ui` ·
+`selectionForView` + `keepPredicate`) compiled every arriving clause into a row
+predicate that read the column off the row, so the same `radii` interval that
+filtered nothing in the sheet dropped every row of a chart that folds its own
+marks. This demo carried a six-line bridge for that until the library took the
+law itself: a row that does not carry a clause's column cannot answer it, so the
+clause does not exclude it (`vizfootprint` · "a clause a row cannot answer does
+not drop it"). One law, three tiers — the map declines the edge, the read
+narrows the clause, the fold keeps the row — and the bridge is gone.
 
 ## What the histogram cannot show, and why the caption counts it
 

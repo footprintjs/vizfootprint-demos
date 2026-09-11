@@ -259,9 +259,9 @@ describe('the three cells over the committed slice', () => {
     const barsOf = (desk: DeskProjection): number =>
       count(renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 })}</>), 'rect');
     // The bucket names `radii`, a column only the minted table has. The library's READ door
-    // narrows such a clause and filters nothing; `web/src/derive.ts` · `judgedHere` makes the
-    // host's own fold answer the same, because `selectionForView` compiles every arriving clause
-    // into a predicate with no columns to judge against — without it every bar here would vanish.
+    // narrows such a clause and filters nothing, and the library's FOLD now answers the same:
+    // a row that does not carry the column cannot answer the clause, so `keepPredicate` keeps it.
+    // No bridge in this repo — one law, three tiers, and every bar here stays.
     expect(barsOf(QUIET)).toBeGreaterThan(0);
     expect(barsOf(WITH_BUCKET)).toBe(barsOf(QUIET));
     // and the histogram itself still draws every bucket: its own clause is self-excluded, so the

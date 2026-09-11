@@ -58,7 +58,7 @@
 import { useMemo, type ReactNode } from 'react';
 import { VizBar, VizHistogram, VizScatter, keepPredicate, placeable, type ChartDomain, type HistogramBinDatum, type ScaleKind, type ScatterDatum, type SessionViewState } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection, DeskSilence } from 'vizfootprint-studio/desk';
-import { categoryCounts, emitIntent, judgedHere, pickedFrom, type Row } from './derive.js';
+import { categoryCounts, emitIntent, pickedFrom, type Row } from './derive.js';
 import { DISAGREES_COLUMN, SCATTER_ADDRESS, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, BY_YEAR_VIEW } from '../../src/exo/def.js';
 
 export { SCATTER_VIEW, SCATTER_ADDRESS, SPREAD_VIEW, SPREAD_ADDRESS, BY_YEAR_VIEW };
@@ -250,9 +250,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
    * id would leave the histogram filtering itself.
    */
   const bins = useMemo(() => {
-    // judgedHere: a clause naming a column these rows have not got filtered NOTHING at the
-    // read door, so it must drop nothing here either (`../src/derive.ts` · judgedHere)
-    const keep = keepPredicate(judgedHere(selFor(SPREAD_ADDRESS), derived));
+    const keep = keepPredicate(selFor(SPREAD_ADDRESS));
     return radiiBins(derived, keep);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
   }, [derived, ...sel]);
@@ -279,7 +277,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
 
   /** References per year — one pass, whatever the number of bars. */
   const yearBars = useMemo(() => {
-    const keep = keepPredicate(judgedHere(selFor(BY_YEAR_VIEW), references));
+    const keep = keepPredicate(selFor(BY_YEAR_VIEW));
     return categoryCounts(references, yearField, keep);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
   }, [references, yearField, ...sel]);
@@ -341,7 +339,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
           domain={{ ...(scatterTransform !== undefined ? { transform: scatterTransform } : {}) }}
           colorOf={colorOfProvenance}
           ariaLabel={desk.altShort(SCATTER_VIEW)}
-          selection={judgedHere(selFor(SCATTER_ADDRESS), planets)}
+          selection={selFor(SCATTER_ADDRESS)}
           columns={columns}
           fits={desk.fitsOf(SCATTER_VIEW)}
           encoding={shown[SCATTER_VIEW] ?? {}}
@@ -396,7 +394,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
             label="published radii per planet"
             countLabel="planets"
             ariaLabel={desk.altShort(SPREAD_VIEW)}
-            selection={judgedHere(selFor(SPREAD_ADDRESS), derived)}
+            selection={selFor(SPREAD_ADDRESS)}
             width={width}
             height={height}
             // an INTERVAL over the minted table's `radii` — the pair of bin edges the bar covers,
@@ -428,7 +426,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
           data={yearBars}
           field={yearField}
           colorOf={colorOfYear}
-          selection={judgedHere(selFor(BY_YEAR_VIEW), references)}
+          selection={selFor(BY_YEAR_VIEW)}
           columns={columns}
           fits={desk.fitsOf(BY_YEAR_VIEW)}
           encoding={shown[BY_YEAR_VIEW] ?? {}}

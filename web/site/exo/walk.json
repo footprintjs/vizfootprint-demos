@@ -1,6 +1,6 @@
 {
   "from": "in process — this demo has no served host, so the walk is taken through the same session builder the page uses",
-  "capturedAt": "2026-09-11T03:28:40.781Z",
+  "capturedAt": "2026-09-11T14:16:29.857Z",
   "planet": "TRAPPIST-1 e",
   "log": [
     {
@@ -391,7 +391,7 @@
       "at": "s8",
       "ts": 7,
       "by": "user",
-      "madeAt": "2026-09-11T03:28:40.767Z"
+      "madeAt": "2026-09-11T14:16:29.840Z"
     }
   ],
   "saved": [],
@@ -531,7 +531,7 @@
             }
           }
         ],
-        "at": "2026-09-11T03:28:40.781Z"
+        "at": "2026-09-11T14:16:29.857Z"
       },
       "bodyBytes": 1816,
       "firstLine": "measurement_id,pl_name,hostname,ref,ref_label,pl_refname,pl_pubdate,pub_year,default_flag,pl_orbper,pl_rade,pl_radeerr1,pl_radeerr2,radius_state,radius_bound,pl_bmasse,pl_bmasseerr1,pl_bmasseerr2,mass_state,mass_bound,mass_kind,disc_year,discoverymethod,sy_dist,pl_name_pl_rade,delta"
