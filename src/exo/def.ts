@@ -206,7 +206,11 @@ export const EXO_ACT_ORDER: readonly { readonly id: string; readonly table: stri
 // ── the relations ────────────────────────────────────────────────────────────
 
 /**
- * Three relations, and the third is the one this demo exists for.
+ * Three relations, and the third is the one this demo exists for — and the
+ * crossfilter now CROSSES it: a planet picked on the scatter travels
+ * `planets.radius_ref → references.ref` to the years as the one reference the
+ * composite took its radius from (`vizfootprint` · `src/session/README.md`,
+ * "A clause travels a relation"; pinned in `tests/exo-session.test.ts`).
  *
  * A measurement points at its PLANET (which is what lets the bring-over carry
  * the accepted radius onto it) and at its PAPER. The composite's own radius

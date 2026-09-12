@@ -14,9 +14,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { graphReadingFor } from 'vizfootprint/def';
+import { buildDashboard, graphReadingFor, layerAddress } from 'vizfootprint/def';
+import { createSessionView, selectionForView, sessionSource } from 'vizfootprint-ui';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { DEFAULT_DISEASE, NETWORK_NODES, type NndssDeskData, type NndssEdgeRow, type NndssNodeRow } from '../web/src/cells.js';
+import { NETWORK_EDGES_LAYER, NETWORK_VIEW, nndssDef } from '../src/nndss/def.js';
+import type { NndssTables } from '../src/nndss/etl.js';
+import type { NndssGraph } from '../src/nndss/graph.js';
 import { buildNndssSurface, graphRowsAt, layOutGraph } from '../src/nndss/surface.js';
 import { loadGraph } from '../src/nndss/snapshot.js';
 import { QUIET, cellsOf, count, textOf } from './deskStub.js';
@@ -69,6 +73,75 @@ describe('the network cell over the committed CDC graph', () => {
     expect(caption).toContain('positions from a seeded stress layout landed as a commit');
     expect(caption).toContain('alt-click to select it and everything it reports with');
   }, 60_000);
+
+  it('a walk that TRAVELLED lights the ego net the walk recorded: the seed is the focus, the nodes outside dim, alt-click-to-clear is on the seed — through the desk\'s own wire (packet AM)', async () => {
+    // a graph small enough to count by hand (the `tests/network.test.ts` fixture): Measles—Mumps, Mumps—Rubella
+    const TINY: NndssGraph = {
+      nodes: [
+        { disease: 'Measles', cases_total: 3, jurisdictions_reporting: 1, weeks_reporting: 1 },
+        { disease: 'Mumps', cases_total: 1, jurisdictions_reporting: 1, weeks_reporting: 1 },
+        { disease: 'Rubella', cases_total: 2, jurisdictions_reporting: 1, weeks_reporting: 1 },
+      ],
+      edges: [
+        { source: 'Measles', target: 'Mumps', weight: 2, jurisdictions: 1 },
+        { source: 'Mumps', target: 'Rubella', weight: 1, jurisdictions: 1 },
+      ],
+    };
+    const TABLES = {
+      cells: [{ jurisdiction: 'Texas', kind: 'state', disease: 'Measles', cases: 3, report_state: 'present', flag: null, ytd: 30, prev52_max: 9, t: '2026-01-04', week_index: 1 }] as unknown as NndssTables['cells'],
+      jurisdictions: [{ jurisdiction: 'Texas', kind: 'state', lat: 31, lon: -99 }] as unknown as NndssTables['jurisdictions'],
+      series: [{ t: '2026-01-04', entity: 'Texas', metric: 'cases', value: 3, entity_kind: 'state', week_index: 1 }] as unknown as NndssTables['series'],
+      grain: { bucket: 'week', reducer: 'sum' },
+    } as unknown as NndssTables;
+    const session = buildDashboard(nndssDef(TABLES, TINY)).createSession({ as: 'user' });
+    expect(await layOutGraph(session)).toEqual([]);
+    const rows = await graphRowsAt(session, TINY);
+    const data: NndssDeskData = { ...NO_GRAPH, nodes: rows.nodes as readonly NndssNodeRow[], edges: rows.edges as readonly NndssEdgeRow[], netRefused: rows.refused };
+
+    // THE WALK, landed on the real session at the edges' address: alt-click Measles. COUNTED BY HAND: Measles's
+    // one tie is Measles→Mumps, so one hop of ego from it is the seed and Mumps — TWO ids — and Rubella is outside.
+    const EDGES = layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER);
+    const cause = { requestedBy: 'user' as const, computedBy: 'user' as const, intent: 'alt-click Measles' };
+    const res = await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Measles', cause });
+    expect(res.ok && (res.commit!.value as { readonly ids: readonly string[] }).ids).toEqual(['Measles', 'Mumps']);
+
+    // THE WIRE the desk reads (`web/src/App.tsx` hands the studio desk a session view), and the desk's own fold:
+    // `selFor(NETWORK_NODES)` = the library's `selectionForView` over the served selections and link graph — which
+    // now picks the consumer's TRAVELLED clause (`disease IN ids`, by identity, `via.from` the walk itself).
+    const view = createSessionView(sessionSource(session), { as: 'user' });
+    await view.refresh();
+    const state = view.getState();
+    expect(state.selections.map((s) => s.viewId)).toEqual([EDGES]);
+    expect(state.selections[0]?.travelled?.[NETWORK_NODES]?.clause).toEqual({ kind: 'match', field: 'disease', values: ['Measles', 'Mumps'] });
+    const deskOver = (selections: typeof state.selections): DeskProjection =>
+      ({ ...QUIET, state: { selections, links: state.links, cleared: state.cleared }, selFor: (self: string | null) => selectionForView(selections, self, 'intersect', state.links, state.cleared) }) as unknown as DeskProjection;
+    const netHtml = (desk: DeskProjection): string => renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === 'net')!.render({ width: 640, height: 420 })}</>);
+    /** Each circle as drawn: its node, its classes, and the words its `<title>` says. */
+    const circlesOf = (html: string): readonly { readonly node: string; readonly classes: string; readonly title: string }[] =>
+      [...html.matchAll(/<circle([^>]*)>\s*<title>([^<]*)<\/title>/g)].map((m) => ({
+        node: /data-node="([^"]+)"/.exec(m[1] ?? '')?.[1] ?? '',
+        classes: /class="([^"]*)"/.exec(m[1] ?? '')?.[1] ?? '',
+        title: (m[2] ?? '').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'),
+      }));
+    const html = netHtml(deskOver(state.selections));
+    const circles = circlesOf(html);
+
+    // THREE circles drawn, ONE dim — Rubella, the node outside the recorded set (dim, never hide)
+    expect(circles.map((c) => c.node).sort()).toEqual(['Measles', 'Mumps', 'Rubella']);
+    expect(circles.filter((c) => c.classes.includes('vzf-dim')).map((c) => c.node)).toEqual(['Rubella']);
+    expect(circles.filter((c) => c.classes.includes('vzf-dim'))).toHaveLength(TINY.nodes.length - 2);
+    // the seed is the focus: its title offers the CLEAR; the other lit node offers a walk of its own
+    expect(circles.find((c) => c.node === 'Measles')?.title).toContain('alt-click to clear its neighbourhood');
+    expect(circles.find((c) => c.node === 'Mumps')?.title).toContain('alt-click for its neighbourhood');
+    // and of the two ties, the one touching Rubella dims with it
+    expect(count(html, 'line')).toBe(2);
+    expect((html.match(/<line[^>]*vzf-dim/g) ?? []).length).toBe(1);
+
+    // THE SAME PICTURE AS BEFORE THE CLAUSE TRAVELLED: strip the wire's key and the render tier reads the walk as
+    // it always did — every circle's classes byte-identical (the library's own pin, `VizNetwork.test.tsx`, here on the desk's wire)
+    const stripped = state.selections.map(({ travelled: _travelled, ...s }) => s);
+    expect(circlesOf(netHtml(deskOver(stripped))).map((c) => [c.node, c.classes])).toEqual(circles.map((c) => [c.node, c.classes]));
+  });
 });
 
 describe('what the cell does when the positions are not there', () => {

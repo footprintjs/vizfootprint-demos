@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { edgesFrom, edgesInto, layerAddress } from 'vizfootprint/def';
 import { exportFromSession } from 'vizfootprint/session';
 import { createSessionView, sessionSource } from 'vizfootprint-ui';
-import { ACCEPTED_RADIUS_COLUMN, BY_YEAR_ADDRESS, BY_YEAR_VIEW, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, EXO_VIEWS, RADII_PER_PLANET, SCATTER_ADDRESS, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, exoDef } from '../src/exo/def.js';
+import { ACCEPTED_RADIUS_COLUMN, BY_YEAR_ADDRESS, BY_YEAR_VIEW, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, EXO_RELATIONS, EXO_VIEWS, RADII_PER_PLANET, SCATTER_ADDRESS, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, exoDef } from '../src/exo/def.js';
 import { SPREAD_BUCKET } from '../src/exo/session.js';
 import { buildExoSurfaceAsync } from '../src/exo/surface.js';
 import { exoRows } from '../src/exo/rows.js';
@@ -296,7 +296,7 @@ describe('the histogram over a table an ACT mints — refused before it, landing
     await surface.session.dispatch({ ...gesture, range: null, cause: { ...cause, intent: 'clear the bucket' } });
   });
 
-  it('a planet picked on the scatter REACHES the years on the map and filters nothing there — the relation mints the edge, the read cannot judge the column (packet AH2)', async () => {
+  it('a planet picked on the scatter REACHES the years on the map and TRAVELS the relation to fill them — the pick arrives as the one reference the composite took its radius from (packets AH2, AM)', async () => {
     const { links } = await surface.session.overview();
 
     // THE MAP, printed once and pinned. `by_year` is a FRAME: it lists its one layer and stands as no edge's end.
@@ -318,21 +318,151 @@ describe('the histogram over a table an ACT mints — refused before it, landing
     // THE PICK. The edge carries it to the layer over `references`…
     const cause = { requestedBy: 'user' as const, computedBy: 'user' as const, intent: `read every published value for ${PLANET}` };
     expect((await surface.session.dispatch({ verb: 'select', viewId: SCATTER_ADDRESS, field: 'pl_name', value: PLANET, cause })).ok).toBe(true);
-    expect(surface.session.clausesFor(BY_YEAR_ADDRESS).map((c) => [c.from, c.response, c.clause])).toEqual([[SCATTER_ADDRESS, 'filter', { kind: 'point', field: 'pl_name', value: PLANET }]]);
-    // …and the READ narrows it: the edge exists because the tables are JOINED, but the clause is phrased in
-    // `pl_name`, a column `references` has not got, and the engine walks no relation to re-phrase it. So the
-    // years keep every row, and the overview says so for exactly this one consumer. The demo does not walk that
-    // relation by hand either (project, never re-derive): a pick that CHANGED the year bars would be a crossing
-    // the library has not stated, and that is a library gap to record, not a fold to write here.
-    const years = await surface.session.viewQuery({ viewId: BY_YEAR_ADDRESS, limit: 1 });
-    expect(years.ok && years.count).toBe(tables.references.length);
-    expect(years.ok ? years.clauses.find((c) => c.from === SCATTER_ADDRESS)?.narrowed : undefined).toEqual({
-      column: 'pl_name',
-      reason: 'table "references" has no column "pl_name" — a sentence about a column these rows do not have is not a claim about these rows',
+    // …and the READ can judge it, because the clause TRAVELLED. The edge exists because a declared relation joins
+    // the tables, and the clause is phrased in `pl_name`, a column `references` has not got — so the session walks
+    // that relation as a semi-join the SOURCE table's engine computes at dispatch (`vizfootprint` ·
+    // `src/session/session.ts` · `travelOf`: one ask of `planets` for the picked rows' `radius_ref`, deduplicated,
+    // is the far column's IN-list) and the clause arrives as a `match` on `ref`, the shape every tier already
+    // judges; `narrowed` is ABSENT for it. (Before AL the engine walked no relation, the years kept every row, and
+    // this test pinned that as the library's stated gap.) The demo still joins nothing (project, never re-derive):
+    // the set of far values IS the library's answer, and the tables are counted below only to say it is REAL.
+    //
+    // COUNTED BY HAND off `data/exo/pscomppars.csv`: the ONE composite row for TRAPPIST-1 e carries
+    // `pl_rade_reflink` = `<a refstr=AGOL_ET_AL__2021 …>Agol et al. 2021</a>`, so its `radius_ref` is
+    // 'AGOL_ET_AL__2021' — read off the table here, and checked once against that literal so a reader sees it.
+    const picked = tables.planets.filter((p) => p.pl_name === PLANET);
+    expect(picked).toHaveLength(1);
+    const radiusRef = picked[0]?.radius_ref;
+    expect(radiusRef).toBe('AGOL_ET_AL__2021');
+    // the relation it travelled — both ends verbatim off the def, never retyped
+    const relation = EXO_RELATIONS.find((r) => r.from.table === 'planets' && r.from.column === 'radius_ref' && r.to.table === 'references');
+    expect(relation).toBeDefined();
+    const reaching = surface.session.clausesFor(BY_YEAR_ADDRESS);
+    expect(reaching).toHaveLength(1);
+    expect(reaching[0]).toEqual({
+      from: SCATTER_ADDRESS,
+      fromLabel: 'Planets, as the composite table accepts them',
+      response: 'filter',
+      clause: { kind: 'match', field: 'ref', values: [radiusRef] },
+      via: {
+        path: [{ from: relation!.from, to: relation!.to }],
+        label: 'where the composite took its accepted radius from',
+        rows: 1, // the planets rows the point clause kept — the one composite row counted above
+        from: { kind: 'point', field: 'pl_name', value: PLANET },
+      },
     });
+    expect(reaching[0]?.via?.label).toBe(relation!.label);
+    expect(reaching[0]?.narrowed).toBeUndefined();
+
+    // THE READ: the years keep exactly the references whose `ref` is that value. `references` is keyed on `ref`
+    // (one row per reference the archive spells, `src/exo/etl.ts`), so that is ONE row — 'Agol et al. 2021',
+    // dated 2021 — counted by hand and derived off the table both.
+    const years = await surface.session.viewQuery({ viewId: BY_YEAR_ADDRESS, limit: 5 });
+    expect(years.ok).toBe(true);
+    if (!years.ok) return;
+    expect(tables.references.filter((r) => r.ref === radiusRef)).toHaveLength(1);
+    expect(years.count).toBe(1);
+    expect(years.count).toBe(tables.references.filter((r) => r.ref === radiusRef).length);
+    expect(years.rows.map((r) => [r['ref'], r['pub_year']])).toEqual([[radiusRef, 2021]]);
+    expect(years.clauses.map((c) => [c.from, c.narrowed, c.via !== undefined])).toEqual([[SCATTER_ADDRESS, undefined, true]]);
+    expect(years.clauses[0]?.via).toEqual(reaching[0]?.via);
+
+    // THE OVERVIEW states it in the same walk that states `narrowedFor` — a consumer is under `travelled` OR
+    // `narrowedFor`, never both, and this pick narrowed nowhere. Keyed by the consumer's address; the entry is the
+    // travelled clause, its `via` (path, label, rows — the read's `from` stays on the read door) and the
+    // consumer's DECLARED label, the layer's (`vizfootprint` · `src/session/layers.ts` · `labelAt`).
     const { activeSelections } = await surface.session.overview();
-    expect(Object.keys(activeSelections[0]?.narrowedFor ?? {})).toEqual([BY_YEAR_ADDRESS]);
+    expect(activeSelections.map((s) => s.viewId)).toEqual([SCATTER_ADDRESS]);
+    expect(activeSelections[0]?.narrowedFor).toBeUndefined();
+    const travelled = activeSelections[0]?.travelled;
+    expect(travelled).toEqual({
+      [BY_YEAR_ADDRESS]: {
+        clause: { kind: 'match', field: 'ref', values: [radiusRef] },
+        via: { path: [{ from: relation!.from, to: relation!.to }], label: 'where the composite took its accepted radius from', rows: 1 },
+        label: 'References by year',
+      },
+    });
+    expect(Object.keys(travelled ?? {})).toEqual([BY_YEAR_ADDRESS]);
+    expect(travelled?.[BY_YEAR_ADDRESS]?.label).toBe(exoDef(tables).encodings?.find((e) => e.viewId === BY_YEAR_VIEW)?.layers?.[0]?.label);
+
+    // THE TWO DOORS AGREE, travelled twin of the AH2 law: the set of consumers the OVERVIEW names under
+    // `travelled` is exactly the set of addresses on the map that the graph SENDS this clause to (`clausesFor`)
+    // AND whose READ door reports it with `via` (`viewQuery`). Every address the def declares is walked — the
+    // views and their layers — and NONE of them reports the pick `narrowed`.
+    const def = exoDef(tables);
+    const addresses = [...EXO_VIEWS, ...(def.encodings ?? []).flatMap((e) => (e.layers ?? []).map((l) => layerAddress(e.viewId, l.layerId)))];
+    const travelledAtRead: string[] = [];
+    for (const address of addresses) {
+      const sent = surface.session.clausesFor(address).some((c) => c.from === SCATTER_ADDRESS);
+      const window = await surface.session.viewQuery({ viewId: address, limit: 1 });
+      expect(window.ok, address).toBe(true);
+      if (!window.ok) continue;
+      expect(window.clauses.some((c) => c.from === SCATTER_ADDRESS && c.narrowed !== undefined), address).toBe(false);
+      if (sent && window.clauses.some((c) => c.from === SCATTER_ADDRESS && c.via !== undefined)) travelledAtRead.push(address);
+    }
+    expect(new Set(Object.keys(travelled ?? {}))).toEqual(new Set(travelledAtRead));
+
+    // THE WIRE: the in-process adapter the static page hands the desk (`web/site/exo/entry.tsx`) carries
+    // `travelled` byte-identical to the session's, whole or dropped (`vizfootprint-ui` · `sessionView.ts`).
+    const view = createSessionView(sessionSource(surface.session), { as: 'user' });
+    await view.refresh();
+    const served = view.getState().selections;
+    expect(served.map((s) => s.viewId)).toEqual([SCATTER_ADDRESS]);
+    expect(served[0]?.narrowedFor).toBeUndefined();
+    expect(JSON.stringify(served[0]?.travelled)).toBe(JSON.stringify(travelled));
+
     await surface.session.dispatch({ verb: 'select', viewId: SCATTER_ADDRESS, field: 'pl_name', value: null, cause: { ...cause, intent: 'clear the planet' } });
+  });
+
+  it('the sheet\'s own pick travels the OTHER relation to the years — every publication the planet has, and the bars are their years (packet AM)', async () => {
+    const cause = { requestedBy: 'user' as const, computedBy: 'user' as const, intent: `read every published value for ${PLANET}` };
+    expect((await surface.session.dispatch({ verb: 'select', viewId: SHEET_VIEW, field: 'pl_name', value: PLANET, cause })).ok).toBe(true);
+
+    // COUNTED BY HAND off `data/exo/ps.csv`: FIVE rows carry pl_name "TRAPPIST-1 e", and their `pl_refname`
+    // anchors are five DIFFERENT papers, in the archive's row order — Gillon et al. 2017 (2017-02), Grimm et al.
+    // 2018 (2018-05), Hirano et al. 2020 (2020-02), Ducrot et al. 2020 (2020-08), Agol et al. 2021 (2021-02) —
+    // so five distinct refs. Read off the table here, and checked once against the literals.
+    const measured = tables.measurements.filter((m) => m.pl_name === PLANET);
+    expect(measured).toHaveLength(5);
+    const refs = [...new Set(measured.map((m) => m.ref))];
+    expect(refs).toEqual(['GILLON_ET_AL__2017', 'GRIMM_ET_AL__2018', 'HIRANO_ET_AL__2020', 'DUCROT_ET_AL__2020', 'AGOL_ET_AL__2021']);
+    const relation = EXO_RELATIONS.find((r) => r.from.table === 'measurements' && r.from.column === 'ref' && r.to.table === 'references');
+    expect(relation).toBeDefined();
+
+    // the sheet's edge into the years carries the measurements→references relation, so the pick travels THAT one:
+    // one ask of `measurements` for the picked rows' `ref` (five rows, five values), deduplicated
+    const reaching = surface.session.clausesFor(BY_YEAR_ADDRESS);
+    expect(reaching).toEqual([{
+      from: SHEET_VIEW,
+      fromLabel: 'Every published value',
+      response: 'filter',
+      clause: { kind: 'match', field: 'ref', values: refs },
+      via: { path: [{ from: relation!.from, to: relation!.to }], label: 'the publication this measurement is from', rows: 5, from: { kind: 'point', field: 'pl_name', value: PLANET } },
+    }]);
+    // …while the scatter, whose table HAS `pl_name`, takes the direct path — the clause as the sheet made it, no `via`
+    expect(surface.session.clausesFor(SCATTER_ADDRESS)).toEqual([{ from: SHEET_VIEW, fromLabel: 'Every published value', response: 'filter', clause: { kind: 'point', field: 'pl_name', value: PLANET } }]);
+
+    // THE READ: the years keep the references with those five refs — five rows (`references` is keyed on `ref`),
+    // and their years are the publication dates above: 2017, 2018, 2020, 2020, 2021.
+    const years = await surface.session.viewQuery({ viewId: BY_YEAR_ADDRESS, limit: 10 });
+    expect(years.ok).toBe(true);
+    if (!years.ok) return;
+    expect(tables.references.filter((r) => refs.includes(r.ref))).toHaveLength(5);
+    expect(years.count).toBe(5);
+    expect(years.count).toBe(tables.references.filter((r) => refs.includes(r.ref)).length);
+    expect(years.rows.map((r) => r['pub_year']).sort()).toEqual([2017, 2018, 2020, 2020, 2021]);
+    expect(years.clauses.map((c) => [c.from, c.narrowed, c.via?.rows])).toEqual([[SHEET_VIEW, undefined, 5]]);
+
+    const { activeSelections } = await surface.session.overview();
+    expect(activeSelections.map((s) => s.viewId)).toEqual([SHEET_VIEW]);
+    expect(activeSelections[0]?.narrowedFor).toBeUndefined();
+    expect(Object.keys(activeSelections[0]?.travelled ?? {})).toEqual([BY_YEAR_ADDRESS]);
+    expect(activeSelections[0]?.travelled?.[BY_YEAR_ADDRESS]).toEqual({
+      clause: { kind: 'match', field: 'ref', values: refs },
+      via: { path: [{ from: relation!.from, to: relation!.to }], label: 'the publication this measurement is from', rows: 5 },
+      label: 'References by year',
+    });
+    await surface.session.dispatch({ verb: 'select', viewId: SHEET_VIEW, field: 'pl_name', value: null, cause: { ...cause, intent: 'clear the planet' } });
   });
 
   it('a gesture landed AT the frame is refused in words naming its layer; the same gesture at the layer is what fills the sheet (packet AH2)', async () => {

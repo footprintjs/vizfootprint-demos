@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { buildDashboard } from 'vizfootprint/def';
 import { layerAddress } from 'vizfootprint/def';
 import type { CommitRecord } from 'vizfootprint/log';
-import { nndssDef, GRAPH_ANALYSES, GRAPH_LAYOUT_SEED, NETWORK_VIEW, NETWORK_NODES_LAYER, NETWORK_EDGES_LAYER } from '../src/nndss/def.js';
+import { nndssDef, GRAPH_ANALYSES, GRAPH_LAYOUT_SEED, GRAPH_RELATIONS, NETWORK_VIEW, NETWORK_NODES_LAYER, NETWORK_EDGES_LAYER } from '../src/nndss/def.js';
 import { buildNndssSurface, buildNndssSurfaceAsync, graphRowsAt, layOutGraph } from '../src/nndss/surface.js';
 import { loadGraph } from '../src/nndss/snapshot.js';
 import type { NndssTables } from '../src/nndss/etl.js';
@@ -372,12 +372,57 @@ describe('one gesture on a node selects that node and what it touches', () => {
     expect(res.ok && (res.commit!.value as { ids: unknown[] }).ids).toEqual(['Mumps', 'Measles', 'Rubella']);
   });
 
-  it('reaches the NODES layer and nothing else: the def routes the walk, the default rule does not', async () => {
+  it('reaches the NODES layer and nothing else: the def routes the walk, the default rule does not — and it arrives BY IDENTITY, the recorded ids as a match on the key', async () => {
     const session = await tinySession();
-    await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Mumps', cause });
-    const reaching = (viewId: string): readonly string[] => session.clausesFor(viewId).filter((c) => c.clause.kind === 'neighbourhood').map((c) => c.response);
-    expect(reaching(NODES)).toEqual(['mirror']); // the ego net, lit on the circles
-    for (const other of ['diseases', 'coverage', 'kinds', 'map', 'weeks', 'trend', 'table', 'sheet']) expect(reaching(other)).toEqual([]);
+    const res = await session.dispatch({ verb: 'select', viewId: EDGES, field: 'source', seed: 'Mumps', cause });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // COUNTED BY HAND off TINY: Mumps ties to Measles (edge 1, as its target) and to Rubella (edge 2, as its
+    // source), so one hop of ego from Mumps is the seed and both — THREE ids, seed first, then in edge order.
+    const ids = (res.commit!.value as { readonly ids: readonly string[] }).ids;
+    expect(ids).toEqual(['Mumps', 'Measles', 'Rubella']);
+
+    // THE WALK TRAVELS BY IDENTITY (`vizfootprint` · `src/session/session.ts` · `travelByIdentity`; the travel is
+    // a strategy per clause kind — a point semi-joins, a walk does not). The clause is over the EDGES table's
+    // two endpoint columns, which `nodes` has not got; but the walk RECORDED the node keys it reached, and both
+    // endpoint relations land on `nodes.disease`, the consumer's key — so the nodes receive the recorded set as a
+    // `match` on that key with NO engine ask: the two relations on `via.path` in the def's order, `via.rows` the
+    // set's size, `via.label` both declarations' words joined, and the walk itself as `via.from`. (A semi-join
+    // over `source` would have answered {Measles, Mumps} and dropped Rubella, only ever a target — the defect
+    // this test caught, fixed in the library.) `narrowed` is absent: the clause was judged, on the key.
+    const [relSource, relTarget] = GRAPH_RELATIONS;
+    expect(session.clausesFor(NODES)).toEqual([{
+      from: EDGES,
+      fromLabel: 'Co-occurrences',
+      response: 'mirror', // the def's routing, not the default rule
+      clause: { kind: 'match', field: 'disease', values: ['Mumps', 'Measles', 'Rubella'] },
+      via: {
+        path: [{ from: relSource!.from, to: relSource!.to }, { from: relTarget!.from, to: relTarget!.to }],
+        label: 'one end of the pair, the other end of the pair',
+        rows: 3,
+        from: { kind: 'neighbourhood', fields: ['source', 'target'], ids: ['Mumps', 'Measles', 'Rubella'] },
+      },
+    }]);
+    const [arrived] = session.clausesFor(NODES);
+    expect(arrived?.clause.kind === 'match' ? arrived.clause.values : undefined).toEqual(ids); // derived from the commit's own record
+    expect(arrived?.via?.rows).toBe(ids.length);
+    expect(arrived?.via?.from.kind === 'neighbourhood' ? arrived.via.from.ids : undefined).toEqual(ids);
+    expect(arrived?.via?.label).toBe(`${relSource!.label}, ${relTarget!.label}`);
+    expect(arrived?.narrowed).toBeUndefined();
+    // every other view receives NOTHING — the def's `none` cuts stand, whatever kind the clause arrives as
+    for (const other of ['diseases', 'coverage', 'kinds', 'map', 'weeks', 'trend', 'table', 'sheet']) expect(session.clausesFor(other), other).toEqual([]);
+
+    // THE READ: the nodes window keeps the three node rows the set names — every row TINY has, since the ego net
+    // from Mumps is the whole tiny graph (3 node rows, counted off the fixture)
+    const nodes = await session.viewQuery({ viewId: NODES });
+    expect(nodes.ok && nodes.count).toBe(3);
+    expect(nodes.ok && nodes.count).toBe(TINY.nodes.filter((n) => ids.includes(n.disease)).length);
+    expect(nodes.ok && nodes.count).toBe(TINY.nodes.length);
+    // …and the overview says it for exactly this one consumer, under the layer's declared label
+    const live = (await session.overview()).activeSelections.find((s) => s.viewId === EDGES)!;
+    expect(Object.keys(live.travelled ?? {})).toEqual([NODES]);
+    expect(live.travelled?.[NODES]).toEqual({ clause: { kind: 'match', field: 'disease', values: ids }, via: { path: arrived!.via!.path, label: arrived!.via!.label, rows: 3 }, label: 'Diseases' });
+    expect(live.narrowedFor).toBeUndefined();
     // …so every other view's window still reads: a clause naming `source` would refuse a table that has no such column
     const window = await session.viewQuery({ viewId: 'diseases' });
     expect(window.ok).toBe(true);

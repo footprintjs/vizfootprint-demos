@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
-import { SelectionChips, createSessionView, narrowedWords, selectionForView, sessionSource, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
+import { SelectionChips, createSessionView, narrowedWords, selectionForView, sessionSource, travelledWords, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
 import { radiiBins, useExoCells, useExoSilences, type ExoDeskData } from '../web/src/exoCells.js';
 import type { Row } from '../web/src/derive.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/exo/absence.js';
@@ -331,6 +331,56 @@ describe('the three cells over the committed slice', () => {
     expect(barsOf(withYear)).toBe(barsOf(QUIET));
   }, 120_000);
 
+  it('a planet picked on the scatter FILLS the year bars — the cell folds the TRAVELLED clause at its layer address, and joins nothing (packet AM)', async () => {
+    const data = await realData();
+    // COUNTED BY HAND off `data/exo/pscomppars.csv`: the one composite row for TRAPPIST-1 e takes its radius
+    // from `<a refstr=AGOL_ET_AL__2021 …>Agol et al. 2021</a>`; `references` is keyed on `ref`, so that is ONE
+    // reference row, dated 2021. Read off the tables here and checked once against the literals.
+    const PLANET = 'TRAPPIST-1 e';
+    const ref = data.planets.find((p) => p['pl_name'] === PLANET)?.['radius_ref'];
+    expect(ref).toBe('AGOL_ET_AL__2021');
+    const cited = data.references.filter((r) => r['ref'] === ref);
+    expect(cited.map((r) => r['pub_year'])).toEqual([2021]);
+
+    // THE WIRE'S KEY, as the session hands it to the desk (`tests/exo-session.test.ts` pins it byte-identical
+    // off the real session): the clause travelled `planets.radius_ref → references.ref` and arrived as a `match`
+    // on `ref`. The cell is NOT changed for it — `selFor(BY_YEAR_ADDRESS)` already folds the layer, and the
+    // library's `selectionForView` now picks the consumer's travelled clause out of the source's map (protocol
+    // 1.9), so the bars filter on the far column with no join of the desk's own.
+    const PICK: SelectionView = { viewId: SCATTER_ADDRESS, kind: 'point', field: 'pl_name', value: PLANET, commitId: 'pick' };
+    const TRAVELLED: SelectionView = {
+      ...PICK,
+      travelled: {
+        [BY_YEAR_ADDRESS]: {
+          clause: { kind: 'match', field: 'ref', values: [ref] },
+          via: { path: [{ from: { table: 'planets', column: 'radius_ref' }, to: { table: 'references', column: 'ref' } }], label: 'where the composite took its accepted radius from', rows: 1 },
+          label: 'References by year',
+        },
+      },
+    };
+    const pointInto = (target: string): LinkGraphView => ({
+      default: 'crossfilter',
+      views: [],
+      edges: [{ id: `${SCATTER_ADDRESS}:point→${target}`, source: SCATTER_ADDRESS, target, kind: 'point', response: 'filter', origin: 'default', via: [{ from: { table: 'planets', column: 'radius_ref' }, to: { table: 'references', column: 'ref' } }] }],
+    });
+    const deskWith = (s: SelectionView): DeskProjection => ({ ...QUIET, state: { ...QUIET.state, selections: [s] }, selFor: (self: string | null) => selectionForView([s], self, 'intersect', pointInto(self ?? ''), []) }) as unknown as DeskProjection;
+    const barsOf = (desk: DeskProjection): readonly { readonly category: string; readonly count: number }[] =>
+      (cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 }) as React.ReactElement<{ readonly data: readonly { readonly category: string; readonly count: number }[] }>).props.data;
+    const rectsOf = (desk: DeskProjection): number => count(renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 })}</>), 'rect');
+
+    // WITH the key: ONE bar, the one reference's year, one reference tall — hand-counted above and derived here
+    expect(barsOf(deskWith(TRAVELLED))).toEqual([{ category: '2021', count: 1 }]);
+    expect(barsOf(deskWith(TRAVELLED))).toEqual(cited.map((r) => ({ category: String(r['pub_year']), count: 1 })));
+    // …and the picture agrees: every bar is one `rect`, so the rects drop by (all the years − 1)
+    const quiet = barsOf(QUIET);
+    expect(quiet.length).toBeGreaterThan(1);
+    expect(rectsOf(deskWith(TRAVELLED))).toBe(rectsOf(QUIET) - (quiet.length - 1));
+    // WITHOUT the key the same pick is a clause about `pl_name`, a column these rows have not got, and the render
+    // tier keeps a row that lacks the column — every bar stands. So the far set on the wire is the WHOLE
+    // difference, exactly the library's law: the tier never joins, the session's answer fills the bars.
+    expect(barsOf(deskWith(PICK))).toEqual(quiet);
+  }, 120_000);
+
   it('the scatter says which planet it is showing off ITS OWN layer\'s clause — the frame hears nothing (packet AH2)', async () => {
     const data = await realData();
     const planet = String(data.planets[0]?.['pl_name']);
@@ -435,5 +485,51 @@ describe('the chip under the brush says where it filtered nothing', () => {
     expect(notes.map((n) => n.text)).toEqual(Object.entries(narrowedFor).map(([address, at]) => narrowedWords(address, at)));
 
     await surface.session.dispatch({ ...gesture, range: null, cause: { ...cause, intent: 'clear the bucket' } });
+  }, 120_000);
+
+  it('the chip under the PICK says where it reached through a relation — one role="note" line, verbatim, a sibling of the ✕ (packet AM)', async () => {
+    const surface = await realSurface();
+    const PLANET = 'TRAPPIST-1 e';
+    const cause = { requestedBy: 'user' as const, computedBy: 'user' as const, intent: `read every published value for ${PLANET}` };
+    expect((await surface.session.dispatch({ verb: 'select', viewId: SCATTER_ADDRESS, field: 'pl_name', value: PLANET, cause })).ok).toBe(true);
+
+    const view = createSessionView(sessionSource(surface.session), { as: 'user' });
+    await view.refresh();
+    const state = view.getState();
+    const served = state.selections;
+    expect(served.map((s) => s.viewId)).toEqual([SCATTER_ADDRESS]);
+    // rendered LIVE (not `readOnly`), with a clear handler, so the chip carries its ✕ and the sibling check bites
+    const cleared: string[] = [];
+    const html = renderToStaticMarkup(
+      <SelectionChips selections={served} cleared={state.cleared} links={state.links} labels={Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId]))} onClear={(viewId) => void cleared.push(viewId)} />,
+    );
+
+    // ONE chip, the pick's own; under it ONE line, travelled and never narrowed — the pick was judged everywhere
+    expect(count(html, 'span class="vzf-selchip"')).toBe(1);
+    expect(html).toContain(`data-view="${SCATTER_ADDRESS}"`);
+    expect(count(html, 'span role="note" class="vzf-selchip-travelled"')).toBe(1);
+    expect(html).not.toContain('vzf-selchip-narrowed');
+    // THE SENTENCE, VERBATIM: `reached <consumer's declared label> through <relation's declared label> · N <far> values`
+    // — the consumer named by the layer's `label`, the relation by its own `label` in `EXO_RELATIONS`, the count
+    // the set the pick became (COUNTED BY HAND: TRAPPIST-1 e's composite radius cites ONE reference,
+    // AGOL_ET_AL__2021 — `tests/exo-session.test.ts`). Composed by `vizfootprint-ui` · `travelledWords`; nothing here.
+    const notes = notesOf(html);
+    expect(notes).toEqual([{ consumer: BY_YEAR_ADDRESS, text: 'reached References by year through where the composite took its accepted radius from · 1 ref values' }]);
+    const travelled = served[0]?.travelled ?? {};
+    expect(Object.keys(travelled)).toEqual([BY_YEAR_ADDRESS]);
+    expect(notes.map((n) => n.text)).toEqual(Object.entries(travelled).map(([address, at]) => travelledWords(address, at)));
+
+    // CLICK-SAFETY on static markup (the library proves it in a DOM — `vizfootprint-ui` · `SelectionChips.travelled.test.tsx`,
+    // "the note is a SIBLING of the clear/flip/save controls"): the chip DOES render buttons here (✕, and the flip a
+    // point allows), and at the note's position every `<button` opened before it has already closed — the line
+    // sits beside the controls, inside none, so a reader clicking the words clears nothing.
+    const at = html.indexOf('class="vzf-selchip-travelled"');
+    expect(at).toBeGreaterThan(0);
+    expect(count(html, 'button')).toBeGreaterThan(0);
+    const before = html.slice(0, at);
+    expect(count(before, 'button')).toBe((before.match(/<\/button>/g) ?? []).length);
+    expect(cleared).toEqual([]);
+
+    await surface.session.dispatch({ verb: 'select', viewId: SCATTER_ADDRESS, field: 'pl_name', value: null, cause: { ...cause, intent: 'clear the planet' } });
   }, 120_000);
 });

@@ -404,7 +404,10 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       // every one of their windows would be refused for a column that was never
       // theirs. It reaches exactly one place, and it MIRRORS there: the nodes
       // layer lights the ego net the walk recorded (the answer is on the commit,
-      // so time travel shows the set that walk found, not today's).
+      // so time travel shows the set that walk found, not today's). The walk
+      // TRAVELS there by identity — the recorded ids arrive as a match on
+      // `nodes.disease` over both endpoint relations, no engine asked
+      // (`vizfootprint` · `src/session/session.ts` · `travelByIdentity`).
       ...(graph === undefined ? [] : walkLinks(Object.keys(actors))),
     ],
     // The encoding plane's HOUSE RULES, as data — the same sentences refuse a bad initial binding
