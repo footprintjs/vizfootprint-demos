@@ -294,15 +294,30 @@ describe('what the def says ABOUT the network, and not just about its rows', () 
     expect(point.ok).toBe(true);
   });
 
-  it('declares its GRAIN, so an edge into it names its fold like every other', async () => {
+  it('declares its GRAIN — and, the frame being its layers, the edges land on the nodes layer with no fold to name', async () => {
     const session = await tinySession();
-    const views = (await session.overview()).links.views;
-    expect(views.find((v) => v.viewId === NETWORK_VIEW)?.grain).toEqual(['disease']);
-    // a view over another grain crossing into the network now says how it folds
-    const edge = (await session.overview()).links.edges.find((e) => e.source === 'map' && e.target === NETWORK_VIEW && e.kind === 'point');
-    expect(edge?.fold).toBe('crossfilter');
-    // …and one over the SAME grain does not cross, so it names none
-    const same = (await session.overview()).links.edges.find((e) => e.source === 'diseases' && e.target === NETWORK_VIEW && e.kind === 'point');
+    const { links } = await session.overview();
+    expect(links.views.find((v) => v.viewId === NETWORK_VIEW)?.grain).toEqual(['disease']);
+
+    // RE-PINNED under AJ ("the frame is its layers", `vizfootprint/def` README law 6a; packet AH2). `net` binds
+    // nothing at its own level, so it is a FRAME on the map — it lists its layers in declaration order, draws no
+    // table, and the default rule mints no edge into or out of it. The edge this test used to read, `map:point→net`
+    // with `fold: 'crossfilter'`, does not exist any more; what exists is `map:point→net~nodes`.
+    const nodes = layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER);
+    expect(links.views.find((v) => v.viewId === NETWORK_VIEW)).toMatchObject({ frame: [layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER), nodes] });
+    expect(links.edges.filter((e) => e.source === NETWORK_VIEW || e.target === NETWORK_VIEW)).toEqual([]);
+    const edge = links.edges.find((e) => e.source === 'map' && e.target === nodes && e.kind === 'point');
+    expect(edge).toMatchObject({ response: 'filter', origin: 'default' });
+    // THE RESIDUE, stated rather than hidden: a grain is declared per VIEW and a layer's node carries none
+    // (`vizfootprint/def` · `layers.ts` · `layerLinkViewOf`: `{ viewId, voice, table }`), so `crossesGrain` is
+    // false at the layer and the crossing the map used to state on the frame's edge is stated nowhere. The
+    // nodes layer draws one mark per disease and the map emits over jurisdictions — that IS a crossing. When
+    // the library gives a layer its frame's grain, this line moves to `'crossfilter'`; until then the map
+    // names none, and this pin is what will say so the day it changes.
+    expect(edge?.fold).toBeUndefined();
+    // …and the one over the SAME grain names none either, for the reason it always did
+    const same = links.edges.find((e) => e.source === 'diseases' && e.target === nodes && e.kind === 'point');
+    expect(same).toMatchObject({ response: 'filter', origin: 'default' });
     expect(same?.fold).toBeUndefined();
   });
 

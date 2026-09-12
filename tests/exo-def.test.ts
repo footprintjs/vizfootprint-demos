@@ -16,6 +16,9 @@ import { ABSENCE_FIELD, ABSENCE_STATES, CARRIES, CARRIES_NOTE, PRESENT } from '.
 import { exoTables } from '../src/exo/etl.js';
 import {
   ACCEPTED_RADIUS_COLUMN,
+  BY_YEAR_ADDRESS,
+  BY_YEAR_LAYER,
+  BY_YEAR_VIEW,
   DELTA_COLUMN,
   DISAGREES_COLUMN,
   EXO_ACT_ORDER,
@@ -160,10 +163,20 @@ describe('what the views can and cannot say, declared', () => {
     expect(def.links?.every((l) => l.source !== SPREAD_VIEW && l.source !== SPREAD_ADDRESS)).toBe(true);
   });
 
-  it('the two edges that DO carry a clause state their fold, because both cross grains', () => {
+  it('the two edges that DO carry a clause state their fold, because both cross grains — and both leave from a LAYER', () => {
     const carrying = exoDef(TINY).links?.filter((l) => l.response === 'filter') ?? [];
-    expect(carrying.map((l) => `${l.source} → ${String(l.target)}`)).toEqual(['mass_radius~planets → sheet', 'by_year → sheet']);
+    // RE-PINNED under AJ ("the frame is its layers"; packet AH2): the years' edge used to leave from `by_year`,
+    // and the def door now refuses an edge naming a frame — `links[1].source "by_year" is a frame that reads
+    // only through its layers — name one: by_year~references` — because a frame reads no rows of its own.
+    // So it leaves from the layer over `references`, exactly as the scatter's leaves from its layer over `planets`.
+    expect(carrying.map((l) => `${l.source} → ${String(l.target)}`)).toEqual(['mass_radius~planets → sheet', 'by_year~references → sheet']);
+    expect(BY_YEAR_ADDRESS).toBe(`${BY_YEAR_VIEW}~${BY_YEAR_LAYER}`);
     expect(carrying.every((l) => typeof l.fold === 'string' && l.fold.length > 10)).toBe(true);
+    // …and the door is what would refuse the old spelling: the parse says the sentence, the build throws it
+    const atFrame = { ...exoDef(TINY), links: carrying.map((l) => (l.source === BY_YEAR_ADDRESS ? { ...l, source: BY_YEAR_VIEW } : l)) };
+    const parsed = parseDashboardDef(atFrame);
+    expect(parsed.ok).toBe(false);
+    expect(!parsed.ok && parsed.problems).toContain(`links[1].source "${BY_YEAR_VIEW}" is a frame that reads only through its layers — name one: ${BY_YEAR_ADDRESS}`);
   });
 
   it('the scatter declares LOGARITHMIC axes on its frame, and no hand-typed window anywhere', () => {

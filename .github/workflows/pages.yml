@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: footprintjs/vizfootprint
-          ref: 5ace74425af30508ef3eafdc11f97367970ff17a
+          ref: 5bed5219d70b88a201886d28d43803d8d90a5d7c
           path: vizfootprint
 
       # the Story tab's scroll lens, the third `file:` sibling — `npm install`

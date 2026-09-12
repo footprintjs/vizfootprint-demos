@@ -87,8 +87,22 @@ export const SPREAD_VIEW = 'spread';
 export const SPREAD_LAYER = 'buckets';
 /** Where a click on a bar lands. Before the aggregate act has landed, the probe door refuses it BY THIS ADDRESS and names the act. */
 export const SPREAD_ADDRESS = layerAddress(SPREAD_VIEW, SPREAD_LAYER);
+/**
+ * The bar chart over the `references` table, and the one layer under it — the
+ * layer names the table, exactly as the scatter's and the histogram's do.
+ */
 export const BY_YEAR_VIEW = 'by_year';
 export const BY_YEAR_LAYER = 'references';
+/**
+ * Where a click on a year lands. THE FRAME IS ITS LAYERS (`vizfootprint/def`
+ * README, law 6a): this view binds nothing at its own level, so `by_year` is a
+ * FRAME on the link map — not a node that reads rows — and a gesture landed at
+ * the frame's own id is refused by the session in words naming this address.
+ * The bar chart emits and folds here; the declared edge into the sheet leaves
+ * from here too, because the def door refuses the frame as a source in the same
+ * sentence.
+ */
+export const BY_YEAR_ADDRESS = layerAddress(BY_YEAR_VIEW, BY_YEAR_LAYER);
 export const SHEET_VIEW = 'sheet';
 
 /** The dashboard's DECLARED words — the def's prose entry and the page's fallback read the same constant. */
@@ -498,6 +512,10 @@ function scatterProse(tables: ExoTables): ProseDecl {
  * reason is the library's own sentence rather than ours — printed under the
  * sheet's rows by the library's own grid (`vizfootprint-ui` · `narrowedSaid`),
  * which is why the layer's declared `label` is the name a reader sees there.
+ * The chip under the brush says it too (`vizfootprint-ui` · `narrowedWords`,
+ * one line per consumer from the overview's `narrowedFor`, each named by ITS
+ * declared label), so a reader who looks at the gesture rather than the sheet
+ * also hears it — one fact, two vantages.
  *
  * What the DEMO still knows, and the library cannot: a bucket is a set of
  * PLANETS, and the other two charts and the sheet are about planets too — so a
@@ -513,7 +531,10 @@ function scatterProse(tables: ExoTables): ProseDecl {
 function exoLinks(): readonly LinkDecl[] {
   return [
     { source: SCATTER_ADDRESS, kind: 'point', target: SHEET_VIEW, response: 'filter', fold: 'every published solution for the picked planet, oldest first', label: 'a dot on the scatter is whose publications the sheet lists' },
-    { source: BY_YEAR_VIEW, kind: 'point', target: SHEET_VIEW, response: 'filter', fold: 'the publications the archive dates to the picked year', label: 'a year on the bar is which publications the sheet keeps' },
+    // the source is the LAYER, as the scatter's is: the frame `by_year` reads no rows of its own, and
+    // the def door refuses an edge that names it (`links[1].source "by_year" is a frame that reads
+    // only through its layers — name one: by_year~references`)
+    { source: BY_YEAR_ADDRESS, kind: 'point', target: SHEET_VIEW, response: 'filter', fold: 'the publications the archive dates to the picked year', label: 'a year on the bar is which publications the sheet keeps' },
   ];
 }
 

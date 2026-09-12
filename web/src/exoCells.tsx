@@ -59,9 +59,9 @@ import { useMemo, type ReactNode } from 'react';
 import { VizBar, VizHistogram, VizScatter, keepPredicate, placeable, type ChartDomain, type HistogramBinDatum, type ScaleKind, type ScatterDatum, type SessionViewState } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection, DeskSilence } from 'vizfootprint-studio/desk';
 import { categoryCounts, emitIntent, pickedFrom, type Row } from './derive.js';
-import { DISAGREES_COLUMN, SCATTER_ADDRESS, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, BY_YEAR_VIEW } from '../../src/exo/def.js';
+import { DISAGREES_COLUMN, SCATTER_ADDRESS, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, BY_YEAR_ADDRESS, BY_YEAR_VIEW } from '../../src/exo/def.js';
 
-export { SCATTER_VIEW, SCATTER_ADDRESS, SPREAD_VIEW, SPREAD_ADDRESS, BY_YEAR_VIEW };
+export { SCATTER_VIEW, SCATTER_ADDRESS, SPREAD_VIEW, SPREAD_ADDRESS, BY_YEAR_VIEW, BY_YEAR_ADDRESS };
 
 // ── the vocabulary's colours ─────────────────────────────────────────────────
 
@@ -275,9 +275,18 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
     [derived],
   );
 
-  /** References per year — one pass, whatever the number of bars. */
+  /**
+   * References per year — one pass, whatever the number of bars.
+   *
+   * Keyed on the LAYER ADDRESS like the histogram's bins: the bars select under
+   * `by_year~references` (the layer whose table they draw), so that is the
+   * clause `keepPredicate` must exclude as its own. THE FRAME IS ITS LAYERS
+   * (`vizfootprint/def` README, law 6a): `by_year` binds nothing at its own
+   * level, so it is a frame on the link map — no edge lands there, and a fold
+   * read under the frame's id would hear nothing at all.
+   */
   const yearBars = useMemo(() => {
-    const keep = keepPredicate(selFor(BY_YEAR_VIEW));
+    const keep = keepPredicate(selFor(BY_YEAR_ADDRESS));
     return categoryCounts(references, yearField, keep);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
   }, [references, yearField, ...sel]);
@@ -285,7 +294,14 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
   /** SILENCE FOUR: a reference with no year — the composite cites it and no confirmed measurement row does, so no row carries its date. */
   const undated = useMemo(() => references.filter((r) => r[yearField] === null || r[yearField] === undefined).length, [references, yearField]);
 
-  /** The planet a view is showing, read through the LINK GRAPH like every other consumer. */
+  /**
+   * The planet a view is showing, read through the LINK GRAPH like every other
+   * consumer — and for the scatter itself, read at ITS OWN LAYER: the pick lives
+   * at `mass_radius~planets`, and `selFor` keeps a view's own clause as-is. Asked
+   * under the frame's id it answered the fallback forever: no edge ever ran from
+   * a layer into its own frame (`vizfootprint/links` · `sharesFrame`), and since
+   * the frame is its layers (law 6a) nothing lands at `mass_radius` at all.
+   */
   const planetFor = (viewId: string): string => pickedFrom(selFor(viewId), SCATTER_ADDRESS, 'pl_name', 'every planet in view');
 
   const emit = (viewId: string, verb: string) => (e: Parameters<typeof view.emit>[1]) => void view.emit(viewId, e, emitIntent(verb, e));
@@ -320,7 +336,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
             // SILENCE FIVE: a dot plotted from a bound, not a measurement — said here because nothing on
             // the chart itself marks the difference (no second shape, no second colour channel to spend)
             assembled.bounded === 0 ? null : `${count(assembled.bounded)} of these dots are plotted from a BOUND rather than a measurement — the accepted radius or mass for that planet is only an upper or lower limit, and this chart has no way to mark that differently`,
-            `click a planet to fill the sheet with every value ever published for it (showing: ${planetFor(SCATTER_VIEW)})`,
+            `click a planet to fill the sheet with every value ever published for it (showing: ${planetFor(SCATTER_ADDRESS)})`,
           ]
             .filter((s): s is string => s !== null)
             .join(' · ')}
@@ -405,7 +421,15 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
         ),
     },
     {
+      // `id` stays the VIEW: the desk's projection keys a chart's encoding fold,
+      // its fits, its prose and its label by view id (`vizfootprint-studio/desk` ·
+      // `projection.tsx`: `shown[viewId]`, `fitsOf`, `words`), and a layer's own
+      // initials are the library's next packet, not this one
       id: BY_YEAR_VIEW,
+      // the bars belong to the REFERENCES layer, whose table they draw — the desk's ✕
+      // and its clear follow that address, and so does the session's refusal of a
+      // gesture landed at the frame's own id
+      clauseId: BY_YEAR_ADDRESS,
       weight: 3,
       caption: (
         <>
@@ -422,17 +446,21 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
       ),
       render: ({ width, height }) => (
         <VizBar
+          // the VIEW: this prop names the picker's target, and a rebind is the view's encoding fold
           viewId={BY_YEAR_VIEW}
           data={yearBars}
           field={yearField}
           colorOf={colorOfYear}
-          selection={selFor(BY_YEAR_VIEW)}
+          // the LAYER: the clauses that reached `by_year~references`, self excluded — the frame hears none
+          selection={selFor(BY_YEAR_ADDRESS)}
           columns={columns}
           fits={desk.fitsOf(BY_YEAR_VIEW)}
           encoding={shown[BY_YEAR_VIEW] ?? {}}
           width={width}
           height={height}
-          onEmit={emit(BY_YEAR_VIEW, 'select')}
+          // a POINT over `references`' year, landed under the layer's address — the session
+          // refuses the same gesture at `by_year` in a sentence that names this address
+          onEmit={emit(BY_YEAR_ADDRESS, 'select')}
           onReencode={reencode}
         />
       ),

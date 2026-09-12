@@ -20,13 +20,14 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
-import { selectionForView, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
+import { SelectionChips, createSessionView, narrowedWords, selectionForView, sessionSource, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
 import { radiiBins, useExoCells, useExoSilences, type ExoDeskData } from '../web/src/exoCells.js';
 import type { Row } from '../web/src/derive.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/exo/absence.js';
-import { exoDef, BY_YEAR_VIEW, SCATTER_VIEW, SPREAD_ADDRESS, SPREAD_VIEW } from '../src/exo/def.js';
+import { exoDef, BY_YEAR_ADDRESS, BY_YEAR_VIEW, SCATTER_ADDRESS, SCATTER_VIEW, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_VIEW } from '../src/exo/def.js';
 import { exoTables } from '../src/exo/etl.js';
-import { buildExoSurfaceAsync } from '../src/exo/surface.js';
+import { SPREAD_BUCKET } from '../src/exo/session.js';
+import { buildExoSurfaceAsync, type ExoSurface } from '../src/exo/surface.js';
 import { loadExo } from '../src/exo/snapshot.js';
 import { TINY_PS, TINY_PSCOMPPARS } from './exoFixture.js';
 
@@ -120,14 +121,17 @@ const count = (html: string, tag: string): number => (html.match(new RegExp(`<${
  * test is CPU that proves nothing the first read did not, and it starves the
  * rest of the suite's workers.
  */
-let once: Promise<ExoDeskData> | null = null;
-const realData = (): Promise<ExoDeskData> => (once ??= buildRealData());
+let once: Promise<{ readonly data: ExoDeskData; readonly surface: ExoSurface }> | null = null;
+const real = (): Promise<{ readonly data: ExoDeskData; readonly surface: ExoSurface }> => (once ??= buildReal());
+const realData = async (): Promise<ExoDeskData> => (await real()).data;
+/** The same one build's live session — for the chip strip, which reads the session's own overview and not the rows (packet AH). */
+const realSurface = async (): Promise<ExoSurface> => (await real()).surface;
 
-async function buildRealData(): Promise<ExoDeskData> {
+async function buildReal(): Promise<{ readonly data: ExoDeskData; readonly surface: ExoSurface }> {
   const tables = loadExo();
   const surface = await buildExoSurfaceAsync(tables);
   expect(surface.actRefusals).toEqual([]);
-  return {
+  const data: ExoDeskData = {
     measurements: tables.measurements,
     planets: tables.planets,
     references: tables.references,
@@ -135,6 +139,7 @@ async function buildRealData(): Promise<ExoDeskData> {
     derivedRefused: surface.derived.refused,
     absence: ABSENCE,
   };
+  return { data, surface };
 }
 
 describe('the three cells over the committed slice', () => {
@@ -300,6 +305,44 @@ describe('the three cells over the committed slice', () => {
     expect(caption).toContain(`${data.references.length.toLocaleString('en-US')} references`);
     if (undated > 0) expect(caption).toContain(`${undated.toLocaleString('en-US')} carry no year`);
   }, 120_000);
+
+  it('a click on a year really dispatches — a POINT, at the LAYER address, and the cell folds its clause there (packet AH2)', async () => {
+    const data = await realData();
+    const emitted: { viewId: string; emission: unknown; intent: string }[] = [];
+    const spy = { ...QUIET, view: { ...QUIET.view, emit: (viewId: string, emission: unknown, intent: string) => void emitted.push({ viewId, emission, intent }) } } as unknown as DeskProjection;
+    const cell = cellsOf(data, spy).find((c) => c.id === BY_YEAR_VIEW)!;
+    // THE FRAME IS ITS LAYERS (AJ): `by_year` binds nothing at its own level, so the session refuses a gesture
+    // landed at `by_year` (`view "by_year" reads only through its layers — a gesture lands under one of them:
+    // by_year~references`, code `guard-failed`). The desk's ✕ and its clear follow the layer too.
+    expect(cell.clauseId).toBe(BY_YEAR_ADDRESS);
+    const chart = cell.render({ width: 800, height: 400 });
+    const props = (chart as React.ReactElement<{ readonly viewId: string; readonly onEmit?: (e: unknown) => void }>).props;
+    // the chart's `viewId` stays the VIEW: it names the picker's target, and a rebind is the view's encoding fold
+    expect(props.viewId).toBe(BY_YEAR_VIEW);
+    props.onEmit!({ rawValue: 2015, encoding: { kind: 'point', field: 'pub_year' } });
+    expect(emitted).toEqual([{ viewId: BY_YEAR_ADDRESS, emission: { rawValue: 2015, encoding: { kind: 'point', field: 'pub_year' } }, intent: 'select pub_year' }]);
+
+    // and the FOLD reads the same address: a clause reaching `by_year~references` is what the bars answer,
+    // self excluded — a year picked on this chart outlines the bar and drops none, like the histogram's bucket
+    const year = data.references.find((r) => typeof r['pub_year'] === 'number')?.['pub_year'];
+    const YEAR: SelectionView = { viewId: BY_YEAR_ADDRESS, kind: 'point', field: 'pub_year', value: year, commitId: 'year' };
+    const withYear = { ...QUIET, state: { ...QUIET.state, selections: [YEAR] }, selFor: (self: string | null) => selectionForView([YEAR], self, 'intersect', crossfilterInto(self ?? ''), []) } as unknown as DeskProjection;
+    const barsOf = (desk: DeskProjection): number => count(renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 })}</>), 'rect');
+    expect(barsOf(withYear)).toBe(barsOf(QUIET));
+  }, 120_000);
+
+  it('the scatter says which planet it is showing off ITS OWN layer\'s clause — the frame hears nothing (packet AH2)', async () => {
+    const data = await realData();
+    const planet = String(data.planets[0]?.['pl_name']);
+    const PICK: SelectionView = { viewId: SCATTER_ADDRESS, kind: 'point', field: 'pl_name', value: planet, commitId: 'pick' };
+    // the library's own resolver over a graph with NO edge into the frame: `selFor(SCATTER_VIEW)` hears nothing
+    // (a layer never drives its own frame — `vizfootprint/links` · `sharesFrame` — and under AJ the frame is no
+    // node at all), while `selFor(SCATTER_ADDRESS)` keeps the view's own clause as-is. The caption reads the latter.
+    const graph: LinkGraphView = { default: 'crossfilter', views: [], edges: [] };
+    const picked = { ...QUIET, state: { ...QUIET.state, selections: [PICK] }, selFor: (self: string | null) => selectionForView([PICK], self, 'intersect', graph, []) } as unknown as DeskProjection;
+    expect(textOf(cellsOf(data, picked).find((c) => c.id === SCATTER_VIEW)!.caption)).toContain(`(showing: ${planet})`);
+    expect(textOf(cellsOf(data).find((c) => c.id === SCATTER_VIEW)!.caption)).toContain('(showing: every planet in view)');
+  }, 120_000);
 });
 
 describe('a desk with nothing in it says so, and draws nothing', () => {
@@ -322,5 +365,75 @@ describe('a desk with nothing in it says so, and draws nothing', () => {
     // the counts are of the WHOLE table: a silence is a fact about the data, not about what is on screen
     expect(groups.find((g) => g.state === 'limit')?.total).toBe(data.measurements.filter((m) => m['radius_state'] === 'limit').length);
     expect(groups.find((g) => g.state === 'unknown')?.total).toBe(0);
+  }, 120_000);
+});
+
+/**
+ * THE CHIP UNDER THE BRUSH SAYS IT TOO — one fact, two vantages (packet AH).
+ *
+ * `tests/exo-session.test.ts` pins the Sheet's side of the narrowing (the
+ * clause `narrowed` on the window, and `narrowedSaid`'s two inputs) and the
+ * overview's `narrowedFor`. This is the SOURCE's side: the chip that names the
+ * brush prints one `role="note"` line per consumer it filtered nothing on,
+ * composed by `vizfootprint-ui` · `narrowedWords` from that same `narrowedFor`
+ * — so a reader who looks at the gesture rather than the sheet hears it as well.
+ *
+ * WHY `SelectionChips` directly and not the studio `Desk`: no test in this
+ * repository renders the Desk (the cells are rendered against a stub
+ * projection, `QUIET`, for the reason given at the top of this file), and a
+ * harness for it is not this packet's to build. So the strip is rendered the
+ * way `vizfootprint-studio/desk` · `Desk` renders it — the same component, the
+ * same props, `labels` built the way `useDeskProjection` builds them — over the
+ * same in-process session view the static page hands the desk
+ * (`web/site/exo/entry.tsx` · `createSessionView(sessionSource(session))`).
+ */
+describe('the chip under the brush says where it filtered nothing', () => {
+  /** Already-rendered text, the entities static markup escapes put back — `textOf` renders a node, and rendering a string again would escape it twice. */
+  const plain = (rendered: string): string => rendered.replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
+  /** Each rendered `role="note"` line: which consumer it is about, and the words a reader sees. */
+  const notesOf = (html: string): readonly { readonly consumer: string; readonly text: string }[] =>
+    [...html.matchAll(/<span([^>]*)>([^<]*)<\/span>/g)]
+      .filter((m) => / role="note"/.test(m[1] ?? ''))
+      .map((m) => ({ consumer: /data-consumer="([^"]+)"/.exec(m[1] ?? '')?.[1] ?? '', text: plain(m[2] ?? '') }));
+
+  it('one role="note" line per consumer, in the library\'s own words, and no line for a consumer that judged the clause', async () => {
+    const surface = await realSurface();
+    const gesture = { verb: 'filter' as const, viewId: SPREAD_ADDRESS, field: 'radii', range: [...SPREAD_BUCKET] as [number, number] };
+    const cause = { requestedBy: 'user' as const, computedBy: 'user' as const, intent: 'the planets with one published radius' };
+    expect((await surface.session.dispatch({ ...gesture, cause })).ok).toBe(true);
+
+    const view = createSessionView(sessionSource(surface.session), { as: 'user' });
+    await view.refresh();
+    const state = view.getState();
+    const served = state.selections;
+    expect(served.map((s) => s.viewId)).toEqual([SPREAD_ADDRESS]);
+    const html = renderToStaticMarkup(
+      <SelectionChips selections={served} cleared={state.cleared} links={state.links} labels={Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId]))} readOnly />,
+    );
+
+    // ONE chip, the brush's own, and under it the lines
+    expect(count(html, 'span class="vzf-selchip"')).toBe(1);
+    expect(html).toContain(`data-view="${SPREAD_ADDRESS}"`);
+    const notes = notesOf(html);
+
+    // THE SENTENCES, VERBATIM — the chip's prefix ("filtered nothing on <declared label>") and, after the
+    // middle dot, the session's own `unjudgeableWords` for that consumer's table, quoted and never re-worded.
+    // TWO lines and WHY two (packet AH2, under AJ — "the frame is its layers"): `mass_radius` and `by_year`
+    // bind nothing at their own level, so they are FRAMES on the map and no edge lands there — the readers
+    // are the scatter's layer over `planets` and the sheet over `measurements`. `by_year~references` has none
+    // because the crossfilter default DECLINED that edge (nothing joins `radii_per_planet` and `references`;
+    // pinned in `tests/exo-session.test.ts`), and the histogram's own addresses have none because a clause is
+    // not sent back to its source.
+    const reason = (table: string): string => `table "${table}" has no column "radii" — a sentence about a column these rows do not have is not a claim about these rows`;
+    expect(notes).toEqual([
+      { consumer: SCATTER_ADDRESS, text: `filtered nothing on Planets, as the composite table accepts them · ${reason('planets')}` },
+      { consumer: SHEET_VIEW, text: `filtered nothing on Every published value · ${reason('measurements')}` },
+    ]);
+    expect(notes.map((n) => n.consumer)).toEqual([SCATTER_ADDRESS, SHEET_VIEW]);
+    // …and each line is exactly what the library composes from the wire's entry — the chip resolves nothing for itself
+    const narrowedFor = served[0]?.narrowedFor ?? {};
+    expect(notes.map((n) => n.text)).toEqual(Object.entries(narrowedFor).map(([address, at]) => narrowedWords(address, at)));
+
+    await surface.session.dispatch({ ...gesture, range: null, cause: { ...cause, intent: 'clear the bucket' } });
   }, 120_000);
 });
