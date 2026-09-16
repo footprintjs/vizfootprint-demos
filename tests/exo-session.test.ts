@@ -241,10 +241,18 @@ describe('the histogram over a table an ACT mints — refused before it, landing
     // narrowed — a pure function of the graph) AND whose READ door reports it `narrowed` (`viewQuery`, the
     // engine's judgement at that table). Every address the def declares is walked — the views and their layers.
     const addresses = [...declared.keys()];
+    // a FRAME — a layered view with no view-level binding — reads no rows at its own address: nothing reaches it
+    // (`clausesFor` is empty) and a window asked there is REFUSED by name with the layers that read (`vizfootprint` ·
+    // `src/session/README.md`, "A read at a frame's bare address"); the two doors are compared over the addresses that read
+    const frames = new Set((await surface.session.overview()).links.views.filter((v) => v.frame !== undefined).map((v) => v.viewId));
     const narrowedAtRead: string[] = [];
     for (const address of addresses) {
       const sent = surface.session.clausesFor(address).some((c) => c.from === SPREAD_ADDRESS);
       const window = await surface.session.viewQuery({ viewId: address, limit: 1 });
+      if (frames.has(address)) {
+        expect([sent, window.ok, !window.ok && window.reason], address).toEqual([false, false, 'frame']);
+        continue;
+      }
       expect(window.ok, address).toBe(true);
       const narrowed = window.ok && window.clauses.some((c) => c.from === SPREAD_ADDRESS && c.narrowed !== undefined);
       if (sent && narrowed) narrowedAtRead.push(address);
@@ -391,10 +399,12 @@ describe('the histogram over a table an ACT mints — refused before it, landing
     // views and their layers — and NONE of them reports the pick `narrowed`.
     const def = exoDef(tables);
     const addresses = [...EXO_VIEWS, ...(def.encodings ?? []).flatMap((e) => (e.layers ?? []).map((l) => layerAddress(e.viewId, l.layerId)))];
+    const frames = new Set((await surface.session.overview()).links.views.filter((v) => v.frame !== undefined).map((v) => v.viewId));
     const travelledAtRead: string[] = [];
     for (const address of addresses) {
       const sent = surface.session.clausesFor(address).some((c) => c.from === SCATTER_ADDRESS);
       const window = await surface.session.viewQuery({ viewId: address, limit: 1 });
+      if (frames.has(address)) { expect([sent, window.ok, !window.ok && window.reason], address).toEqual([false, false, 'frame']); continue; }
       expect(window.ok, address).toBe(true);
       if (!window.ok) continue;
       expect(window.clauses.some((c) => c.from === SCATTER_ADDRESS && c.narrowed !== undefined), address).toBe(false);
