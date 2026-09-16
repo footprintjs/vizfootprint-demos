@@ -21,10 +21,11 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { SelectionChips, boundField, createSessionView, narrowedWords, selectionForView, sessionSource, travelledWords, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
+import { ChartEditor } from 'vizfootprint-ui/editor';
 import { radiiBins, useExoCells, useExoSilences, type ExoDeskData } from '../web/src/exoCells.js';
 import type { Row } from '../web/src/derive.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/exo/absence.js';
-import { exoDef, BY_YEAR_ADDRESS, BY_YEAR_VIEW, SCATTER_ADDRESS, SCATTER_VIEW, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_VIEW } from '../src/exo/def.js';
+import { exoDef, BY_YEAR_ADDRESS, BY_YEAR_VIEW, RADII_PER_PLANET, SCATTER_ADDRESS, SCATTER_VIEW, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_VIEW } from '../src/exo/def.js';
 import { exoTables } from '../src/exo/etl.js';
 import { SPREAD_BUCKET } from '../src/exo/session.js';
 import { buildExoSurfaceAsync, type ExoSurface } from '../src/exo/surface.js';
@@ -574,5 +575,70 @@ describe('the cells read their axes at the LAYER address, and the fold answers',
     } as unknown as DeskProjection;
     cellsOf(data, desk);
     expect(asked).toEqual([`${SCATTER_ADDRESS}.x`, `${SCATTER_ADDRESS}.y`, `${BY_YEAR_ADDRESS}.category`]);
+  }, 120_000);
+});
+
+/**
+ * THE EDITOR SAYS WHAT THE MAP SAYS — the layer's edges, and the refusals
+ * (packet AW).
+ *
+ * The histogram is a FRAME on this desk: `spread` binds nothing at its own
+ * level, so no edge lands at its bare address and every edge it has lives at
+ * `spread~buckets`. An editor that asked only about the view's id therefore
+ * showed this chart an empty Links list. And the one gesture this dashboard
+ * cannot carry — the bucket brush to the years, over two tables nothing joins —
+ * is recorded on the map with its reason (`overview().links.declined`, pinned
+ * in `tests/exo-session.test.ts`) and, until this packet, was drawn nowhere:
+ * the reader saw the bar chart stand still and was told nothing.
+ *
+ * WHY `ChartEditor` directly and not the studio `Desk`: the reason given above
+ * the chip block — no test here renders the Desk — so the panel is rendered the
+ * way `vizfootprint-studio/desk` · `Desk` renders it: the same component, the
+ * same props, `labels` built from the views the way `useDeskProjection` builds
+ * them, over the same in-process session view the static page hands the desk.
+ */
+describe('the chart editor shows the layer\'s edges and the map\'s refusals', () => {
+  /** The markup as a reader's eye sees it: the entities React escaped put back (the chip block's `plain`, for a whole document). */
+  const unescaped = (html: string): string => html.replace(/&quot;/g, '"').replace(/&#x27;/g, "'").replace(/&amp;/g, '&');
+
+  it('the frame\'s panel lists its LAYER\'s edges, and one note per declined edge in the map\'s own words', async () => {
+    const surface = await realSurface();
+    const { links } = await surface.session.overview();
+    const view = createSessionView(sessionSource(surface.session), { as: 'user' });
+    await view.refresh();
+    const state = view.getState();
+
+    // THE FRAME HAS NO EDGES OF ITS OWN — this is the gap, stated as a fact before the panel is drawn
+    expect(links.edges.filter((e) => e.source === SPREAD_VIEW || e.target === SPREAD_VIEW)).toEqual([]);
+    expect(links.views.find((v) => v.viewId === SPREAD_VIEW)!.frame).toEqual([SPREAD_ADDRESS]);
+
+    const html = renderToStaticMarkup(
+      <ChartEditor
+        view={state.views.find((v) => v.viewId === SPREAD_VIEW)!}
+        links={state.links}
+        labels={Object.fromEntries(state.views.map((v) => [v.viewId, v.label ?? v.viewId]))}
+        by="you"
+      />,
+    );
+
+    // …and the panel lists the layer's, one row per edge the map really holds there
+    const at = links.edges.filter((e) => e.source === SPREAD_ADDRESS || e.target === SPREAD_ADDRESS);
+    expect(at.length).toBeGreaterThan(0);
+    for (const e of at) expect(html).toContain(`aria-label="${e.source} ${e.kind} → ${e.target}"`);
+    expect(count(html, 'select')).toBe(at.length);
+
+    // THE REFUSALS, VERBATIM: every decline touching this chart's addresses, the map's `reason` quoted and
+    // never re-worded — including the one this demo is about, the bucket brush that can never reach the years.
+    const refused = links.declined!.filter((d) => d.source === SPREAD_ADDRESS || d.target === SPREAD_ADDRESS);
+    expect(refused.map((d) => d.id)).toEqual(links.declined!.map((d) => d.id)); // on this desk, all of them
+    expect(count(html, 'div role="note" class="vzf-editor-declined"')).toBe(refused.length);
+    const text = unescaped(html);
+    for (const d of refused) expect(text).toContain(`the map declined ${d.source} → ${d.target} (${d.kind}): ${d.reason}`);
+    expect(text).toContain(`the map declined ${SPREAD_ADDRESS} → ${BY_YEAR_ADDRESS} (interval): view "${SPREAD_ADDRESS}" draws table "${RADII_PER_PLANET}" and view "${BY_YEAR_ADDRESS}" draws table "references" — no relation joins those tables and they share no column, so nothing this edge carries could be judged there`);
+
+    // a note is a line, not a control: nothing to change an edge the map never minted
+    const note = html.indexOf('class="vzf-editor-declined"');
+    const before = html.slice(0, note);
+    expect(count(before, 'select')).toBe((before.match(/<\/select>/g) ?? []).length);
   }, 120_000);
 });
