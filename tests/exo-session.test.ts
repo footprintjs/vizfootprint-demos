@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { edgesFrom, edgesInto, layerAddress } from 'vizfootprint/def';
 import { exportFromSession } from 'vizfootprint/session';
 import { createSessionView, sessionSource } from 'vizfootprint-ui';
-import { ACCEPTED_RADIUS_COLUMN, BY_YEAR_ADDRESS, BY_YEAR_VIEW, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, EXO_RELATIONS, EXO_VIEWS, RADII_PER_PLANET, SCATTER_ADDRESS, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, exoDef } from '../src/exo/def.js';
+import { ACCEPTED_RADIUS_COLUMN, BY_YEAR_ADDRESS, BY_YEAR_VIEW, DELTA_COLUMN, DISAGREES_COLUMN, EXO_ACT_ORDER, EXO_RELATIONS, EXO_VIEWS, RADII_PER_PLANET, SCATTER_ADDRESS, SCATTER_VIEW, SHEET_VIEW, SPREAD_ADDRESS, SPREAD_COLUMN, SPREAD_VIEW, exoDef } from '../src/exo/def.js';
 import { SPREAD_BUCKET } from '../src/exo/session.js';
 import { buildExoSurfaceAsync } from '../src/exo/surface.js';
 import { exoRows } from '../src/exo/rows.js';
@@ -512,5 +512,45 @@ describe('the payload one page reads', () => {
     expect((payload['acts'] as readonly unknown[]).length).toBe(5);
     // the derived table's name is the one the def declared, so a cell can find it
     expect(RADII_PER_PLANET).toBe('radii_per_planet');
+  });
+});
+
+/**
+ * WHAT THE ENCODING PLANE SAYS ABOUT THESE THREE FRAMES. Each view here draws
+ * through ONE layer over a table that is not the default one, so the fold and
+ * the verdicts both have to be read at the layer's address — which is the whole
+ * of what this desk had to write out by hand before.
+ */
+describe('the encoding plane, per layer', () => {
+  /** The layer the def declares for a view — read off the def, so the assertion IS the declaration. */
+  const layerOf = (viewId: string) => exoDef(tables).encodings!.find((e) => e.viewId === viewId)!.layers![0]!;
+
+  it("`overview().encodings` carries each layer's declared initial verbatim, under its address, and the frames bind nothing", async () => {
+    const o = await surface.session.overview();
+    expect(o.encodings[SCATTER_ADDRESS]).toEqual(layerOf(SCATTER_VIEW).initial);
+    expect(o.encodings[SPREAD_ADDRESS]).toEqual(layerOf(SPREAD_VIEW).initial);
+    expect(o.encodings[BY_YEAR_ADDRESS]).toEqual(layerOf(BY_YEAR_VIEW).initial);
+    // a layer follows no encoding edge, so what it SHOWS is what it declares
+    expect(o.effectiveEncodings[SCATTER_ADDRESS]).toEqual(o.encodings[SCATTER_ADDRESS]);
+    for (const viewId of [SCATTER_VIEW, SPREAD_VIEW, BY_YEAR_VIEW]) expect(o.encodings[viewId]).toEqual({});
+  });
+
+  it("each layer's verdicts are judged against the table IT reads — never the default table — and a frame carries none", async () => {
+    const o = await surface.session.overview();
+    const scatter = o.views.find((v) => v.viewId === SCATTER_VIEW)!;
+    expect('fits' in scatter).toBe(false); // a frame draws no rows of `measurements`, so nothing is judged there
+    const planets = scatter.layers![0]!;
+    expect(planets.table).toBe('planets');
+    // every column of `planets`, and only those — checked against the served schema for that table
+    const columnsOf = (table: string): readonly string[] => (o.columns[table] ?? []).map((c) => c.field);
+    expect(planets.fits!['x']!.map((f) => f.field).sort()).toEqual([...columnsOf('planets')].sort());
+    expect(planets.fits!['x']!.some((f) => f.field === 'pl_bmasse' && f.ok)).toBe(true);
+    // the histogram's layer reads the MINTED table, and its verdicts name those columns
+    const spread = o.views.find((v) => v.viewId === SPREAD_VIEW)!.layers![0]!;
+    expect(spread.table).toBe(RADII_PER_PLANET);
+    expect(spread.fits!['x']!.map((f) => f.field).sort()).toEqual([...columnsOf(RADII_PER_PLANET)].sort());
+    // and the bar's reads `references`
+    const byYear = o.views.find((v) => v.viewId === BY_YEAR_VIEW)!.layers![0]!;
+    expect(byYear.fits!['category']!.map((f) => f.field).sort()).toEqual([...columnsOf('references')].sort());
   });
 });

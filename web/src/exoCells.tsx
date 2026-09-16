@@ -182,11 +182,19 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
   const { state, view, columns, shown } = desk;
   const selFor = desk.selFor;
 
-  /** WHICH FIELD A CHART'S CHANNEL ENCODES — the session's answer, not a constant written here at build time. */
-  const bound = (viewId: string, channel: string, fallback: string): string => desk.bound(viewId, channel, fallback);
-  const massField = bound(SCATTER_VIEW, 'x', 'pl_bmasse');
-  const radiusField = bound(SCATTER_VIEW, 'y', 'pl_rade');
-  const yearField = bound(BY_YEAR_VIEW, 'category', 'pub_year');
+  /**
+   * WHICH FIELD A CHART'S CHANNEL ENCODES — the session's answer, not a constant
+   * written here at build time. Asked at the LAYER's address: every chart here
+   * is one layer on a frame, its axes are declared on that layer, and the
+   * session's encoding fold is keyed by address — so this reads the declaration
+   * where every other binding is read. The frame's own address binds nothing
+   * (it draws no rows), which is why asking there only ever returned the
+   * fallback these three used to be written as.
+   */
+  const bound = (address: string, channel: string, fallback: string): string => desk.bound(address, channel, fallback);
+  const massField = bound(SCATTER_ADDRESS, 'x', 'pl_bmasse');
+  const radiusField = bound(SCATTER_ADDRESS, 'y', 'pl_rade');
+  const yearField = bound(BY_YEAR_ADDRESS, 'category', 'pub_year');
 
   // the slices every fold below is keyed on: what is selected, what the links do with it, what was cleared
   const sel = [state.selections, state.links, state.cleared] as const;
@@ -357,6 +365,10 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
           ariaLabel={desk.altShort(SCATTER_VIEW)}
           selection={selFor(SCATTER_ADDRESS)}
           columns={columns}
+          // the picker's target is the VIEW (a rebind is the view's fold), so its verdicts are asked
+          // there too — and a FRAME has none: it draws no rows of the default table to be judged
+          // against. Until re-encoding ONE layer of a frame lands (`vizfootprint/def` README, "The
+          // frame", not-in-this-version) the picker falls back to its own compatibility test.
           fits={desk.fitsOf(SCATTER_VIEW)}
           encoding={shown[SCATTER_VIEW] ?? {}}
           width={width}
@@ -447,6 +459,7 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
       render: ({ width, height }) => (
         <VizBar
           // the VIEW: this prop names the picker's target, and a rebind is the view's encoding fold
+          // — so its verdicts are asked there too, and a frame has none (see the scatter above)
           viewId={BY_YEAR_VIEW}
           data={yearBars}
           field={yearField}

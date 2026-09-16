@@ -20,7 +20,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
-import { SelectionChips, createSessionView, narrowedWords, selectionForView, sessionSource, travelledWords, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
+import { SelectionChips, boundField, createSessionView, narrowedWords, selectionForView, sessionSource, travelledWords, type LinkGraphView, type SelectionView } from 'vizfootprint-ui';
 import { radiiBins, useExoCells, useExoSilences, type ExoDeskData } from '../web/src/exoCells.js';
 import type { Row } from '../web/src/derive.js';
 import { ABSENCE_FIELD, ABSENCE_STATES } from '../src/exo/absence.js';
@@ -531,5 +531,48 @@ describe('the chip under the brush says where it filtered nothing', () => {
     expect(cleared).toEqual([]);
 
     await surface.session.dispatch({ verb: 'select', viewId: SCATTER_ADDRESS, field: 'pl_name', value: null, cause: { ...cause, intent: 'clear the planet' } });
+  }, 120_000);
+});
+
+/**
+ * THE AXES COME OFF THE FOLD, AT THE LAYER'S ADDRESS. Every chart on this desk
+ * is one layer on a frame, and a layer's axes are declared on the layer. The
+ * session's encoding fold is keyed by ADDRESS, so the cells read the
+ * declaration through the projection instead of carrying it as literals here
+ * — the demo COLLECTS the library's answer rather than restating it.
+ */
+describe('the cells read their axes at the LAYER address, and the fold answers', () => {
+  /** `desk.bound` is `boundField(shown[address] ?? {}, channel, fallback)` over `effectiveEncodings ?? encodings` (`vizfootprint-studio` · `useDeskProjection`). */
+  const boundOf = (state: { readonly encodings: Readonly<Record<string, Readonly<Record<string, string>>>>; readonly effectiveEncodings?: Readonly<Record<string, Readonly<Record<string, string>>>> }) => {
+    const shown = state.effectiveEncodings ?? state.encodings;
+    return (address: string, channel: string, fallback: string): string => boundField(shown[address] ?? {}, channel, fallback);
+  };
+
+  it('the fallback is never reached: the fold answers the declared axis at every address the cells ask about', async () => {
+    const surface = await realSurface();
+    const view = createSessionView(sessionSource(surface.session), { as: 'user' });
+    await view.refresh();
+    const bound = boundOf(view.getState());
+    // verbatim off the DEF, never retyped here — the declaration is the assertion
+    const declared = (viewId: string): Readonly<Record<string, string>> => exoDef(loadExo()).encodings!.find((e) => e.viewId === viewId)!.layers![0]!.initial!;
+    expect(bound(SCATTER_ADDRESS, 'x', 'WRONG')).toBe(declared(SCATTER_VIEW)['x']);
+    expect(bound(SCATTER_ADDRESS, 'y', 'WRONG')).toBe(declared(SCATTER_VIEW)['y']);
+    expect(bound(BY_YEAR_ADDRESS, 'category', 'WRONG')).toBe(declared(BY_YEAR_VIEW)['category']);
+    // …and the FRAME's own address binds nothing, which is why asking there only ever gave the fallback
+    expect(bound(SCATTER_VIEW, 'x', 'WRONG')).toBe('WRONG');
+  }, 120_000);
+
+  it('the cells ask at the layer addresses and nowhere else — no view id among them', async () => {
+    const data = await realData();
+    const asked: string[] = [];
+    const desk = {
+      ...QUIET,
+      bound: (address: string, channel: string, fallback: string) => {
+        asked.push(`${address}.${channel}`);
+        return fallback;
+      },
+    } as unknown as DeskProjection;
+    cellsOf(data, desk);
+    expect(asked).toEqual([`${SCATTER_ADDRESS}.x`, `${SCATTER_ADDRESS}.y`, `${BY_YEAR_ADDRESS}.category`]);
   }, 120_000);
 });
