@@ -200,7 +200,7 @@ function walkLinks(): readonly LinkDecl[] {
 function netProse(tables: GridTables): ProseDecl {
   const nodes = tables.authorities.length;
   const possible = (nodes * (nodes - 1)) / 2;
-  const undirected = new Set(tables.links.map((l) => [String(l.from_authority), String(l.to_authority)].sort().join(' '))).size;
+  const undirected = new Set(tables.links.map((l) => [String(l.from_authority), String(l.to_authority)].sort().join('\u0000'))).size;
   const share = possible === 0 ? 0 : Math.round((undirected / possible) * 1000) / 10;
   return {
     viewId: NETWORK_VIEW,
@@ -370,15 +370,20 @@ export function gridDef(tables: GridTables): DashboardDef {
       { viewId: 'authorities', chartKind: 'bar', channels: ['category'], initial: { category: 'region' } },
     ],
     analyses: { ...GRID_ANALYSES },
-    // Layer 4 — each view's GRAIN: the group keys its marks stand for ([] = one
-    // mark per row). An edge whose source emits over one grain and whose target
-    // shows another CROSSES grains and must state its fold, or the def door
-    // refuses it with the sentence.
+    // Layer 4 — the GRAIN at each ADDRESS: the group keys the marks THERE stand for
+    // ([] = one mark per row), declared where the marks are — a view's own id, or a
+    // layer's. An edge whose source emits over one grain and whose target shows
+    // another CROSSES grains and must state its fold, or the def door refuses it
+    // with the sentence.
     grains: [
-      // the network's marks stand for AUTHORITIES — one circle per node row. The
-      // frame's grain is not a layer's (the library gives a layer none: a grain is
-      // a VIEW's, judged there).
-      { viewId: NETWORK_VIEW, keys: ['authority'] },
+      // A GRAIN IS DECLARED WHERE THE MARKS ARE, and the network draws none at its
+      // own address — it is a FRAME — so each LAYER declares the grain of its own
+      // marks: the circles stand for AUTHORITIES (one per node row), the lines for
+      // DIRECTED PAIRS (one per from→to). So an edge from an hourly view into either
+      // crosses grains, and the map states the fold on it. A grain on `net` itself is
+      // refused at the def door with these two addresses as the remedy.
+      { viewId: NETWORK_NODES_ADDRESS, keys: ['authority'] },
+      { viewId: NETWORK_EDGES_ADDRESS, keys: ['from_authority', 'to_authority'] },
       { viewId: 'demand', keys: ['t'] },
       { viewId: 'authorities', keys: ['region'] },
       // the sheet stands for ROWS, not groups: grain [] is one mark per row of `hourly`

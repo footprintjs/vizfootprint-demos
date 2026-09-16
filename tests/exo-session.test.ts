@@ -308,7 +308,11 @@ describe('the histogram over a table an ACT mints — refused before it, landing
     const { links } = await surface.session.overview();
 
     // THE MAP, printed once and pinned. `by_year` is a FRAME: it lists its one layer and stands as no edge's end.
-    expect(links.views.find((v) => v.viewId === BY_YEAR_VIEW)).toMatchObject({ viewId: BY_YEAR_VIEW, frame: [BY_YEAR_ADDRESS], grain: ['pub_year'] });
+    // RE-PINNED under AV: a grain is declared WHERE THE MARKS ARE, so the bars' grain moved off the frame and onto
+    // the layer that draws them (`vizfootprint/def` README law 6c) — the frame declares none at all.
+    expect(links.views.find((v) => v.viewId === BY_YEAR_VIEW)).toMatchObject({ viewId: BY_YEAR_VIEW, frame: [BY_YEAR_ADDRESS] });
+    expect(links.views.find((v) => v.viewId === BY_YEAR_VIEW)).not.toHaveProperty('grain');
+    expect(links.views.find((v) => v.viewId === BY_YEAR_ADDRESS)?.grain).toEqual(['pub_year']);
     expect(links.views.find((v) => v.viewId === BY_YEAR_VIEW)?.table).toBeUndefined();
     expect(links.edges.filter((e) => e.source === BY_YEAR_VIEW || e.target === BY_YEAR_VIEW)).toEqual([]);
     // INTO the layer: the sheet and the scatter's layer, point and match — the crossfilter default, minted

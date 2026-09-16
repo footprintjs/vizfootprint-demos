@@ -556,17 +556,21 @@ export function exoDef(tables: ExoTables): DashboardDef {
     actors: { mass_radius: MASS_RADIUS, spread: SPREAD, by_year: BY_YEAR, sheet: SHEET },
     encodings: exoEncodings(),
     analyses: { ...EXO_ANALYSES },
-    // Layer 4 — each view's GRAIN: the group keys its marks stand for ([] = one
-    // mark per row). An edge whose source emits over one grain and whose target
-    // shows another CROSSES grains and must state its fold, or the def door
-    // refuses it with the sentence.
+    // Layer 4 — the GRAIN at each ADDRESS: the group keys the marks THERE stand for
+    // ([] = one mark per row). An edge whose source emits over one grain and whose
+    // target shows another CROSSES grains and must state its fold, or the def door
+    // refuses it with the sentence. A GRAIN IS DECLARED WHERE THE MARKS ARE: all three
+    // charts are FRAMES (each binds nothing at its own level), so each one's LAYER
+    // declares the grain of its own marks and the frame declares none — a grain on the
+    // frame is refused at the door with the layer address as the remedy.
     grains: [
-      // one dot per planet — the frame's grain, not the layer's (the library gives a layer none: a grain is a VIEW's, judged there)
-      { viewId: SCATTER_VIEW, keys: ['pl_name'] },
+      // one dot per planet — declared on the layer that draws the dots
+      { viewId: SCATTER_ADDRESS, keys: ['pl_name'] },
       // a bar stands for every planet with the SAME number of published radii
-      { viewId: SPREAD_VIEW, keys: ['radii'] },
-      { viewId: BY_YEAR_VIEW, keys: ['pub_year'] },
-      // the sheet stands for ROWS: grain [] is one mark per row of `measurements`
+      { viewId: SPREAD_ADDRESS, keys: ['radii'] },
+      // one bar per publication year the archive dates a reference to
+      { viewId: BY_YEAR_ADDRESS, keys: ['pub_year'] },
+      // the sheet declares no layers, so it draws its own marks: grain [] is one mark per row of `measurements`
       { viewId: SHEET_VIEW, keys: [] },
     ],
     // The honest capability envelope. The scatter and the sheet can emit a point

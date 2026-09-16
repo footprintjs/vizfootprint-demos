@@ -333,9 +333,10 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       // refuses, and a refusal at boot is worse than an act nobody declared
       ...(population === undefined ? {} : POPULATION_ANALYSES),
     },
-    // Layer 4 — each view's GRAIN: the group keys its marks stand for ([] = one mark per row). An edge whose
-    // source emits over one grain and whose target shows another CROSSES grains and must state its fold,
-    // or the def door refuses it with the sentence; the default rule's crossing edges carry `crossfilter`.
+    // Layer 4 — the GRAIN at each ADDRESS: the group keys the marks THERE stand for ([] = one mark per row),
+    // declared where the marks are — a view's own id, or a layer's. An edge whose source emits over one grain
+    // and whose target shows another CROSSES grains and must state its fold, or the def door refuses it with
+    // the sentence; the default rule's crossing edges carry `crossfilter`.
     grains: [
       { viewId: 'coverage', keys: ['report_state'] },
       { viewId: 'diseases', keys: ['disease'] },
@@ -348,12 +349,18 @@ export function nndssDef(tables: NndssTables, graph?: NndssGraph): DashboardDef 
       { viewId: 'table', keys: ['jurisdiction'] },
       // the sheet stands for ROWS, not groups: grain [] is one mark per row of `cells`
       { viewId: 'sheet', keys: [] },
-      // the network's marks stand for DISEASES — one circle per node row — so an
-      // edge from a per-cell view into it crosses grains and names its fold.
-      // Gated with the actor: `validateGrains` refuses a grain on a view the def
-      // did not declare, and the frame's grain is not a layer's (the library
-      // gives a layer none: a grain is a VIEW's, judged there).
-      ...(graph === undefined ? [] : [{ viewId: NETWORK_VIEW, keys: ['disease'] }]),
+      // A GRAIN IS DECLARED WHERE THE MARKS ARE, and the network draws none at its own
+      // address — it is a FRAME — so each LAYER declares the grain of its own marks: the
+      // circles stand for DISEASES (one per node row), the ties for PAIRS (one per
+      // source→target). An edge from a per-cell view into either therefore crosses grains
+      // and names its fold, which is what the map now states on the default edges into
+      // them. Gated with the actor, as before: a grain at a layer of a view the def did
+      // not declare is refused by the whole address; a grain on `net` itself is refused
+      // with these two addresses as the remedy.
+      ...(graph === undefined ? [] : [
+        { viewId: layerAddress(NETWORK_VIEW, NETWORK_NODES_LAYER), keys: ['disease'] },
+        { viewId: layerAddress(NETWORK_VIEW, NETWORK_EDGES_LAYER), keys: ['source', 'target'] },
+      ]),
     ],
     // The sheet's honest capability envelope: it can emit a point (a row) and a match
     // (a header filter, when that lands) — never an interval, and never the compound cell.
