@@ -134,6 +134,9 @@ describe('RULE 3 — the theme is the only place a colour lives', () => {
     { name: 'web/src/protDesk.tsx', source: code(readFileSync(join(process.cwd(), 'web', 'src', 'protDesk.tsx'), 'utf8')) },
     { name: 'web/src/protLanding.tsx', source: code(readFileSync(join(process.cwd(), 'web', 'src', 'protLanding.tsx'), 'utf8')) },
     { name: 'web/src/protTrace.tsx', source: code(readFileSync(join(process.cwd(), 'web', 'src', 'protTrace.tsx'), 'utf8')) },
+    // the page's own foot is styled here too since the follow-up round, so it
+    // is judged by the same rule as everything else that draws
+    { name: 'web/site/prot/entry.tsx', source: code(readFileSync(join(process.cwd(), 'web', 'site', 'prot', 'entry.tsx'), 'utf8')) },
   ];
 
   for (const { name, source } of drawn) {
@@ -142,9 +145,10 @@ describe('RULE 3 — the theme is the only place a colour lives', () => {
         .split('\n')
         .map((line, index) => ({ line, at: index + 1 }))
         // `tokens.ts` is the theme's own TypeScript half and holds the ONE
-        // documented copy of two colours, pinned to the stylesheet by
-        // `tests/prot-theme.test.ts`
-        .filter(({ line }) => COLOUR.test(line) && !(name.endsWith('tokens.ts') && /CHAIN_INK|ACCENT_INK|light:|dark:/.test(line)))
+        // documented copy of the three colours code has to read rather than
+        // spend in CSS — the two chain hues and the 3D well's ground — each
+        // pinned to the stylesheet by `tests/prot-theme.test.ts`
+        .filter(({ line }) => COLOUR.test(line) && !(name.endsWith('tokens.ts') && /CHAIN_INK|ACCENT_INK|VIEWER_BG|light:|dark:/.test(line)))
         .map(({ line, at }) => `${name}:${String(at)} ${line.trim()}`);
       expect(offending).toEqual([]);
     });

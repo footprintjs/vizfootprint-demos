@@ -41,7 +41,7 @@ import { ChartCard, ViewerBox } from '../web/src/workbench/ChartCard.js';
 import { FactsStrip, WorkbenchHeader } from '../web/src/workbench/Chrome.js';
 import { factsStrip, methodLine } from '../web/src/workbench/bands.js';
 import { chainChips, chainColorOf, chainInk, ownerLine, splitByFocus, stageOfChart } from '../web/src/workbench/charts.js';
-import { CHAIN_INK } from '../web/src/workbench/tokens.js';
+import { CHAIN_INK, VIEWER_BG } from '../web/src/workbench/tokens.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -352,7 +352,7 @@ describe('the two top bands are read off the run, never typed', () => {
 
 describe('the chain colours come from the theme and are told to the library, never painted by hand', () => {
   it('pairs the chains with the design’s two hues, in the order the FILE first mentions them', () => {
-    const ink = { chainA: CHAIN_INK.light.a, chainB: CHAIN_INK.light.b, accent: CHAIN_INK.light.a };
+    const ink = { chainA: CHAIN_INK.light.a, chainB: CHAIN_INK.light.b, accent: CHAIN_INK.light.a, viewerBg: VIEWER_BG };
     expect(chainInk(TABLES.counts, ink)).toEqual([
       { chain: TABLES.counts.chains[0]!.chain, color: CHAIN_INK.light.a },
       { chain: TABLES.counts.chains[1]!.chain, color: CHAIN_INK.light.b },
@@ -360,7 +360,7 @@ describe('the chain colours come from the theme and are told to the library, nev
   });
 
   it('answers a category the entry has no chain for with the accent — never with a chain’s own colour', () => {
-    const ink = { chainA: CHAIN_INK.dark.a, chainB: CHAIN_INK.dark.b, accent: '#ffffff' };
+    const ink = { chainA: CHAIN_INK.dark.a, chainB: CHAIN_INK.dark.b, accent: '#ffffff', viewerBg: VIEWER_BG };
     const colorOf = chainColorOf(TABLES.counts, ink);
     expect(colorOf(TABLES.counts.chains[0]!.chain)).toBe(CHAIN_INK.dark.a);
     expect(colorOf(TABLES.counts.chains[1]!.chain)).toBe(CHAIN_INK.dark.b);
@@ -370,7 +370,7 @@ describe('the chain colours come from the theme and are told to the library, nev
   });
 
   it('hands the viewer well one chip per chain, with the chain’s own name', async () => {
-    const ink = { chainA: CHAIN_INK.light.a, chainB: CHAIN_INK.light.b, accent: CHAIN_INK.light.a };
+    const ink = { chainA: CHAIN_INK.light.a, chainB: CHAIN_INK.light.b, accent: CHAIN_INK.light.a, viewerBg: VIEWER_BG };
     const chips = chainChips(TABLES.counts, ink);
     expect(chips.map((c) => c.name)).toEqual(TABLES.counts.chains.map((c) => `chain ${c.chain}`));
     const panel = await mount(

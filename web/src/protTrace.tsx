@@ -158,13 +158,25 @@ export function ActRow({ outcome, run, onSeek, say }: ActRowProps): JSX.Element 
 export function RunNarrative({ run }: { readonly run: ProtRun | null }): JSX.Element | null {
   if (run === null || run.narrative.length === 0) return null;
   return (
-    <details style={{ marginTop: '.5rem' }}>
-      <summary style={{ cursor: 'pointer' }}>What the run looked like from inside — the recorder&rsquo;s own {count(run.narrative.length)} sentences, in order and not re-worded here</summary>
-      <ol style={{ margin: '.3rem 0 0', paddingLeft: '1.2rem', color: 'var(--pw-mid-2)' }}>
-        {run.narrative.map((sentence, index) => (
-          <li key={`${String(index)}:${sentence.slice(0, 24)}`}>{sentence}</li>
-        ))}
-      </ol>
-    </details>
+    <ol style={{ margin: 0, paddingLeft: '1.2rem', color: 'var(--pw-mid-2)' }}>
+      {run.narrative.map((sentence, index) => (
+        <li key={`${String(index)}:${sentence.slice(0, 24)}`}>{sentence}</li>
+      ))}
+    </ol>
   );
+}
+
+/**
+ * WHAT THAT DISCLOSURE IS CALLED — counted off the recorder, never estimated.
+ *
+ * The title and the list used to be one `<details>` here. The desk now folds
+ * everything through ONE shape (`web/src/workbench/Chrome.tsx` · `Disclosure`),
+ * so this file hands over the words and the composition hands over the box:
+ * a `<summary>` cannot carry the glass button's own layout, and three folds
+ * drawn three ways is what the follow-up round was about. `null` when the
+ * recorder said nothing — and then there is no control either.
+ */
+export function narrativeTitle(run: ProtRun | null): string | null {
+  if (run === null || run.narrative.length === 0) return null;
+  return `What the run looked like from inside — the recorder’s own ${count(run.narrative.length)} sentences, in order and not re-worded here`;
 }

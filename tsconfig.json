@@ -10,7 +10,8 @@
     "allowImportingTsExtensions": false,
     "noEmit": true,
     "types": [
-      "node"
+      "node",
+      "vite/client"
     ]
   },
   "include": [

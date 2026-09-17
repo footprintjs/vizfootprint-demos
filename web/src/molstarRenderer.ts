@@ -202,11 +202,24 @@ export interface MolstarRendererOptions extends StructureFields {
    */
   readonly structure: { readonly text: string; readonly at?: string };
   /**
+   * THE GROUND THE VIEWER CLEARS ITS CANVAS TO, as a CSS colour.
+   *
+   * The host owns the BOX this viewer mounts in, so the host says what colour
+   * that box is; the molecule's own colours are the paint's
+   * ({@link paintOf}) and are untouched. Absent ⇒ Mol*'s own default, which is
+   * what every caller got before this option existed.
+   *
+   * Two things write this value — the desk's well in CSS and the canvas here —
+   * and `web/src/molstarViewer.ts` says which one a reader sees and why they
+   * cannot disagree.
+   */
+  readonly background?: string;
+  /**
    * How to get a viewer for a mounted element. The default dynamically imports
    * the Mol* adapter, so nothing of Mol* is loaded until a mount happens; a
    * test passes a double and proves the protocol without a GPU.
    */
-  readonly viewer?: (el: HTMLElement) => Promise<StructureViewerPort>;
+  readonly viewer?: (el: HTMLElement, options?: { readonly background?: string }) => Promise<StructureViewerPort>;
 }
 
 const DEFAULTS = { keyField: 'residue_key', chainField: 'chain', resnumField: 'resnum', absentWhenNull: ['phi', 'psi'] } as const;
@@ -404,7 +417,9 @@ export function molstarRenderer(options: MolstarRendererOptions): Renderer {
       void (async () => {
         try {
           const open = options.viewer ?? defaultViewer;
-          const port = await open(stage);
+          // the ground travels with the mount: the box is the host's, so the
+          // colour it is cleared to is the host's too
+          const port = await open(stage, options.background === undefined ? {} : { background: options.background });
           if (gone) {
             // the host unmounted while Mol* was starting: dispose what arrived
             // and paint nothing — a viewer nobody is holding is a leak
@@ -470,7 +485,7 @@ function sentenceOf(err: unknown): string {
  * its own — the CDC, grid and exoplanet desks are built from the same sources
  * and must not carry one byte of it.
  */
-async function defaultViewer(el: HTMLElement): Promise<StructureViewerPort> {
+async function defaultViewer(el: HTMLElement, options: { readonly background?: string } = {}): Promise<StructureViewerPort> {
   const { molstarViewer } = await import('./molstarViewer.js');
-  return molstarViewer(el);
+  return molstarViewer(el, options);
 }

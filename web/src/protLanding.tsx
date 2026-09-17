@@ -77,8 +77,18 @@ export function urlForEntry(entry: string | null, href: string): string {
 }
 
 export interface ProtLandingProps {
-  /** The desk's own title and caption — the def's words (`src/prot/def.ts` · `PROT_WORDS`), never retyped here. */
-  readonly title: string;
+  /**
+   * WHAT THE PAGE IS CALLED (`src/prot/def.ts` · `PROT_WORDS.name`) — the big
+   * serif line the design puts at the top, and the name in the header band once
+   * a reader has asked something.
+   *
+   * A name is not a sentence. {@link ProtLandingProps.claim} is the desk's
+   * argument about itself and sits under the example, where a reader meets it
+   * after the thing they came to do.
+   */
+  readonly name: string;
+  /** The desk's claim about itself — `PROT_WORDS.title`, the def's own words, never retyped here. */
+  readonly claim: string;
   readonly caption: string;
   /** The archive, as a function — `browserArchive` on the page, a fake in a test. */
   readonly doors: ArchiveFetch;
@@ -102,10 +112,10 @@ const FIELD = 'a PDB entry id, or words to search the archive for';
  * THE LANDING.
  *
  * ```tsx
- * <ProtLanding title={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={browserArchive} onOpen={open} />
+ * <ProtLanding name={PROT_WORDS.name} claim={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={browserArchive} onOpen={open} />
  * ```
  */
-export function ProtLanding({ title, caption, doors, refusal, onOpen }: ProtLandingProps): JSX.Element {
+export function ProtLanding({ name, claim, caption, doors, refusal, onOpen }: ProtLandingProps): JSX.Element {
   const [words, setWords] = useState('');
   const [asked, setAsked] = useState<Asked>({ status: 'idle' });
   /** The question whose answer this page is still waiting for — so a slow answer to an older question never replaces a newer list. */
@@ -166,9 +176,11 @@ export function ProtLanding({ title, caption, doors, refusal, onOpen }: ProtLand
   // ── nobody has asked yet ──────────────────────────────────────────────────
   if (asked.status === 'idle') {
     return (
-      <SearchHero title={title}>
+      <SearchHero title={name}>
         {form(false)}
         {example}
+        {/* THE DESK'S CLAIM ABOUT ITSELF, under the name rather than in its place */}
+        <SearchProse center>{claim}</SearchProse>
         <SearchProse center>{caption}</SearchProse>
         <SearchProse center>{SEARCH_RULE}</SearchProse>
         {arrived}
@@ -179,7 +191,7 @@ export function ProtLanding({ title, caption, doors, refusal, onOpen }: ProtLand
   // ── asked: the header form, then whatever came back ───────────────────────
   return (
     <div style={{ minHeight: '100vh' }}>
-      <SearchHeader title={title}>{form(true)}</SearchHeader>
+      <SearchHeader title={name}>{form(true)}</SearchHeader>
       <SearchColumn>
         {asked.status === 'searching' ? (
           <p role="status" style={{ margin: '26px 0 0', fontSize: 14, color: 'var(--pw-mid-2)' }}>

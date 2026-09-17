@@ -84,11 +84,25 @@ export function Broken({ sentence }: { readonly sentence: string }): JSX.Element
  * real, time travel is real. What is missing is everything that needed a
  * process on the other end, and each item says what a reader would have had.
  */
-export function WhatIsMissing({ extra }: { readonly extra?: ReactNode }): JSX.Element {
-  return (
-    <div style={{ font: '13px/1.5 system-ui, sans-serif', color: '#4a5462', background: '#fffbe9', border: '1px solid #e8dfae', borderRadius: 8, padding: '.7rem .9rem', margin: '.5rem 0 0' }}>
+export function WhatIsMissing({ extra, bare = false }: { readonly extra?: ReactNode; readonly bare?: boolean }): JSX.Element {
+  const words = (
+    <>
       <b>This is the static build.</b> There is no server behind it, so: the <b>commit log lives in this tab</b> and is gone when you reload, where the served desk keeps one session per process; and the <b>Sources tab cannot refresh</b> — the files are what the repository committed, and re-reading them would answer the same bytes. Everything else — every selection, every act, undo, named paths, bookmarks, compare, the Sheet — is the same library doing the same work, here in the browser.
       {extra}
-    </div>
+    </>
   );
+  /**
+   * `bare` — THE SAME WORDS WITHOUT THE BOX.
+   *
+   * The protein desk wears a designed theme of its own
+   * (`web/src/workbench/theme.css`), and this component's saturated yellow was
+   * the one un-themed block on a page of glass. So that page asks for the
+   * sentences and supplies its own shell; every other desk passes nothing and
+   * renders byte-for-byte what it rendered before this prop existed.
+   *
+   * NOT ONE WORD DIFFERS between the two forms, and
+   * `tests/prot-tail.test.tsx` asserts that by comparing their text.
+   */
+  if (bare) return <>{words}</>;
+  return <div style={{ font: '13px/1.5 system-ui, sans-serif', color: '#4a5462', background: '#fffbe9', border: '1px solid #e8dfae', borderRadius: 8, padding: '.7rem .9rem', margin: '.5rem 0 0' }}>{words}</div>;
 }

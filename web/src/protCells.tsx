@@ -159,6 +159,8 @@ export interface StructureCellProps {
   /** The channel→field fold at the cursor: the renderer reads `color` off it. */
   readonly encodings: Readonly<Record<string, string>>;
   readonly structure: StructureArtifact;
+  /** The ground the viewer clears its canvas to — the desk's well, so the box has one colour and not two. `undefined` ⇒ Mol*'s own default. */
+  readonly background?: string;
   readonly width: number;
   readonly height: number;
   onEmit(emission: ChartEmission): void;
@@ -188,12 +190,12 @@ export function StructureCell(props: StructureCellProps): JSX.Element {
   onEmitRef.current = props.onEmit;
   const onGapRef = useRef(props.onGap);
   onGapRef.current = props.onGap;
-  const { viewId, structure } = props;
+  const { viewId, structure, background } = props;
 
   useEffect(() => {
     const el = hostRef.current;
     if (el === null) return;
-    const res = bindRenderer(molstarRenderer({ structure: { text: structure.text, at: structure.at }, keyField: RESIDUE_KEY }), el, {
+    const res = bindRenderer(molstarRenderer({ structure: { text: structure.text, at: structure.at }, keyField: RESIDUE_KEY, ...(background === undefined ? {} : { background }) }), el, {
       viewId,
       callbacks: {
         emit: (emission) => onEmitRef.current(emission),
@@ -211,7 +213,9 @@ export function StructureCell(props: StructureCellProps): JSX.Element {
       res.view.unmount();
       boundRef.current = null;
     };
-  }, [viewId, structure]);
+    // the ground is a MOUNT-time fact: Mol* clears its canvas to it, and a
+    // remount to change a colour would lose the camera for nothing
+  }, [viewId, structure, background]);
 
   useEffect(() => {
     if (props.width < 1 || props.height < 1) return;
@@ -543,6 +547,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
           // the encoding fold at the cursor: a rebind of `color` in the desk's ✎ repaints the molecule
           encodings={shown[STRUCTURE_VIEW] ?? {}}
           structure={structure}
+          {...(ink === undefined ? {} : { background: ink.viewerBg })}
           width={width}
           height={height}
           onEmit={emit(STRUCTURE_VIEW, 'select')}

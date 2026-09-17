@@ -23,7 +23,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ACCENT_INK, CHAIN_INK, PW } from '../web/src/workbench/tokens.js';
+import { ACCENT_INK, CHAIN_INK, PW, VIEWER_BG } from '../web/src/workbench/tokens.js';
 
 const CSS = readFileSync(join(process.cwd(), 'web', 'src', 'workbench', 'theme.css'), 'utf8');
 
@@ -97,6 +97,7 @@ describe('the three blocks the contract asks for', () => {
       'pw-font-serif',
       'pw-font-mono',
       'pw-viewer-bg',
+      'pw-viewer-ink',
     ]) {
       expect(LIGHT, `:root declares no --${needed}`).toHaveProperty(`--${needed}`);
     }
@@ -131,7 +132,10 @@ describe('the charts are themed through the library’s own hook, and never reac
     // the bridge must set the library's own names, from OUR tokens
     for (const name of ['--vzf-brand', '--vzf-ink', '--vzf-line', '--vzf-font-mono']) expect(bridge).toContain(name);
     for (const line of bridge.split('\n').filter((l) => l.includes('--vzf-'))) {
-      expect(line, `the bridge sets ${line.trim()} to something that is not one of this desk's tokens`).toMatch(/var\(--pw-[a-z0-9-]+\)|transparent/);
+      // a token, `transparent`, or a bare NUMBER — the library's one
+      // non-colour hook is `--vzf-text-scale`, a multiplier, and a multiplier
+      // has no token to come from
+      expect(line, `the bridge sets ${line.trim()} to something that is not one of this desk's tokens`).toMatch(/var\(--pw-[a-z0-9-]+\)|transparent|:\s*[0-9.]+;/);
     }
   });
 
@@ -146,6 +150,15 @@ describe('the two copies of the chain colours are pinned to the stylesheet', () 
     expect(PW.chainA).toBe('--pw-chain-a');
     expect(PW.chainB).toBe('--pw-chain-b');
     expect(PW.accent).toBe('--pw-accent');
+  });
+
+  it('carries the viewer ground the canvas is cleared to, and it is the well’s own', () => {
+    // TWO WRITERS, ONE VALUE: the well paints this token in CSS and Mol* clears
+    // its canvas to the same one, parsed from this literal
+    // (`web/src/molstarViewer.ts`). If they drifted, a reader would see two
+    // grounds inside one box.
+    expect(VIEWER_BG).toBe(LIGHT['--pw-viewer-bg']);
+    expect(OS_DARK['--pw-viewer-bg'], 'the 3D well is dark in both palettes, so it must not be restated in the dark block').toBeUndefined();
   });
 
   it('carries the SAME bytes the stylesheet carries, in both palettes', () => {

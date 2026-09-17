@@ -33,7 +33,7 @@ import { PROT_FILES } from '../src/data/files.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
 import { stepperStages } from '../web/src/protStages.js';
 import { StagePanel } from '../web/src/workbench/StagePanel.js';
-import { NARRATIVE_LINES, stageFacts, stagePanel } from '../web/src/workbench/panel.js';
+import { NARRATIVE_LINES, firstClause, stageFacts, stagePanel } from '../web/src/workbench/panel.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,7 +46,7 @@ import { NARRATIVE_LINES, stageFacts, stagePanel } from '../web/src/workbench/pa
  */
 const TABLES = protTables(readFileSync(join(process.cwd(), PROT_FILES.structure), 'utf8'));
 
-async function mount(element: ReactElement): Promise<{ readonly words: () => string; readonly unmount: () => Promise<void>; readonly host: HTMLElement }> {
+async function mount(element: ReactElement): Promise<{ readonly words: () => string; readonly press: (label: string) => Promise<void>; readonly unmount: () => Promise<void>; readonly host: HTMLElement }> {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
@@ -56,6 +56,13 @@ async function mount(element: ReactElement): Promise<{ readonly words: () => str
   return {
     host,
     words: () => (host.textContent ?? '').replace(/\s+/g, ' '),
+    press: async (label) => {
+      const button = ([...host.querySelectorAll('[aria-label]')] as HTMLElement[]).find((el) => el.getAttribute('aria-label') === label);
+      if (button === undefined) throw new Error(`no control is called "${label}"`);
+      await act(async () => {
+        button.click();
+      });
+    },
     unmount: async () => {
       await act(async () => {
         root.unmount();
@@ -100,6 +107,43 @@ const surface = STAGES[1]!;
 const panelFor = (here: typeof interactions | null, run: ProtRun | null = RUN, focused: readonly string[] = []) =>
   stagePanel({ here, run, counts: TABLES.counts, cursor: here === null ? null : (here.commit ?? null), onPath: true, focused });
 
+/** What the fold is called on screen and for a screen reader — the composition's own two strings. */
+const FOLD = 'More about where you are standing';
+const FOLD_ARIA = 'more about where you are standing';
+
+/**
+ * THE PANEL AS THE COMPOSITION MOUNTS IT — the fold included.
+ *
+ * `web/src/protDesk.tsx` builds the fold's children out of four things: the
+ * quiet rows note, the dashboard's declared summary, the desk's own claim, and
+ * the MEASURED paragraph behind each short unavailable line. The test builds the
+ * same four so that what it presses is what a reader presses.
+ */
+const panelProps = (words: ReturnType<typeof stagePanel>) => ({
+  ...words,
+  fold: {
+    label: FOLD,
+    aria: FOLD_ARIA,
+    children: (
+      <>
+        <p>{ROWS_NOTE}</p>
+        <p>{SUMMARY}</p>
+        <p>{CLAIM}</p>
+        {words.unavailableWhy.map((stage) => (
+          <p key={stage.id}>
+            {stage.name} — {stage.why}
+          </p>
+        ))}
+      </>
+    ),
+  },
+});
+
+/** The three long things the follow-up round moved into the fold, in the words the page uses. */
+const ROWS_NOTE = 'every picture below is drawn from the 185 residue rows as they stand at commit s4';
+const SUMMARY = 'A protein structure as its depositors solved it: 185 residues in 2 chains (A: 96, B: 89)';
+const CLAIM = 'One residue, four pictures — and two of them arrive';
+
 describe('the panel is about the stage the cursor is standing in', () => {
   it('names it by its NUMBER and its DECLARED label, in the eyebrow', () => {
     expect(panelFor(surface).eyebrow).toBe(`Stage ${String(surface.number)} · ${surface.label}`);
@@ -130,12 +174,12 @@ describe('the panel is about the stage the cursor is standing in', () => {
   });
 
   it('switches when the cursor moves — a different stage is a different panel', async () => {
-    const first = await mount(<StagePanel {...panelFor(interactions)} />);
+    const first = await mount(<StagePanel {...panelProps(panelFor(interactions))} />);
     expect(first.words()).toContain(interactions.label);
     expect(first.words()).toContain(interactions.subtitle);
     expect(first.words()).not.toContain(surface.subtitle);
     await first.unmount();
-    const second = await mount(<StagePanel {...panelFor(surface)} />);
+    const second = await mount(<StagePanel {...panelProps(panelFor(surface))} />);
     expect(second.words()).toContain(surface.subtitle);
     expect(second.words()).not.toContain(interactions.subtitle);
     await second.unmount();
@@ -169,13 +213,13 @@ describe('the four facts are the acts’ own counts, read field by field', () =>
     const stages = stepperStages([], null);
     const words = stagePanel({ here: stages[0]!, run: null, counts: TABLES.counts, cursor: null, onPath: true, focused: [] });
     expect(words.facts).toEqual([]);
-    const panel = await mount(<StagePanel {...words} />);
+    const panel = await mount(<StagePanel {...panelProps(words)} />);
     expect(panel.words()).toContain('this stage has landed no counts to read');
     await panel.unmount();
   });
 
   it('puts every value in the DOM, in Mono at full ink, beside the name of the field it came from', async () => {
-    const panel = await mount(<StagePanel {...panelFor(surface)} />);
+    const panel = await mount(<StagePanel {...panelProps(panelFor(surface))} />);
     const said = panel.words();
     for (const fact of stageFacts(surface, RUN, TABLES.counts)) {
       expect(said).toContain(fact.label);
@@ -193,23 +237,41 @@ describe('a refusal and an impossibility are two different sentences, and both a
     expect(refused.state).toBe('refused');
     const words = stagePanel({ here: refused, run: { ...RUN, outcomes: REFUSED }, counts: TABLES.counts, cursor: 'c2', onPath: true, focused: [] });
     expect(words.refusal).toBe(REFUSED[2]!.refusal);
-    const panel = await mount(<StagePanel {...words} />);
+    const panel = await mount(<StagePanel {...panelProps(words)} />);
     expect(panel.words()).toContain(REFUSED[2]!.refusal!);
     // a refusal is a STATUS, not prose folded into the paragraph above it
     expect(panel.host.querySelector('[role="status"]')?.textContent).toBe(REFUSED[2]!.refusal);
     await panel.unmount();
   });
 
-  it('carries the MEASURED reason a declared stage cannot run here at all, wherever the cursor is', async () => {
+  it('announces the declared-and-impossible stage wherever the cursor is — in a handful of words', async () => {
     const declared = PROT_UNAVAILABLE_STAGES[0]!;
-    // the footnote is a fact about the DESK, so it is there for every position
+    // the announcement is a fact about the DESK, so it is there for every position
     for (const here of [interactions, surface, null]) {
-      expect(panelFor(here).unavailable).toEqual([{ id: declared.stage, name: declared.label, why: declared.why }]);
+      expect(panelFor(here).unavailable).toEqual([{ id: declared.stage, name: declared.label, short: firstClause(declared.why) }]);
     }
-    const panel = await mount(<StagePanel {...panelFor(surface)} />);
+    const panel = await mount(<StagePanel {...panelProps(panelFor(surface))} />);
+    const said = panel.words();
+    // the SHORT line is visible, and it is the measured reason's own first
+    // clause — not a paraphrase of it
+    expect(said).toContain('not available here');
+    expect(said).toContain(declared.label);
+    expect(said).toContain(firstClause(declared.why));
+    expect(firstClause(declared.why).split(/\s+/).length, 'the visible line is a handful of words, not a paragraph').toBeLessThan(20);
+    // …and the PARAGRAPH is not on screen until the fold is pressed
+    expect(said).not.toContain('access-control-allow-origin');
+    await panel.press(FOLD_ARIA);
     expect(panel.words()).toContain(declared.why);
     expect(panel.words()).toContain('access-control-allow-origin');
     await panel.unmount();
+  });
+
+  it('cuts that first clause at a punctuation boundary and never at a word count', () => {
+    expect(firstClause('one thing, and another: the rest of it')).toBe('one thing, and another');
+    expect(firstClause('one sentence. a second one')).toBe('one sentence.');
+    expect(firstClause('nothing to cut')).toBe('nothing to cut');
+    // the real one, and it stops where the measured reason's own colon is
+    expect(firstClause(PROT_UNAVAILABLE_STAGES[0]!.why)).toBe('this stage needs a sequence-database search, and a static page cannot make one');
   });
 });
 
@@ -230,13 +292,71 @@ describe('“no stage” is three different sentences, and never a guess', () =>
   });
 });
 
+describe('LESS WORDS SHOWN — the panel is short, and what it folds is one press away', () => {
+  it('shows the eyebrow, the sentences, the facts and the short line — and NOT the long prose', async () => {
+    const panel = await mount(<StagePanel {...panelProps(panelFor(surface))} />);
+    const said = panel.words();
+    // the three things the follow-up round folded are absent from the DOM
+    expect(said).not.toContain(SUMMARY);
+    expect(said).not.toContain(CLAIM);
+    expect(said).not.toContain(ROWS_NOTE);
+    expect(said).not.toContain('access-control-allow-origin');
+    // what stays is what the design draws
+    expect(said).toContain(surface.subtitle);
+    for (const fact of stageFacts(surface, RUN, TABLES.counts)) expect(said).toContain(fact.label);
+    await panel.unmount();
+  });
+
+  it('counts fewer than 150 visible words, where the same panel used to run past 300', async () => {
+    const panel = await mount(<StagePanel {...panelProps(panelFor(surface, RUN, ['How much of each residue the solvent can reach']))} />);
+    const shown = panel.words().trim().split(/\s+/).filter((w) => w.length > 0).length;
+    // measured on the built page before the follow-up round: 342 visible words.
+    // The budget here is the CEILING, not the measurement — the measurement is
+    // in the packet's report, taken in a real browser.
+    expect(shown, `the panel shows ${String(shown)} words; the design's panel is three or four sentences and a <dl>`).toBeLessThan(150);
+    await panel.unmount();
+  });
+
+  it('gives every folded word back on one press — folded is not lost', async () => {
+    const panel = await mount(<StagePanel {...panelProps(panelFor(surface))} />);
+    await panel.press(FOLD_ARIA);
+    const said = panel.words();
+    for (const folded of [SUMMARY, CLAIM, ROWS_NOTE, PROT_UNAVAILABLE_STAGES[0]!.why]) expect(said).toContain(folded);
+    await panel.unmount();
+  });
+
+  it('uses the SAME affordance the cards use, and says so through aria-expanded', async () => {
+    const panel = await mount(<StagePanel {...panelProps(panelFor(surface))} />);
+    const button = ([...panel.host.querySelectorAll('[aria-label]')] as HTMLElement[]).find((el) => el.getAttribute('aria-label') === FOLD_ARIA);
+    expect(button?.tagName).toBe('BUTTON');
+    expect(button?.getAttribute('aria-expanded')).toBe('false');
+    await panel.press(FOLD_ARIA);
+    expect(button?.getAttribute('aria-expanded')).toBe('true');
+    await panel.unmount();
+  });
+
+  it('keeps a REFUSAL and a loud rows note visible — a refusal is never behind a press', async () => {
+    const stages = stepperStages(REFUSED, { ...RUN, outcomes: REFUSED });
+    const words = stagePanel({ here: stages[1]!, run: { ...RUN, outcomes: REFUSED }, counts: TABLES.counts, cursor: 'c2', onPath: true, focused: [] });
+    const panel = await mount(
+      <StagePanel {...panelProps(words)}>
+        <p role="status">the rows at this commit were refused, in the library’s own words</p>
+      </StagePanel>,
+    );
+    const said = panel.words();
+    expect(said).toContain(REFUSED[2]!.refusal!);
+    expect(said).toContain('the rows at this commit were refused');
+    await panel.unmount();
+  });
+});
+
 describe('the two facts the DESIGN got wrong are not on this screen', () => {
   it('never blames incomplete coordinates for a residue with no backbone angle', async () => {
     const panel = await mount(
       <>
-        <StagePanel {...panelFor(interactions)} />
-        <StagePanel {...panelFor(surface)} />
-        <StagePanel {...panelFor(null)} />
+        <StagePanel {...panelProps(panelFor(interactions))} />
+        <StagePanel {...panelProps(panelFor(surface))} />
+        <StagePanel {...panelProps(panelFor(null))} />
       </>,
     );
     const said = panel.words().toLowerCase();

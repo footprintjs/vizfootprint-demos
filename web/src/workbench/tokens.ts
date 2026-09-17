@@ -31,6 +31,11 @@ export const PW = {
   chainA: '--pw-chain-a',
   chainB: '--pw-chain-b',
   accent: '--pw-accent',
+  /**
+   * The ground the 3D well is drawn on — and now also the ground Mol* clears
+   * its own canvas to (`web/src/molstarViewer.ts`). Two writers, one value.
+   */
+  viewerBg: '--pw-viewer-bg',
 } as const;
 
 /** Which palette the page is wearing. `auto` is not a value — it has already resolved to one of these by the time anything is drawn. */
@@ -51,6 +56,15 @@ export const CHAIN_INK: Readonly<Record<PwMode, { readonly a: string; readonly b
 
 /** The accent, the same way — the ink the unsplit charts' own scale is drawn in. */
 export const ACCENT_INK: Readonly<Record<PwMode, string>> = { light: '#02648f', dark: '#45a8d4' };
+
+/**
+ * THE 3D WELL'S GROUND, which is the same in both palettes.
+ *
+ * It is read in TypeScript for the same reason the two chain hues are: the
+ * thing that needs it is not CSS. Mol\* clears its canvas to a NUMBER, so the
+ * value has to arrive as a literal and be parsed (`web/src/molstarViewer.ts`).
+ */
+export const VIEWER_BG = '#05080b';
 
 /** The palette a reader is actually seeing, asked of the browser. `light` wherever there is nothing to ask. */
 export function currentMode(): PwMode {
@@ -79,6 +93,8 @@ export interface WorkbenchInk {
   readonly chainA: string;
   readonly chainB: string;
   readonly accent: string;
+  /** The 3D well's ground, as a CSS colour — handed to Mol\* so the canvas and the well are one ground. */
+  readonly viewerBg: string;
 }
 
 /**
@@ -122,10 +138,11 @@ function inkOf(el: Element | null, mode: PwMode): WorkbenchInk {
     chainA: resolveToken(el, PW.chainA, CHAIN_INK[mode].a),
     chainB: resolveToken(el, PW.chainB, CHAIN_INK[mode].b),
     accent: resolveToken(el, PW.accent, ACCENT_INK[mode]),
+    viewerBg: resolveToken(el, PW.viewerBg, VIEWER_BG),
   };
 }
 
 /** `null` when the two are the same three values — so the held object keeps its identity and nothing downstream re-folds. */
 function sameInk(was: WorkbenchInk, now: WorkbenchInk): WorkbenchInk | null {
-  return was.chainA === now.chainA && was.chainB === now.chainB && was.accent === now.accent ? null : now;
+  return was.chainA === now.chainA && was.chainB === now.chainB && was.accent === now.accent && was.viewerBg === now.viewerBg ? null : now;
 }

@@ -12,7 +12,7 @@
  * (`./theme.css`). There is not a literal in this file, and the theme test
  * fails if one appears.
  */
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 // ── the shared glass button, which three bands each want ─────────────────────
 
@@ -56,12 +56,154 @@ export function GlassButton({ children, open = false, label, expanded, small = f
   );
 }
 
-/** The chevron the design puts on a disclosure. Its own component so the two disclosures cannot drift. */
+/** The chevron the design puts on a disclosure. Its own component so no two disclosures can drift. */
 export function Chevron({ open }: { readonly open: boolean }): JSX.Element {
   return (
     <svg viewBox="0 0 12 12" width={10} height={10} aria-hidden="true" style={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s ease' }}>
       <path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/**
+ * A NUMBER INSIDE A SENTENCE — Mono, at full ink.
+ *
+ * The design's rule across the whole desk is that a figure is Mono and the
+ * words around it are Sans, and a disclosure's title is the one place the two
+ * meet. One component, so no title spells it a different way.
+ */
+export function Count({ children }: { readonly children: ReactNode }): JSX.Element {
+  return <span style={{ fontFamily: 'var(--pw-font-mono)', color: 'var(--pw-ink)' }}>{children}</span>;
+}
+
+// ── the one disclosure shape, used everywhere something folds away ───────────
+
+export interface DisclosureProps {
+  /** The visible title. Sans; a count in it should be spelled by the caller in Mono. */
+  readonly title: ReactNode;
+  /** The accessible name of the control — a title that carries markup cannot be read off the DOM. */
+  readonly label: string;
+  /**
+   * `card` draws the glass card the tail's panels wear; `bare` is the button
+   * and the revealed block alone, for a fold INSIDE something that is already
+   * a card (the stage panel's).
+   */
+  readonly shape: 'card' | 'bare';
+  readonly children: ReactNode;
+}
+
+/**
+ * ONE DISCLOSURE, AND ONE SHAPE FOR ALL OF THEM.
+ *
+ * Every fold on this desk is this component: the panel's own fold, the four
+ * record panels at the foot of the page, the recorder's account and the list of
+ * what this page does without. The card's `Full note` is the same affordance
+ * ({@link GlassButton} plus {@link Chevron}), so a reader learns the gesture
+ * once — which is the whole reason the packet was allowed to fold anything
+ * away at all.
+ *
+ * It holds a `<button aria-expanded>` and reveals its body BELOW it. Not
+ * `<details>`: a `<summary>` cannot carry the glass button's own layout, and
+ * the four panels this replaces each drew their own chrome a different way.
+ */
+export function Disclosure({ title, label, shape, children }: DisclosureProps): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const card = shape === 'card';
+  return (
+    <section
+      style={
+        card
+          ? {
+              border: '1px solid var(--pw-edge-card)',
+              borderRadius: 'var(--pw-r-card)',
+              background: 'var(--pw-glass-card)',
+              backdropFilter: 'var(--pw-blur-card)',
+              WebkitBackdropFilter: 'var(--pw-blur-card)',
+              boxShadow: 'var(--pw-shadow-card)',
+              padding: '12px 16px',
+              minWidth: 0,
+            }
+          : { minWidth: 0 }
+      }
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={label}
+        style={{
+          font: 'inherit',
+          fontFamily: 'var(--pw-font-sans)',
+          fontSize: 12.5,
+          fontWeight: card ? 600 : 400,
+          color: card ? 'var(--pw-ink)' : 'var(--pw-accent)',
+          background: 'none',
+          border: 0,
+          padding: 0,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ minWidth: 0 }}>{title}</span>
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', color: 'var(--pw-accent)' }}>
+          <Chevron open={open} />
+        </span>
+      </button>
+      {!open ? null : (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--pw-rule)', fontSize: 12, lineHeight: 1.6, color: 'var(--pw-mid-2)', minWidth: 0 }}>{children}</div>
+      )}
+    </section>
+  );
+}
+
+// ── the designed home for what is selected ───────────────────────────────────
+
+export interface SelectionBarProps {
+  /** The Mono eyebrow that names the row — what these controls are about. */
+  readonly eyebrow: string;
+  readonly children: ReactNode;
+}
+
+/**
+ * WHAT IS SELECTED, IN A ROOM OF ITS OWN.
+ *
+ * The library's own two pieces — the live chips and the saved pictures — used
+ * to sit loose between the panel and the charts, at two different sizes, on no
+ * token and in no card. They say something true and they stay; what they get
+ * here is a home: one quiet glass row, a Mono eyebrow naming it, and the
+ * library's parts inside at this desk's own density.
+ *
+ * The density is the LIBRARY'S OWN HOOK and not a selector into its markup:
+ * both of those parts re-root `.vzf` on themselves, which re-declares the
+ * library's defaults there and discards a host's inherited token overrides — so
+ * the composition hands each one `className="pw-scope"` and the bridge rule in
+ * `./theme.css` reaches them again (a finding, reported).
+ */
+export function SelectionBar({ eyebrow, children }: SelectionBarProps): JSX.Element {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 14,
+        flexWrap: 'wrap',
+        padding: '10px 14px',
+        background: 'var(--pw-glass-facts)',
+        backdropFilter: 'var(--pw-blur-facts)',
+        WebkitBackdropFilter: 'var(--pw-blur-facts)',
+        border: '1px solid var(--pw-edge-card)',
+        borderRadius: 'var(--pw-r-card)',
+        minWidth: 0,
+      }}
+    >
+      <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-soft)', flex: '0 0 auto' }}>{eyebrow}</span>
+      <span aria-hidden style={{ flex: '0 0 1px', alignSelf: 'stretch', background: 'var(--pw-rule-divider)' }} />
+      {children}
+    </div>
   );
 }
 

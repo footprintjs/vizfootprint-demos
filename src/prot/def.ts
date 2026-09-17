@@ -214,6 +214,22 @@ const CAPTION_TAIL =
   'drawn in three dimensions by Mol* — code this project did not write — and again as the two angles that describe each residue’s backbone. Both of those are read straight off the file. The other two pictures are not there when the page opens: a stage finds every non-covalent contact in the entry, a second rolls a solvent probe over it, and each one lands its evidence as a commit. Until a stage ends its chart is refused at the read, in the library’s own words, and stepping the cursor back behind that commit refuses it again — the screen un-builds because the log does.';
 
 export const PROT_WORDS = {
+  /**
+   * WHAT THE PAGE IS CALLED — and it is a different kind of word from the two
+   * below it.
+   *
+   * A NAME is not data about the run. It does not count anything, it does not
+   * change with the entry, and it cannot be read off a file: it is what this
+   * desk is, the same on every entry and in every theme, and it is what the
+   * design reserves the header's first slot for. So it is DECLARED, here,
+   * beside the desk's other words — and the header prints this one.
+   *
+   * {@link PROT_WORDS.title} is the desk's CLAIM ABOUT ITSELF, which is a
+   * different thing and wants a different place: it is a sentence, it argues
+   * something, and a reader meets it under the panel's fold and on the landing
+   * rather than in the slot where a name goes.
+   */
+  name: 'Protein Hot Spot Workbench',
   title: 'One residue, four pictures — and two of them arrive',
   caption: `A protein structure as its depositors solved it, ${CAPTION_TAIL}`,
 } as const;

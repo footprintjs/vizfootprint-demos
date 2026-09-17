@@ -17,8 +17,10 @@
  *                  `src/prot/orchestrator.ts` · `landAct` wrote it.
  *   the four facts `InteractionCounts` / `SurfaceCounts` — the acts' own
  *                  answers, read field by field (see {@link stageFacts}).
- *   the footnote   `src/prot/analyses.ts` · `PROT_UNAVAILABLE_STAGES` · `why`,
- *                  the measured reason a stage cannot run on this desk.
+ *   the footnote   `src/prot/analyses.ts` · `PROT_UNAVAILABLE_STAGES` · `why`
+ *                  — its FIRST CLAUSE on the visible line ({@link firstClause},
+ *                  cut at a punctuation boundary and re-worded nowhere), the
+ *                  whole paragraph in the panel's fold.
  *
  * Nothing here composes a sentence about a protein. The two sentences the
  * DESIGN wrote about this stage are not reproduced: one of them is wrong about
@@ -37,7 +39,7 @@ import { CONTACTS_ACT, PAIRS_ACT, PROT_UNAVAILABLE_STAGES, SURFACE_ACT } from '.
 import type { ProtCounts } from '../../../src/prot/etl.js';
 import type { ProtRun } from '../../../src/prot/orchestrator.js';
 import type { StageState, StepperStage } from '../protStages.js';
-import type { PanelFact } from './StagePanel.js';
+import type { PanelFact, UnavailableLine } from './StagePanel.js';
 
 /** How many of the recorder's own sentences reach the panel. The rest are in the run's own disclosure — see the file header. */
 export const NARRATIVE_LINES = 3;
@@ -96,6 +98,21 @@ export function stageFacts(stage: StepperStage, run: ProtRun | null, counts: Pro
   return [];
 }
 
+/**
+ * A HANDFUL OF WORDS OUT OF A PARAGRAPH — the first clause of a measured
+ * reason, verbatim.
+ *
+ * Cut at the first colon, or at the first full stop when there is no colon, and
+ * never at a word count: a sentence chopped mid-clause is a sentence this code
+ * has edited. Whatever is cut is in the panel's fold, whole.
+ */
+export function firstClause(sentence: string): string {
+  const at = sentence.indexOf(':');
+  const stop = sentence.indexOf('. ');
+  const cut = at >= 0 ? at : stop >= 0 ? stop + 1 : -1;
+  return cut < 0 ? sentence : sentence.slice(0, cut).trim();
+}
+
 /** Everything the panel draws, as plain data. */
 export interface PanelWords {
   readonly label: string;
@@ -104,7 +121,10 @@ export interface PanelWords {
   readonly refusal: string | null;
   readonly facts: readonly PanelFact[];
   readonly noFacts: string;
-  readonly unavailable: readonly { readonly id: string; readonly name: string; readonly why: string }[];
+  /** The SHORT visible line per declared-and-impossible stage. */
+  readonly unavailable: readonly UnavailableLine[];
+  /** The same stages with their MEASURED paragraph, for the panel's fold. Never dropped, only moved. */
+  readonly unavailableWhy: readonly { readonly id: string; readonly name: string; readonly why: string }[];
 }
 
 /** What the panel is told about where the cursor is standing. */
@@ -121,8 +141,16 @@ export interface PanelInput {
   readonly focused: readonly string[];
 }
 
-/** The stages this desk declares and cannot perform, with the measured reason. A fact about the desk, not about the cursor. */
-const UNAVAILABLE = PROT_UNAVAILABLE_STAGES.map((stage) => ({ id: stage.stage, name: stage.label, why: stage.why }));
+/**
+ * THE STAGES THIS DESK DECLARES AND CANNOT PERFORM — a fact about the desk, not
+ * about the cursor, so both forms are the same on every panel.
+ *
+ * `UNAVAILABLE` is the short visible line; `UNAVAILABLE_WHY` is the measured
+ * paragraph the fold carries. The short one is the long one's own first clause,
+ * so nothing on screen is a paraphrase of anything.
+ */
+const UNAVAILABLE: readonly UnavailableLine[] = PROT_UNAVAILABLE_STAGES.map((stage) => ({ id: stage.stage, name: stage.label, short: firstClause(stage.why) }));
+const UNAVAILABLE_WHY = PROT_UNAVAILABLE_STAGES.map((stage) => ({ id: stage.stage, name: stage.label, why: stage.why }));
 
 /**
  * THE PANEL, FOLDED.
@@ -149,6 +177,7 @@ export function stagePanel(input: PanelInput): PanelWords {
       facts: [],
       noFacts: 'no stage is standing, so there are no counts to read',
       unavailable: UNAVAILABLE,
+      unavailableWhy: UNAVAILABLE_WHY,
     };
   }
   const word = WORD[here.state];
@@ -168,5 +197,6 @@ export function stagePanel(input: PanelInput): PanelWords {
     facts: stageFacts(here, run, counts),
     noFacts: 'this stage has landed no counts to read',
     unavailable: UNAVAILABLE,
+    unavailableWhy: UNAVAILABLE_WHY,
   };
 }

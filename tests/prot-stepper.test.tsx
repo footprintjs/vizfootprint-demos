@@ -35,7 +35,7 @@ import type { ReactElement } from 'react';
 import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
 import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
-import { ActRow, RunNarrative, landedLine } from '../web/src/protTrace.js';
+import { ActRow, RunNarrative, landedLine, narrativeTitle } from '../web/src/protTrace.js';
 import { StageDetail } from '../web/src/protDesk.js';
 import { chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from '../web/src/protStages.js';
 import { StageStepper } from '../web/src/workbench/Stepper.js';
@@ -374,13 +374,21 @@ describe('the recorder’s own account stays whole', () => {
     const run = runWith({ outcomes: ALL_LANDED });
     const panel = await mount(<RunNarrative run={run} />);
     const said = panel.words();
-    expect(said).toContain('the recorder’s own 2 sentences, in order and not re-worded here');
     for (const line of run.narrative) expect(said).toContain(line);
     expect(said.indexOf(run.narrative[0]!)).toBeLessThan(said.indexOf(run.narrative[1]!));
     await panel.unmount();
   });
 
-  it('shows nothing at all when the recorder said nothing', async () => {
+  it('hands its TITLE over separately, counted off the recorder, so one disclosure shape can carry it', () => {
+    // the list used to draw its own `<details>`; the desk now folds everything
+    // through `workbench/Chrome.tsx` · `Disclosure`, so this file supplies the
+    // words and the composition supplies the box
+    expect(narrativeTitle(runWith({ outcomes: ALL_LANDED }))).toBe('What the run looked like from inside — the recorder’s own 2 sentences, in order and not re-worded here');
+  });
+
+  it('shows nothing at all, and offers no control, when the recorder said nothing', async () => {
+    expect(narrativeTitle(runWith({ narrative: [] }))).toBeNull();
+    expect(narrativeTitle(null)).toBeNull();
     const panel = await mount(<div>{RunNarrative({ run: runWith({ narrative: [] }) })}</div>);
     expect(panel.words()).not.toContain('from inside');
     await panel.unmount();

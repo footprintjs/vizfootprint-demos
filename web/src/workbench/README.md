@@ -41,6 +41,34 @@ A component that takes only props is a component that can later move into `vizfo
 
 4. **Nothing is dropped to make room.** The redesign moved every long caption behind a `Full note` disclosure — it did not shorten one. `tests/prot-cards.test.tsx` opens the disclosure and asserts the note's own sentences are in the DOM.
 
+## One disclosure, everywhere something folds
+
+`Chrome.tsx · Disclosure` is the ONLY fold shape on this desk. It draws a `<button aria-expanded>` plus `Chevron` and reveals its body below — never `<details>`, because a `<summary>` cannot carry the glass button's layout and the page used to fold three things three different ways.
+
+| where | shape | what it holds |
+|---|---|---|
+| a chart card's `Full note` | the card's own `GlassButton` + `Chevron` | the long caption, whole |
+| the stage panel's `More about where you are standing` | `shape="bare"` | the dashboard's declared summary, this desk's claim about itself, the commit the pictures are drawn at, and the measured reason a declared stage cannot run here |
+| the four record panels, the recorder's account, the list of omissions | `shape="card"` | the library's own `CommitLog` / `GapsPanel` / `Sheet`, untouched |
+
+**The panel shows three or four sentences and a `<dl>`, and nothing else.** That is the author's ruling — *less words shown, one panel, about the stage* — and the only things allowed past it are a REFUSAL (never behind a press) and ONE SHORT LINE naming the stage this build cannot run at all. That line is the measured reason's own first clause (`panel.ts · firstClause`, cut at a punctuation boundary, re-worded nowhere); the paragraph is in the fold. An announcement does not have to be a paragraph to be an announcement.
+
+`tests/prot-panel.test.tsx` holds the panel under 150 visible words and presses the fold to read every folded sentence back. `tests/prot-tail.test.tsx` does the same for the foot of the page.
+
+## A number is Mono, the words round it are Sans
+
+`Chrome.tsx · Count`. One component, so no title spells it differently — the four record panels' counts and the facts strip agree by construction.
+
+## The three library parts that lose a host's tokens, and the door back in
+
+`SelectionChips`, `SavedSelections` and `Sheet` each render `class="vzf …"` on themselves. That re-declares the library's own defaults ON that element, and a declaration on an element beats one inherited from an ancestor — so the bridge in `theme.css` stops at their boundary. The way back in is the library's own `className` prop: the composition passes `className="pw-scope"`, the bridge rule matches `.vzf.pw-scope`, and the tokens reach inside. Never a selector into their markup. (Reported as a finding.)
+
+The same bridge sets `--vzf-text-scale: 0.85`, the library's own density hook, because its root rule is `font-size: calc(15px * var(--vzf-text-scale))` and those three parts would otherwise render a third larger than everything around them.
+
+## The 3D well's ground has two writers, and the canvas wins
+
+`theme.css · --pw-viewer-bg` paints the well; `tokens.ts · VIEWER_BG` is the same value resolved in TypeScript and handed to Mol\* as a `Color` (`web/src/molstarViewer.ts`), which clears its canvas over the whole well. They cannot disagree — one value, and the theme test pins the TypeScript copy to the stylesheet. The well shows through only before WebGL has painted and in the case where it never does, where it is the ground the renderer's own refusal sentence is read on. The molecule's own colours are the paint's and are untouched.
+
 ## The one place two copies of a value exist, and the pin that keeps them one
 
 The library's charts take a categorical colour through a **function** (`colorOf`), not through a stylesheet, so the two chain hues have to exist in TypeScript as well as in CSS. `tokens.ts` · `CHAIN_INK` carries the same bytes `theme.css` carries, for an environment with no stylesheet, and `tests/prot-theme.test.ts` **parses the stylesheet and fails when the two disagree**. The stylesheet is the owner; the copy is pinned, never trusted.

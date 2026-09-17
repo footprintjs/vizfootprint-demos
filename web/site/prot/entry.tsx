@@ -171,8 +171,9 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         checks={checks}
         session={surface.session}
         table={RESIDUES_TABLE}
-        rowsNote={<RowsNote residues={residues} />}
-        title={PROT_WORDS.title}
+        rowsNote={rowsNote(residues)}
+        name={PROT_WORDS.name}
+        claim={PROT_WORDS.title}
         credit={booted.credit}
         counts={surface.tables.counts}
         onSearchAgain={onSearchAgain}
@@ -185,20 +186,58 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         sentence it cannot say about the entry, and both are still on the page
         in the words they were read in.
       */}
-      <div style={{ padding: '0 24px 32px', display: 'grid', gap: '.4rem' }}>
-        <EntryNotes entry={booted.entry} notes={notes} cost={booted.cost} onSearchAgain={onSearchAgain} />
-        <Credit credit={booted.credit} characters={surface.structure.characters} skipped={skippedTotal(surface.tables.skipped)} />
-        <WhatIsMissing
-          extra={
-            <>
-              {' '}
-              And one thing that is missing on <i>every</i> build of this desk, server or not: <b>a version for the structure file</b>. The other three desks declare their tables through the library's source
-              port, so a carrier vouches for what it read and every commit carries that version. A structure file is not rows, CSV or JSON — no carrier will take it — so these bytes reach the 3D viewer as an
-              argument, and travelling back to an earlier commit gives you the rows that were true then with whatever file the page is holding now. The desk says it under the viewer too, because that is the
-              picture it affects.
-            </>
-          }
-        />
+      {/*
+        THE PAGE'S OWN FOOT, on the theme's tokens: one glass card, the same
+        edge and radius as every other card, hairlines between the three blocks.
+        NOT ONE WORD OF THEIR CONTENT CHANGES — this is clothes. The static-build
+        note in particular keeps every clause, which is why it arrives here
+        `bare` (`web/site/boot.tsx` · `WhatIsMissing`) rather than in its own
+        saturated box: the words are the same and
+        `tests/prot-tail.test.tsx` compares them.
+      */}
+      <div style={{ padding: '0 24px 32px' }}>
+        <section
+          style={{
+            display: 'grid',
+            gap: 12,
+            padding: '14px 18px',
+            border: '1px solid var(--pw-edge-card)',
+            borderRadius: 'var(--pw-r-card)',
+            background: 'var(--pw-glass-card)',
+            backdropFilter: 'var(--pw-blur-card)',
+            WebkitBackdropFilter: 'var(--pw-blur-card)',
+            boxShadow: 'var(--pw-shadow-card)',
+            fontSize: 12,
+            lineHeight: 1.55,
+            color: 'var(--pw-mid-2)',
+          }}
+        >
+          <EntryNotes entry={booted.entry} notes={notes} cost={booted.cost} onSearchAgain={onSearchAgain} />
+          <span aria-hidden style={{ height: 1, background: 'var(--pw-rule)' }} />
+          <Credit credit={booted.credit} characters={surface.structure.characters} skipped={skippedTotal(surface.tables.skipped)} />
+          <span aria-hidden style={{ height: 1, background: 'var(--pw-rule)' }} />
+          {/*
+            IN A PARAGRAPH, and it has to be: `bare` answers a FRAGMENT of
+            inline prose, and a fragment dropped straight into this grid makes
+            every `<b>` in it a grid item of its own — which a real browser
+            showed as the sentence broken into a dozen lines. It is one
+            paragraph, so it goes in one `<p>`.
+          */}
+          <p style={{ margin: 0 }}>
+            <WhatIsMissing
+              bare
+              extra={
+                <>
+                  {' '}
+                  And one thing that is missing on <i>every</i> build of this desk, server or not: <b>a version for the structure file</b>. The other three desks declare their tables through the library's
+                  source port, so a carrier vouches for what it read and every commit carries that version. A structure file is not rows, CSV or JSON — no carrier will take it — so these bytes reach the 3D
+                  viewer as an argument, and travelling back to an earlier commit gives you the rows that were true then with whatever file the page is holding now. The desk says it under the viewer too,
+                  because that is the picture it affects.
+                </>
+              }
+            />
+          </p>
+        </section>
       </div>
     </>
   );
@@ -218,22 +257,42 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
  *   - a read that answered — the commit the rows came from, so the pictures and
  *     the stepper can never be read as disagreeing about where the cursor is.
  */
-function RowsNote({ residues }: { readonly residues: ResiduesNow }): JSX.Element {
-  const NOTE: React.CSSProperties = { font: '12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif', margin: '.4rem 0 0' };
+function rowsNote(residues: ResiduesNow): { readonly line: JSX.Element; readonly quiet: boolean } {
+  const NOTE: React.CSSProperties = { fontSize: 12, lineHeight: 1.5, margin: '.4rem 0 0' };
   if (residues.refused !== null) {
-    return (
-      <p role="status" style={{ ...NOTE, color: '#8a2b2b' }}>
-        the rows at this commit were refused, in the library&rsquo;s own words: <i>{residues.refused}</i> — the pictures below fall back to the columns the file itself gave, so nothing an act landed is on them
-      </p>
-    );
+    return {
+      // LOUD: the panel keeps this one visible
+      quiet: false,
+      line: (
+        <p role="status" style={{ ...NOTE, color: 'var(--pw-refuse-ink)' }}>
+          the rows at this commit were refused, in the library&rsquo;s own words: <i>{residues.refused}</i> — the pictures below fall back to the columns the file itself gave, so nothing an act landed is on them
+        </p>
+      ),
+    };
   }
-  return (
-    <p role="status" style={{ ...NOTE, color: '#5a6572' }}>
-      {residues.reading
-        ? 'reading the rows at the commit you just moved to — the pictures below are still the previous one’s until it answers'
-        : `every picture below is drawn from the ${residues.rows.length.toLocaleString('en-US')} residue rows as they stand at ${residues.cursor === null ? 'the root of this log — no act has landed yet' : `commit ${residues.cursor}`}`}
-    </p>
-  );
+  if (residues.reading) {
+    return {
+      // ALSO LOUD: the pictures on screen are the PREVIOUS cursor's, and a
+      // reader has to be told that while it is true
+      quiet: false,
+      line: (
+        <p role="status" style={{ ...NOTE, color: 'var(--pw-mid-2)' }}>
+          reading the rows at the commit you just moved to — the pictures below are still the previous one&rsquo;s until it answers
+        </p>
+      ),
+    };
+  }
+  return {
+    // QUIET: a plain statement of where the cursor is standing, which is what
+    // the follow-up round moved into the panel's fold
+    quiet: true,
+    line: (
+      <p role="status" style={{ ...NOTE, color: 'var(--pw-mid-2)' }}>
+        every picture below is drawn from the {residues.rows.length.toLocaleString('en-US')} residue rows as they stand at{' '}
+        {residues.cursor === null ? 'the root of this log — no act has landed yet' : `commit ${residues.cursor}`}
+      </p>
+    ),
+  };
 }
 
 /** The credit the archive asks for, in the entry's own words. */
@@ -321,7 +380,7 @@ function Page(): JSX.Element {
     setPhase({ status: 'landing', sentence: null });
   }, []);
 
-  if (phase.status === 'landing') return <ProtLanding title={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={browserArchive} refusal={phase.sentence} onOpen={open} />;
+  if (phase.status === 'landing') return <ProtLanding name={PROT_WORDS.name} claim={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={browserArchive} refusal={phase.sentence} onOpen={open} />;
   if (phase.status === 'broken') return <Broken sentence={phase.sentence} />;
   if (phase.status === 'reading') {
     return (

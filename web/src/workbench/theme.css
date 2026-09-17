@@ -332,6 +332,12 @@ body.pw-body {
   --vzf-line-soft: var(--pw-rule-faint);
   --vzf-paper: transparent;
   --vzf-surface: var(--pw-glass-card);
+  /* THE LIBRARY'S OWN DENSITY HOOK. Its root rule is
+     `font-size: calc(15px * var(--vzf-text-scale))`, and two of its parts
+     (`SelectionChips`, `SavedSelections`, `Sheet`) re-root `.vzf` on
+     themselves — so without this they render a third larger than everything
+     around them. `0.85` puts 15px at this desk's own 12.75px. */
+  --vzf-text-scale: 0.85;
   --vzf-font-body: var(--pw-font-sans);
   --vzf-font-display: var(--pw-font-serif);
   --vzf-font-mono: var(--pw-font-mono);

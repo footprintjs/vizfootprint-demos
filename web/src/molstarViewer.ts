@@ -48,13 +48,53 @@ import type { PaintBucket, ResidueAddress, StructureViewerPort } from './molstar
 const FORMAT = 'pdb' as const;
 
 /**
+ * A CSS COLOUR AS A MOL\* COLOUR — `#05080b` becomes `0x05080b`.
+ *
+ * `undefined` for anything that is not a six-digit hex, which means "say
+ * nothing and let the engine keep its own default": a host that handed over a
+ * colour nobody can parse should not silently get black.
+ */
+function molColor(css: string | undefined): Color | undefined {
+  if (css === undefined || !/^#[0-9a-fA-F]{6}$/.test(css)) return undefined;
+  return Color(Number.parseInt(css.slice(1), 16));
+}
+
+/** What a host may say about the box it is mounting this viewer into. */
+export interface MolstarViewerOptions {
+  /**
+   * THE GROUND, as a CSS colour — the ONE thing about the picture this desk
+   * decides, and it decides it because it owns the box.
+   *
+   * Absent ⇒ Mol\*'s own default. See {@link molstarViewer} for which of the
+   * two writers of that colour wins.
+   */
+  readonly background?: string;
+}
+
+/**
  * Start a viewer inside `el` and answer the port.
  *
  * Throws when this browser will not give Mol* a WebGL context — which the
  * renderer catches and says out loud, because a 3D view that silently draws
  * nothing is the worst of the three outcomes.
+ *
+ * ── THE GROUND NOW HAS TWO WRITERS, AND THE CANVAS WINS ────────────────────
+ * The desk frames this viewer in a dark well of its own
+ * (`web/src/workbench/ChartCard.tsx` · `ViewerBox`, painted
+ * `var(--pw-viewer-bg)`), and Mol* clears its canvas over the whole of it. So
+ * two things write that colour and the CANVAS is what a reader sees; the well
+ * shows through only before WebGL has painted and in the one case where it
+ * never does — a viewer that could not start, where the well is the ground the
+ * renderer's own refusal sentence is read on.
+ *
+ * They cannot disagree, because they are the same value: the well takes it from
+ * the token in CSS and this function takes it from the SAME token resolved in
+ * TypeScript (`web/src/workbench/tokens.ts` · `PW.viewerBg`, its literal copy
+ * pinned to the stylesheet by `tests/prot-theme.test.ts`). The molecule's own
+ * colours are untouched — this is the page not letting two grounds fight inside
+ * one box, not the page overriding somebody else's picture.
  */
-export async function molstarViewer(el: HTMLElement): Promise<StructureViewerPort> {
+export async function molstarViewer(el: HTMLElement, options: MolstarViewerOptions = {}): Promise<StructureViewerPort> {
   const doc = el.ownerDocument;
   const container = doc.createElement('div');
   container.style.cssText = 'position:absolute;inset:0';
@@ -63,7 +103,11 @@ export async function molstarViewer(el: HTMLElement): Promise<StructureViewerPor
   container.append(canvas);
   el.append(container);
 
-  const plugin = new PluginContext(DefaultPluginSpec());
+  const spec = DefaultPluginSpec();
+  const ground = molColor(options.background);
+  const plugin = new PluginContext(
+    ground === undefined ? spec : { ...spec, canvas3d: { ...spec.canvas3d, renderer: { ...spec.canvas3d?.renderer, backgroundColor: ground } } },
+  );
   await plugin.init();
   if (!(await plugin.initViewerAsync(canvas, container))) {
     plugin.dispose();

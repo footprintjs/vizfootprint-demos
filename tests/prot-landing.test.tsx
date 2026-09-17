@@ -114,8 +114,11 @@ async function mount(element: ReactElement): Promise<{
 describe('the landing says what this is, and offers the example by name', () => {
   it('carries the desk’s own title and caption, the box, the rule and the example', async () => {
     const { doors, calls } = fakeArchive(() => ({ status: 200, body: RECORD_1AY7 }));
-    const page = await mount(<ProtLanding title={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={doors} onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name={PROT_WORDS.name} claim={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={doors} onOpen={() => undefined} />);
     const said = page.words();
+    // THE NAME is the big line; the def's CLAIM about this desk is a sentence
+    // below it, and both are on the page
+    expect(said).toContain(PROT_WORDS.name);
     expect(said).toContain(PROT_WORDS.title);
     expect(said).toContain(PROT_WORDS.caption.slice(0, 60));
     expect(said).toContain('Four characters that look like an entry id');
@@ -130,7 +133,7 @@ describe('the landing says what this is, and offers the example by name', () => 
   it('opens the example when the box is empty, and when its link is clicked — with no request either way', async () => {
     const opened: string[] = [];
     const { doors, calls } = fakeArchive(() => ({ status: 200, body: RECORD_1AY7 }));
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={(entry) => opened.push(entry)} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} onOpen={(entry) => opened.push(entry)} />);
     await page.submit();
     await page.click(`Open the example, ${EXAMPLE_ENTRY}`);
     expect(opened).toEqual([EXAMPLE_ENTRY, EXAMPLE_ENTRY]);
@@ -143,7 +146,7 @@ describe('an id opens that entry; words ask the archive', () => {
   it('opens a typed id, upper-cased, without asking the archive anything', async () => {
     const opened: string[] = [];
     const { doors, calls } = fakeArchive(() => ({ status: 200, body: RECORD_1AY7 }));
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={(entry) => opened.push(entry)} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} onOpen={(entry) => opened.push(entry)} />);
     await page.type('1ay7');
     await page.submit();
     expect(opened).toEqual(['1AY7']);
@@ -158,7 +161,7 @@ describe('an id opens that entry; words ask the archive', () => {
       if (url.endsWith('1A19')) return { status: 200, body: recordWith({ deposited_polymer_entity_instance_count: 1 }, { struct: { title: 'BARSTAR' }, exptl: [{ method: 'SOLUTION NMR' }] }) };
       return { status: 200, body: RECORD_1AY7 };
     });
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={(entry) => opened.push(entry)} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} onOpen={(entry) => opened.push(entry)} />);
     await page.type('barstar');
     await page.submit();
     const said = page.words();
@@ -185,7 +188,7 @@ describe('an id opens that entry; words ask the archive', () => {
 
   it('says so, in the service’s own answer, when a question matches nothing', async () => {
     const { doors } = fakeArchive(() => ({ status: 204, body: '' }));
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} onOpen={() => undefined} />);
     await page.type('zzzqqqxxnotathing');
     await page.submit();
     expect(page.words()).toContain('the archive\'s search answered 204 (no content) for "zzzqqqxxnotathing" — nothing in the PDB\'s full text matches those words');
@@ -199,7 +202,7 @@ describe('an id opens that entry; words ask the archive', () => {
       if (url.endsWith('4V4A')) return { status: 200, body: recordWith({ deposited_atom_count: 200_000 }) };
       return noSuchEntry('9ZZZ');
     });
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} onOpen={() => undefined} />);
     await page.type('ribosome');
     await page.submit();
     const said = page.words();
@@ -215,7 +218,7 @@ describe('an id opens that entry; words ask the archive', () => {
 
   it('says so on screen when nothing answers at all — an offline browser is a sentence, not a stuck page', async () => {
     const offline: ArchiveFetch = () => Promise.reject(new TypeError('Failed to fetch'));
-    const page = await mount(<ProtLanding title="t" caption="c" doors={offline} onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={offline} onOpen={() => undefined} />);
     await page.type('barstar');
     await page.submit();
     const said = page.words();
@@ -227,7 +230,7 @@ describe('an id opens that entry; words ask the archive', () => {
 
   it('shows the refusal a reader arrived with, verbatim, above the box', async () => {
     const { doors } = fakeArchive(() => ({ status: 200, body: RECORD_1AY7 }));
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} refusal="the archive has no entry “9ZZZ”" onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} refusal="the archive has no entry “9ZZZ”" onOpen={() => undefined} />);
     expect(page.words()).toContain('the archive has no entry “9ZZZ”');
     await page.unmount();
   });
@@ -236,10 +239,13 @@ describe('an id opens that entry; words ask the archive', () => {
 describe('screen one, in its three states — the design’s clothes over the same behaviour', () => {
   it('EMPTY: one centred column, the serif title, one field, one accent button, the example and the rule', async () => {
     const { doors } = fakeArchive(() => ({ status: 200, body: RECORD_1AY7 }));
-    const page = await mount(<ProtLanding title={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={doors} onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name={PROT_WORDS.name} claim={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={doors} onOpen={() => undefined} />);
     // the title is the DEF's, in the serif, as an h1
     const heading = page.host.querySelector('h1');
-    expect(heading?.textContent).toBe(PROT_WORDS.title);
+    // the NAME, not the claim: a product's name is what the design reserves
+    // the big serif line for
+    expect(heading?.textContent).toBe(PROT_WORDS.name);
+    expect(heading?.textContent).not.toBe(PROT_WORDS.title);
     expect(heading?.getAttribute('style') ?? '').toContain('var(--pw-font-serif)');
     // exactly one field and one submit, and the field carries the accessible name
     expect(page.host.querySelectorAll('input')).toHaveLength(1);
@@ -256,7 +262,7 @@ describe('screen one, in its three states — the design’s clothes over the sa
       if (url.includes('/rcsbsearch/')) return { status: 200, body: searchAnswer(['2CX6'], 1) };
       return { status: 200, body: RECORD_1AY7 };
     });
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} onOpen={() => undefined} />);
     await page.type('barstar');
     await page.submit();
     // the title moved into a header band beside the form, so there is no h1 any more
@@ -270,7 +276,7 @@ describe('screen one, in its three states — the design’s clothes over the sa
 
   it('NOTHING MATCHED: the serif apology, the service’s own sentence, the two real facts, then the example', async () => {
     const { doors } = fakeArchive(() => ({ status: 204, body: '' }));
-    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={() => undefined} />);
+    const page = await mount(<ProtLanding name="t" claim="c" caption="c" doors={doors} onOpen={() => undefined} />);
     await page.type('rnase sa hot spot map');
     await page.submit();
     const heading = page.host.querySelector('h2');

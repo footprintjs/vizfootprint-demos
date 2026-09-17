@@ -60,7 +60,6 @@ import {
   SavedSelections,
   SelectionChips,
   Sheet,
-  VizPanel,
   sessionSheetData,
   themeAttr,
   useSessionView,
@@ -72,9 +71,9 @@ import type { ActOutcome, ProtRun } from '../../src/prot/orchestrator.js';
 import { STRUCTURE_VIEW } from '../../src/prot/def.js';
 import { useProtCells, type ProtCell, type ProtDeskData } from './protCells.js';
 import { useProtProjection } from './protProjection.js';
-import { ActRow, RunNarrative } from './protTrace.js';
+import { ActRow, RunNarrative, narrativeTitle } from './protTrace.js';
 import { chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from './protStages.js';
-import { FactsStrip, WorkbenchHeader } from './workbench/Chrome.js';
+import { Count, Disclosure, FactsStrip, SelectionBar, WorkbenchHeader } from './workbench/Chrome.js';
 import { ChartCard, ViewerBox } from './workbench/ChartCard.js';
 import { StagePanel } from './workbench/StagePanel.js';
 import { StageStepper } from './workbench/Stepper.js';
@@ -106,10 +105,29 @@ export interface ProtDeskProps {
   readonly session: SheetSessionLike;
   /** The table the sheet shows. */
   readonly table: string;
-  /** Which commit the pictures are drawn at, in the page's own words. */
-  readonly rowsNote: ReactNode;
-  /** The desk's own declared title (`src/prot/def.ts` · `PROT_WORDS`). */
-  readonly title: string;
+  /**
+   * WHICH COMMIT THE PICTURES ARE DRAWN AT, in the page's own words — and
+   * whether that line is QUIET.
+   *
+   * A quiet line is a plain statement of where the cursor is standing, and it
+   * goes into the panel's fold with the rest of the long prose. A LOUD one is
+   * a refused read or a read in flight: the pictures below are then falling
+   * back to the file's own columns, or are still the previous cursor's, and a
+   * page that folded that away would be showing the parse and calling it the
+   * record. So the page says which it is and the panel obeys.
+   */
+  readonly rowsNote: { readonly line: ReactNode; readonly quiet: boolean };
+  /**
+   * WHAT THE PAGE IS CALLED (`src/prot/def.ts` · `PROT_WORDS.name`) — the
+   * header's first slot. A name is not data about the run.
+   */
+  readonly name: string;
+  /**
+   * THE DESK'S CLAIM ABOUT ITSELF (`PROT_WORDS.title`) — a sentence, and a
+   * different kind of word from the name. It rides the panel's fold, where a
+   * reader meets it once rather than in the slot a name belongs in.
+   */
+  readonly claim: string;
   /** The entry's credit, read out of its own header records — the header band's whole content. */
   readonly credit: EntryCredit;
   /** What the parse counted — the facts strip's residues and chains. */
@@ -118,17 +136,20 @@ export interface ProtDeskProps {
   onSearchAgain(): void;
 }
 
+/** What that fold is called — the one place the count of omissions is spelled. */
+const NOT_HERE_TITLE = 'What the other three desks show and this page does not — seven things it does without, each one named rather than quietly missing, one it adds, and one request it makes';
+
 /**
  * WHAT THE OTHER THREE DESKS SHOW AND THIS PAGE DOES NOT — named, because an
  * omission nobody announced is a lie by arrangement.
+ *
+ * It draws no chrome of its own any more: the composition folds it through the
+ * ONE disclosure shape this desk uses everywhere (`workbench/Chrome.tsx` ·
+ * `Disclosure`). Every word of the list is unchanged.
  */
 function NotHere(): JSX.Element {
   return (
-    <details style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--pw-mid-2)', background: 'var(--pw-glass-card)', border: '1px solid var(--pw-rule-button)', borderRadius: 'var(--pw-r-card)', padding: '.55rem .8rem', margin: '.6rem 0 0' }}>
-      <summary style={{ cursor: 'pointer' }}>
-        <b>What the other three desks show and this page does not</b> — seven things it does without, each one named rather than quietly missing, one it adds, and one request it makes
-      </summary>
-      <ul style={{ margin: '.4rem 0 0', paddingLeft: '1.1rem' }}>
+    <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
         <li>
           <b>The fine time cursor.</b> The library ships a time strip — a bar of every commit, with step-back, step-forward, a jump box and a &ldquo;return to now&rdquo;. It is deliberately not on this page: the stepper is the STAGES&rsquo; cursor and the fine one is
           deferred. <b>The consequence, said plainly:</b> every gesture a reader makes here — a residue clicked in 3D, a drag across an axis — lands a real commit on this same record, and this page offers no way to step through those. They are on the
@@ -157,12 +178,11 @@ function NotHere(): JSX.Element {
         <li>
           <b>And one thing this page shows that the packaged desk does not:</b> the GAPS panel — every request the session refused, typed and in its own words, including the two gestures this desk makes at its own unlanded charts before the stages run.
         </li>
-        <li>
-          <b>And one request this page makes that the other three do not:</b> it asks <code>fonts.googleapis.com</code> for IBM Plex Sans, Serif and Mono. That is a THIRD-PARTY REQUEST from a page that otherwise makes none — every byte of data
-          here is the repository&rsquo;s own — so it is named rather than made quietly. Each family carries a real fallback stack, so a blocked request changes the letters and nothing else.
-        </li>
-      </ul>
-    </details>
+      <li>
+        <b>And one request this page makes that the other three do not:</b> it asks <code>fonts.googleapis.com</code> for IBM Plex Sans, Serif and Mono. That is a THIRD-PARTY REQUEST from a page that otherwise makes none — every byte of data
+        here is the repository&rsquo;s own — so it is named rather than made quietly. Each family carries a real fallback stack, so a blocked request changes the letters and nothing else.
+      </li>
+    </ul>
   );
 }
 
@@ -219,7 +239,7 @@ export function RunStepper({ outcomes }: { readonly outcomes: readonly ActOutcom
 }
 
 /** The whole workbench. See the file header for the four layers and what this file is allowed to do. */
-export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, title, credit, counts, onSearchAgain }: ProtDeskProps): JSX.Element {
+export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, onSearchAgain }: ProtDeskProps): JSX.Element {
   // ── LAYER 4: the data ─────────────────────────────────────────────────────
   const state = useSessionView(view);
   const sheetPort = useMemo(() => sessionSheetData(session, { table }), [session, table]);
@@ -300,48 +320,87 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
   // ── LAYER 2: the components ──────────────────────────────────────────────
   return (
     <div ref={root} className="vzf pw-scope" data-theme={themeAttr(undefined)} style={{ fontFamily: 'var(--pw-font-sans)', fontSize: 13, color: 'var(--pw-ink)' }}>
-      <WorkbenchHeader title={title} entry={credit.entry} entryTitle={credit.title.toLowerCase()} method={methodLine(credit)} searchAgain="New search" onSearchAgain={onSearchAgain} />
+      {/* THE NAME, in the slot the design reserves for it. The def's own claim
+          about this desk is a sentence, not a name, and rides the panel's fold. */}
+      <WorkbenchHeader title={name} entry={credit.entry} entryTitle={credit.title.toLowerCase()} method={methodLine(credit)} searchAgain="New search" onSearchAgain={onSearchAgain} />
 
       <FactsStrip label="what this entry is, counted" items={factsStrip(counts, run)} nothing="nothing has been counted on this entry yet" />
 
       {/* THE STEPPER IS THE CURSOR — the control the whole page turns on */}
       <StageStepper steps={steps} label={STEPPER_LABEL} note={stepperNote(stages, true)} refusedSeek={said} onSeek={(key) => void seek(stages.find((s) => s.stage === key)?.commit ?? '').then(setSaid, (e: unknown) => setSaid(`that seek threw: ${e instanceof Error ? e.message : String(e)}`))} />
 
-      {/* THE ONE PANEL — the stage the reader is on, in the run's own words */}
-      <StagePanel {...words}>
-        {rowsNote}
+      {/*
+        THE ONE PANEL — the stage the reader is on, in the run's own words.
+
+        VISIBLE: the eyebrow, three or four sentences, the four facts, a refusal,
+        and one short line about the stage this build cannot run. FOLDED: the
+        long prose — the dashboard's declared summary, the desk's own claim, the
+        commit the pictures are drawn at, and the measured paragraph behind that
+        short line. Folded, never lost: `tests/prot-panel.test.tsx` presses the
+        fold and reads the words back.
+      */}
+      <StagePanel
+        {...words}
+        fold={{
+          label: 'More about where you are standing',
+          aria: 'more about where you are standing — the dashboard’s own summary, this desk’s claim, the commit these pictures are drawn at, and the measured reason a declared stage cannot run here',
+          children: (
+            <>
+              {rowsNote.quiet ? rowsNote.line : null}
+              {summary === undefined ? null : (
+                <p style={{ margin: '.4rem 0 0' }}>
+                  <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>summary</span>{' '}
+                  <ProseText text={summary.text} refs={summary.refs} onSeek={(id) => void view.seek(id)} onBookmark={desk.seekBookmark} describeCommit={desk.describeCommit} />
+                </p>
+              )}
+              {/* THE DESK'S CLAIM ABOUT ITSELF — the def's declared title sentence,
+                  which is not the page's NAME and does not belong in its slot */}
+              <p style={{ margin: '.4rem 0 0' }}>
+                <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>this desk</span> {claim}
+              </p>
+              {words.unavailableWhy.map((stage) => (
+                <p key={stage.id} style={{ margin: '.4rem 0 0' }}>
+                  <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>not available here</span> <b style={{ fontWeight: 600 }}>{stage.name}</b> — {stage.why}
+                </p>
+              ))}
+            </>
+          ),
+        }}
+      >
+        {/* LOUD, so it stays visible: a refused read, or one still in flight */}
+        {rowsNote.quiet ? null : rowsNote.line}
         {notice === null ? null : (
           <p role="alert" style={{ margin: '.4rem 0 0', fontSize: 12.5, color: 'var(--pw-refuse-ink)' }}>
             ⚠ {notice}
           </p>
         )}
-        {summary === undefined ? null : (
-          <p style={{ margin: '.4rem 0 0', fontSize: 12.5, color: 'var(--pw-mid-2)' }}>
-            <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>summary</span>{' '}
-            <ProseText text={summary.text} refs={summary.refs} onSeek={(id) => void view.seek(id)} onBookmark={desk.seekBookmark} describeCommit={desk.describeCommit} />
-          </p>
-        )}
       </StagePanel>
 
-      {/* what is selected, and the named pictures — the library's own two pieces */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.6rem', alignItems: 'baseline', padding: '14px 24px 0' }}>
-        <SelectionChips
-          selections={state.selections}
-          cleared={state.cleared}
-          links={state.links}
-          labels={Object.fromEntries(state.views.map((v) => [v.viewId, desk.label(v.viewId)]))}
-          onClear={(id) => void view.clear(id, `clear ${desk.label(id)}`)}
-          // NOT point-free: the chip strip wires this straight to a DOM handler,
-          // and a bare `view.clearAll` would receive the click EVENT as the
-          // commit's own words.
-          onClearAll={() => void view.clearAll()}
-          onSetPolarity={(id, exclude) => void view.setPolarity(id, exclude, `${exclude ? 'exclude' : 'keep'} the ${desk.label(id)} selection`)}
-          onSave={(id) => {
-            const name = window.prompt(`Save the ${desk.label(id)} selection as…`);
-            if (name !== null && name.trim() !== '') desk.savePicture(name.trim(), { viewId: id });
-          }}
-        />
-        <SavedSelections saved={state.saved} selections={state.selections} labels={Object.fromEntries(state.views.map((v) => [v.viewId, desk.label(v.viewId)]))} onApply={desk.applyPicture} />
+      {/* WHAT IS SELECTED — the library's own two pieces, in a room of their own */}
+      <div style={{ padding: '14px 24px 0' }}>
+        <SelectionBar eyebrow="selection">
+          <SelectionChips
+            // `pw-scope` is how this desk's tokens reach INSIDE a library part
+            // that re-roots `.vzf` on itself — the library's own `className`
+            // door, never a selector into its markup (a finding, reported).
+            className="pw-scope"
+            selections={state.selections}
+            cleared={state.cleared}
+            links={state.links}
+            labels={Object.fromEntries(state.views.map((v) => [v.viewId, desk.label(v.viewId)]))}
+            onClear={(id) => void view.clear(id, `clear ${desk.label(id)}`)}
+            // NOT point-free: the chip strip wires this straight to a DOM handler,
+            // and a bare `view.clearAll` would receive the click EVENT as the
+            // commit's own words.
+            onClearAll={() => void view.clearAll()}
+            onSetPolarity={(id, exclude) => void view.setPolarity(id, exclude, `${exclude ? 'exclude' : 'keep'} the ${desk.label(id)} selection`)}
+            onSave={(id) => {
+              const saved = window.prompt(`Save the ${desk.label(id)} selection as…`);
+              if (saved !== null && saved.trim() !== '') desk.savePicture(saved.trim(), { viewId: id });
+            }}
+          />
+          <SavedSelections className="pw-scope" saved={state.saved} selections={state.selections} labels={Object.fromEntries(state.views.map((v) => [v.viewId, desk.label(v.viewId)]))} onApply={desk.applyPicture} />
+        </SelectionBar>
       </div>
 
       {/* THE FOCUSED STAGE'S PICTURE, FULL WIDTH — and which one that is, is derived */}
@@ -355,37 +414,51 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
           this file knowing any breakpoint. */}
       <div style={{ padding: '24px 24px 32px', display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 32rem), 1fr))' }}>{rest.map((c) => card(c, false, hero.length === 0 ? 340 : 280))}</div>
 
-      {/* THE RECORD, in the library's own panels */}
-      <div style={{ padding: '0 24px 24px', display: 'grid', gap: '.6rem', gridTemplateColumns: 'repeat(auto-fit, minmax(20rem, 1fr))' }}>
-        <VizPanel title={`Commit log (${state.commits.length.toLocaleString('en-US')})`} collapsible defaultCollapsed>
+      {/*
+        THE RECORD — the same four panels, now in this desk's OWN disclosure.
+
+        The CONTENT is the library's and is untouched (`CommitLog`, `GapsPanel`,
+        `Sheet`); what changed is the box around it. `VizPanel` drew its own
+        chrome a different way from the cards above it, which on a themed page
+        read as pre-design furniture under a designed desk. Not one word of any
+        of it differs — the counts are the same folds of the same state.
+      */}
+      <div style={{ padding: '0 24px 24px', display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 20rem), 1fr))' }}>
+        <Disclosure shape="card" label={`the commit log, ${state.commits.length.toLocaleString('en-US')} commits`} title={<>Commit log <Count>{state.commits.length.toLocaleString('en-US')}</Count></>}>
           <CommitLog commits={state.commits} onSeek={(id) => void view.seek(id)} />
-        </VizPanel>
-        <VizPanel title={`Every request the session refused (${state.gaps.length.toLocaleString('en-US')})`} collapsible defaultCollapsed>
+        </Disclosure>
+        <Disclosure shape="card" label={`every request the session refused, ${state.gaps.length.toLocaleString('en-US')} of them`} title={<>Every request the session refused <Count>{state.gaps.length.toLocaleString('en-US')}</Count></>}>
           <GapsPanel gaps={state.gaps} heading={false} />
-        </VizPanel>
-        <VizPanel title={`What the data checks said (${checks.length.toLocaleString('en-US')})`} collapsible defaultCollapsed>
+        </Disclosure>
+        <Disclosure shape="card" label={`what the data checks said, ${checks.length.toLocaleString('en-US')} of them`} title={<>What the data checks said <Count>{checks.length.toLocaleString('en-US')}</Count></>}>
           {checks.length === 0 ? (
-            <p style={{ margin: 0, color: 'var(--pw-mid-2)' }}>the definition&rsquo;s own checks and this surface&rsquo;s own found nothing to report on this entry</p>
+            <p style={{ margin: 0 }}>the definition&rsquo;s own checks and this surface&rsquo;s own found nothing to report on this entry</p>
           ) : (
-            <ul style={{ margin: 0, paddingLeft: '1.1rem', color: 'var(--pw-mid-2)' }}>
+            <ul style={{ margin: 0, paddingLeft: '1.1rem' }}>
               {checks.map((check) => (
                 <li key={check}>{check}</li>
               ))}
             </ul>
           )}
-        </VizPanel>
-        <VizPanel title={`The ${table} table at the cursor`} collapsible defaultCollapsed>
+        </Disclosure>
+        <Disclosure shape="card" label={`the ${table} table at the cursor`} title={<>The {table} table at the cursor</>}>
           {/* READ-ONLY, and at the cursor: the version keys the grid's blocks, so a
               seek and a refresh both empty them rather than painting old rows */}
-          <Sheet data={sheetPort} table={table} cursor={state.cursor} version={state.sources?.[table]?.version} height={320} />
-        </VizPanel>
+          <Sheet className="pw-scope" data={sheetPort} table={table} cursor={state.cursor} version={state.sources?.[table]?.version} height={320} />
+        </Disclosure>
       </div>
 
-      <div style={{ padding: '0 24px 32px', fontSize: 12, color: 'var(--pw-mid-2)' }}>
+      <div style={{ padding: '0 24px 32px', display: 'grid', gap: 14 }}>
         {/* THE RECORDER'S OWN ACCOUNT OF THE WHOLE RUN, in full and in order — the
             panel above quotes the first few of a stage's; this is all of them */}
-        <RunNarrative run={run} />
-        <NotHere />
+        {narrativeTitle(run) === null ? null : (
+          <Disclosure shape="card" label={narrativeTitle(run) ?? ''} title={narrativeTitle(run)}>
+            <RunNarrative run={run} />
+          </Disclosure>
+        )}
+        <Disclosure shape="card" label={NOT_HERE_TITLE} title={NOT_HERE_TITLE}>
+          <NotHere />
+        </Disclosure>
       </div>
     </div>
   );
