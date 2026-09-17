@@ -2,8 +2,12 @@
  * THE PROTEIN DESK'S CELLS — a third-party 3D view, three first-party charts and
  * a receipt, over one table.
  *
- * The shell (`vizfootprint-studio/desk`) draws the band, the ✎, the ✕, the time
- * strip, the editor and the sheet; what is here is this demo's own:
+ * The shell draws the band, the ✕ and the sheet — and on THIS page the shell is
+ * `./protDesk.tsx`, composed from the library's own parts rather than the
+ * packaged `vizfootprint-studio/desk` the other three demos wear (that file says
+ * why, and names what it does without). Nothing below changed for it: a cell
+ * reads a `DeskProjection` and draws at a measured size, which is the same
+ * contract either shell keeps. What is here is this demo's own:
  *
  *   `structure`  Mol* — somebody else's viewer — bound through the renderer
  *                contract and nothing else ({@link StructureCell}). A click on
@@ -77,13 +81,16 @@ import { emitIntent, type Row } from './derive.js';
 
 export { STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
 
-/**
- * The cells the story figure is built from, in the order a reader meets them.
+/*
+ * THERE WAS A `PROT_STORY_FIGURE` HERE — the four cells the Story tab's figure
+ * column was built from — and it is gone with the tab.
  *
- * The two ACT-FED charts are in it, and deliberately: a story column that
- * skipped them would tell the desk's story without the half that arrives.
+ * This page no longer wears the packaged desk (`./protDesk.tsx` says why), and
+ * the Story tab is one of the eight things it names as NOT here
+ * (`./protDesk.tsx` · `NotHere`). A constant nothing reads is dead whatever it
+ * documents, so it is deleted rather than left to rot; the four ids it listed
+ * are the four exported above, in the same order.
  */
-export const PROT_STORY_FIGURE = [STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW] as const;
 
 // ── what the page hands in ───────────────────────────────────────────────────
 

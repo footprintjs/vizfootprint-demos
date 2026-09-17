@@ -149,6 +149,60 @@ const analyst = useMemo(() => createBrowserDesk(surface, key), [surface, key]);
 <KeyGate … onUse={(typed) => { setProblem(store.write(typed)); setKey(typed); }} onClear={() => { setProblem(store.clear()); setKey(undefined); }} />
 ```
 
+### The law: a page may compose the pieces instead of wearing the desk — and must then say what it dropped
+
+Three of the four desks render `vizfootprint-studio/desk`'s packaged `Desk`, and
+should: it is a whole provenance cockpit for one line of wiring. The **protein**
+page does not, because the UX it was asked for cannot be expressed inside one —
+a search box, a numbered **stage stepper** across the top that IS the cursor, and
+the dashboard centred with the stage in action focused. So it composes the parts
+a desk is made of, every one of them the library's own (`ChartFrame`,
+`SelectionChips`, `SavedSelections`, `CommitLog`, `GapsPanel`, `Sheet`,
+`ProseText`), and adds two of its own: the stepper
+([`web/src/protStepper.tsx`](src/protStepper.tsx)) and the `DeskProjection` the
+cells read ([`web/src/protProjection.tsx`](src/protProjection.tsx)).
+
+Two things that makes it owe a reader, and both are the law rather than the
+style:
+
+1. **ONE session view.** Every piece reads the one the page made — the stepper,
+   the charts, the chips, the log, the gaps, the sheet and the rows at the
+   cursor. A second source of truth is how a desk starts lying.
+2. **Every dropped piece is NAMED, in the page's own words.**
+   [`web/src/protDesk.tsx`](src/protDesk.tsx) · `NotHere` lists the eight things
+   the packaged desk shows and this page does not, with the deferred time cursor
+   first and the consequence of deferring it in the same breath. An omission
+   nobody announced is a lie by arrangement — the same law `WhatIsMissing` keeps
+   one level up.
+
+```tsx
+<ProtDesk view={view} data={data} run={surface.run} outcomes={surface.run?.outcomes ?? []} … />
+```
+
+This is one page's departure, not a change of house style. Keep the other three
+on the packaged `Desk`.
+
+### The law: a picture is drawn at a CURSOR, so the rows are read at one
+
+The protein page's charts were frozen for a release, and the shape of the bug is
+worth keeping: the boot read its rows ONCE
+([`src/prot/session.ts`](../src/prot/session.ts) · `residuesAt`) and handed them
+to the cells as data. Every column the desk's two stages land is resolved AT THE
+CURSOR, so a boot-time read is the boot's cursor forever — clicking a trace row
+seeked the record and nothing on screen changed, 565 marks before and 565 after.
+
+The fix is one sentence: **read the rows at the cursor, and re-read when it
+moves.** The session view is a store, so "the cursor moved" is a value a page can
+watch ([`web/src/protRows.ts`](src/protRows.ts) · `useResiduesAtCursor`), and the
+read asks with `viewId: null` — *no clause at all*, the whole table at that
+cursor — so re-reading cannot narrow a chart to a reader's own click.
+
+And the gate for a claim like this is a **real browser**, not a unit test: a
+green unit test asserted exactly this behaviour all along, because the test drove
+the library and the page drove a snapshot.
+[`tests/prot-cursor.smoke.test.ts`](../tests/prot-cursor.smoke.test.ts) clicks
+the control a reader clicks and counts the marks.
+
 ### The law: the base is a knob, and the data is copied, never inlined
 
 `SITE_BASE` sets where the site is mounted (`/vizfootprint-demo/` by default,

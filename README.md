@@ -68,13 +68,29 @@ for what that costs and what it doesn't.
   the insertion-coded residues the minted key cannot spell, and an entry with
   one chain — which has no interface, so that picture says so instead of drawing
   a bar of zero per residue.
-  And the **trace at the bottom is a control**: one row per act the run really
-  dispatched, in order, each clickable to the commit it landed — a refused act is
-  a row with its sentence, an act that landed no commit is not clickable and says
-  why, and there are **no greyed boxes for acts nobody dispatched**, because a
-  missing row is the truth and a promise is not. It fills as the stages run and
-  collapses when they are done, and the recorder's own sentences ride under it,
+  And the **stage stepper across the top IS the cursor**: a numbered circle per
+  stage the desk declares, and clicking one moves the whole desk to the commit
+  that stage landed — the rows are re-read at that cursor and every picture goes
+  with them, including the two that lose their column and print the library's
+  own refusal instead. Five states, and the fifth is what keeps the other four
+  honest: *not run* (declared, dispatched nothing, claiming nothing), *running*,
+  *landed* (a button), *refused* (carrying the act's own sentence verbatim) and
+  *not available on this desk* — the sequence-conservation track, which needs a
+  database search no browser can make, because both public services answer
+  without an `access-control-allow-origin` header. Said, rather than left
+  pending forever. A stage **expands to its acts**, which are the rows the trace
+  panel used to be: one per act the run really dispatched, each clickable to its
+  own commit, with **no greyed boxes for acts nobody dispatched** — a missing row
+  is the truth and a promise is not. The recorder's own sentences ride under it,
   not re-worded.
+  This is also the one page in this repository that does **not** wear the
+  packaged `vizfootprint-studio/desk`: the layout above cannot be expressed
+  inside it, so the page composes the parts a desk is made of instead (the chart
+  frame, the selection chips, the saved pictures, the commit log, the gaps panel,
+  the sheet) and **names the eight things the packaged desk shows and it does
+  not** — the fine time cursor first, because that one is deferred on purpose and
+  the consequence of deferring it (a reader's own gestures land on the same
+  record with no strip to walk them) is said in the same breath.
 
 All four run the real dashboard, the real ETL, the real definition — the one
 thing the published pages cannot do unattended is hold a server-side model

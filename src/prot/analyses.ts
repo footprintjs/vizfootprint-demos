@@ -436,3 +436,42 @@ export const PROT_STAGES: readonly {
 
 /** Every act id, in landing order — the flat view of {@link PROT_STAGES}. */
 export const PROT_ACT_ORDER: readonly string[] = PROT_STAGES.flatMap((s) => s.acts.map((a) => a.id));
+
+/**
+ * ONE MORE STAGE THIS DESK DECLARES AND CANNOT PERFORM — declared and
+ * UNAVAILABLE, which is a different statement from pending.
+ *
+ * The stepper shows the plan, and a plan is a declared fact, so showing it is
+ * honest. What is not honest is a circle that waits forever: a reader looking at
+ * a pending stage is being told it is coming. So a stage this page cannot run at
+ * all says so, with the reason, and the reason is MEASURED rather than assumed.
+ *
+ * ── WHY THE CONSERVATION TRACK CANNOT RUN HERE ──────────────────────────────
+ * "How conserved is this residue across the protein's family" is a question
+ * about OTHER SEQUENCES, so it needs a database search, and a static page has
+ * only the browser's own fetch to make one with. Both public search services
+ * answer WITHOUT `access-control-allow-origin` — `blast.ncbi.nlm.nih.gov` and
+ * EBI's HMMER — so the browser discards the answer before this page can read a
+ * byte of it. No amount of code on this side changes that: it is the other
+ * side's header. A served build with a process behind it could make the same
+ * request and hand the rows over; this build cannot, and it is the build the
+ * reader is looking at.
+ *
+ * It is a SEPARATE list from {@link PROT_STAGES} on purpose. That one is what
+ * `./orchestrator.ts` dispatches, and a stage with no acts in it would either
+ * dispatch nothing (a stage that lands nothing and says nothing) or fail the
+ * orchestrator's own two-stage guard. One list is the work; this one is the
+ * declaration that there is work this desk cannot do.
+ */
+export const PROT_UNAVAILABLE_STAGES: readonly {
+  readonly stage: string;
+  readonly label: string;
+  /** Why this page cannot perform it — printed on the stepper verbatim. */
+  readonly why: string;
+}[] = [
+  {
+    stage: 'conservation',
+    label: 'How conserved each residue is across the family',
+    why: 'this stage needs a sequence-database search, and a static page cannot make one: both public services — blast.ncbi.nlm.nih.gov and EBI HMMER — answer without an access-control-allow-origin header, so the browser throws the answer away before this page can read it. That is the other side\'s header, not a gap in this code. A build with a server behind it could run the search and hand the rows over; this build is not that build, so the stage is declared and unavailable rather than left pending.',
+  },
+];

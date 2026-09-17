@@ -398,15 +398,17 @@ describe('the run, as it happens', () => {
 });
 
 /**
- * THE TRACE PANEL IS A CONTROL FOR THE RECORD — and the cursor it moves is the
- * one the desk reads.
+ * THE STEPPER IS A CONTROL FOR THE RECORD — and the cursor it moves is the one
+ * the desk reads.
  *
- * `tests/prot-trace.test.tsx` clicks the rows and asserts which commit id the
- * panel asked for. This is the other half, without a browser: the page hands
- * the panel and the desk ONE session view (`web/site/prot/entry.tsx` ·
- * `StaticProtDesk`), so a seek through it moves the cursor every picture on
- * this desk is folded at — and a commit that is not on the log comes back as
- * the SESSION's own sentence, which is what the panel prints.
+ * `tests/prot-stepper.test.tsx` clicks the stages and the act rows and asserts
+ * which commit id each asked for; `tests/prot-cursor.smoke.test.ts` proves in a
+ * real browser that the pictures then follow. This is the middle half, without a
+ * browser: the page hands the stepper and the charts ONE session view
+ * (`web/site/prot/entry.tsx` · `StaticProtDesk`), so a seek through it moves the
+ * cursor every picture on this desk is folded at — and a commit that is not on
+ * the log comes back as the SESSION's own sentence, which is what the stepper
+ * prints.
  */
 describe('a row’s seek reaches the cursor the desk is folded at', () => {
   it('moves it to that act’s commit, and refuses an unknown one in the session’s words', async () => {

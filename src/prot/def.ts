@@ -71,7 +71,7 @@ import type { EncodingRules } from 'vizfootprint/def';
 import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
 import type { ProtTables, ResidueRow } from './etl.js';
-import { ACT_KEY_COLUMN, ACT_TABLE, CONTACTS_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, protAnalyses } from './analyses.js';
+import { ACT_KEY_COLUMN, ACT_TABLE, CONTACTS_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PAIRS_ACT, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, protAnalyses } from './analyses.js';
 
 // ── the views, named once ────────────────────────────────────────────────────
 
@@ -109,6 +109,31 @@ export const SHEET_VIEW = 'sheet';
 
 /** Every view this def declares, in the order a reader meets them. */
 export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW] as const;
+
+/**
+ * THE RECEIPT VIEWS — which view draws WHICH ACT'S OWN ANSWER, by the act that
+ * answers it. The one link on this desk that has to be written down.
+ *
+ * Every other "which charts did this stage produce" is an INTERSECTION and is
+ * computed (`web/src/protStages.ts` · `chartsOfStage`): an act says which
+ * columns it landed (`ActOutcome.materialized`) and a view says which columns it
+ * binds (the encoding fold at its address), so the answer is derivable from
+ * what the session already carries and nobody has to type a map.
+ *
+ * A RECEIPT breaks that, and the reason is the finding this desk exists to
+ * produce: {@link PAIRS_VIEW} draws the pair table, the pair table is not in the
+ * data space (`./analyses.ts` says why the library cannot put it there), so it
+ * binds NO column and the intersection can never reach it. The wire carries no
+ * act→view link either — a view declares a chart kind, channels and
+ * capabilities, and none of those names an analysis. So this one pair is
+ * declared, here, beside the view it is about, rather than hidden inside a
+ * screen: the alternative is a stepper that silently drops the one picture an
+ * act cut by hand.
+ *
+ * `web/src/protCells.tsx` draws that cell off `ProtDeskData.run.pairs` under this
+ * same {@link PAIRS_VIEW} constant, so the two cannot spell it differently.
+ */
+export const PROT_RECEIPTS: Readonly<Record<string, string>> = { [PAIRS_ACT]: PAIRS_VIEW };
 
 /** The one table, and the column its rows are identified by — both named once, so no reader spells either. */
 export const RESIDUES_TABLE = 'residues';

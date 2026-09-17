@@ -1,16 +1,24 @@
 /**
- * THE TRACE, AS A CONTROL — one row per act the run dispatched, in order, each
- * one a way back to the commit it landed.
+ * THE TRACE'S ROWS — one per act the run dispatched, each one a way back to the
+ * commit it landed, and the recorder's own account underneath them.
  *
- * ── THE ONE RULE ────────────────────────────────────────────────────────────
- * **This panel reads the RUN, never the def.** It would be easy to draw the two
- * declared stages and their three acts as greyed boxes and fill them in as they
- * land — and it would be a promise rather than a record: a box for an act
- * nobody dispatched claims the desk is going to do something, which is a claim
- * no log can support. A missing row is the truth. So the rows come off
- * {@link ProtTraceProps.outcomes} — `src/prot/orchestrator.ts` · `ActOutcome`,
- * one per act the stages really dispatched — and a run that dispatched nothing
- * has no rows and says so in a sentence.
+ * ── THIS FILE USED TO BE A PANEL, AND IS NOW THE DETAIL OF ONE LIST ─────────
+ * It shipped as `ProtTrace`: its own collapsible section under the desk, with
+ * its own header, its own counts and its own expander. The stepper across the
+ * top of the page is the same record read one level out — the stages — so the
+ * two were two lists of one thing, and a reader had to work out that a row in
+ * the panel was an act of a circle above it. So the panel's chrome is GONE
+ * rather than shipped beside the stepper, and what is left is the part that was
+ * worth keeping: the row ({@link ActRow}), what a row says it landed
+ * ({@link landedLine}) and the recorder's sentences ({@link RunNarrative}).
+ * `./protStepper.tsx` composes all three.
+ *
+ * ── THE ONE RULE, unchanged ─────────────────────────────────────────────────
+ * **A ROW READS THE RUN, NEVER THE DEF.** Rows come off the acts the stages
+ * really dispatched (`src/prot/orchestrator.ts` · `ActOutcome`), so a missing row
+ * is an act that did not happen. The STAGE above it may be declared and unrun —
+ * a plan is a declared fact and `./protStages.ts` says how far that bends — but
+ * an act is not: there is no such thing as a greyed act box here.
  *
  * ── WHAT A ROW IS ──────────────────────────────────────────────────────────
  * The stage, the act, and then one of two things:
@@ -20,42 +28,32 @@
  *     counts ({@link landedLine}), read off the act's answer and recomputed
  *     nowhere;
  *   - the REFUSAL SENTENCE, verbatim. A refused act is a first-class row, not
- *     an absence: `landAct` already wrote the sentence and this panel does not
+ *     an absence: `landAct` already wrote the sentence and this file does not
  *     re-word it.
  *
  * A row whose commit is `null` is NOT clickable, and says why in its own words
  * rather than looking clickable and doing nothing.
  *
  * ── CLICKING A ROW IS THE POINT ─────────────────────────────────────────────
- * It seeks the session's read-only cursor to that commit — so the flowchart is
- * a control for the record rather than a diagram of the design. The seek itself
- * belongs to the session view (`vizfootprint-ui` · `SessionView.seek`), which
- * answers `{ ok }` or a sentence of its own; the host hands that answer back
- * through {@link ProtTraceProps.onSeek} and this panel prints it. A refused
- * seek is a sentence a reader sees, like every other refusal on this desk.
+ * It seeks the session's read-only cursor to that commit — and because the
+ * page's rows are re-read at the cursor (`./protRows.ts`), every picture on the
+ * desk follows it. The seek itself belongs to the session view
+ * (`vizfootprint-ui` · `SessionView.seek`), which answers `{ ok }` or a sentence
+ * of its own; the host hands that answer back through `onSeek` and the row's
+ * owner prints it. A refused seek is a sentence a reader sees, like every other
+ * refusal on this desk.
  *
  * ── AND ONE THING THAT IS NOT HERE ──────────────────────────────────────────
  * A DURATION per act. Nothing in this desk's pipeline records elapsed time, and
- * a number this panel measured for itself would put profiling where provenance
- * goes — the panel would be the only thing on screen claiming a fact no commit
+ * a number this file measured for itself would put profiling where provenance
+ * goes — the row would be the only thing on screen claiming a fact no commit
  * carries.
  */
-import { useState } from 'react';
 import { PAIRS_ACT } from '../../src/prot/analyses.js';
 import type { ActOutcome, ProtRun } from '../../src/prot/orchestrator.js';
 
-export interface ProtTraceProps {
-  /**
-   * The finished run, or `null` while its stages are still dispatching. It is
-   * what tells the panel whether to open itself: expanded while the run is in
-   * flight (a reader watches it fill), collapsed once it is done.
-   */
-  readonly run: ProtRun | null;
-  /** The acts that have come back so far, in dispatch order — the run's own once it has finished. */
-  readonly outcomes: readonly ActOutcome[];
-  /** Seek the cursor to a commit. Answers the SESSION's refusal sentence, or `null` when the cursor moved. */
-  onSeek(commitId: string): Promise<string | null>;
-}
+/** Seek the cursor to a commit. Answers the SESSION's refusal sentence, or `null` when the cursor moved. */
+export type SeekDoor = (commitId: string) => Promise<string | null>;
 
 const count = (n: number): string => n.toLocaleString('en-US');
 
@@ -84,8 +82,17 @@ const ROW: React.CSSProperties = { display: 'block', width: '100%', textAlign: '
 const STAGE: React.CSSProperties = { fontWeight: 600 };
 const COMMIT: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: '#5a6572' };
 
+export interface ActRowProps {
+  readonly outcome: ActOutcome;
+  /** The finished run, or `null` while its stages are still dispatching — `landedLine` needs it to read an act's own counts. */
+  readonly run: ProtRun | null;
+  readonly onSeek: SeekDoor;
+  /** Where the seek's answer goes: the session's refusal sentence, or `null` when the cursor moved. */
+  readonly say: (sentence: string | null) => void;
+}
+
 /** One act's row: a button when there is a commit to seek to, a plain note when there is not. */
-function TraceRow({ outcome, run, onSeek, say }: { readonly outcome: ActOutcome; readonly run: ProtRun | null; readonly onSeek: ProtTraceProps['onSeek']; readonly say: (sentence: string | null) => void }): JSX.Element {
+export function ActRow({ outcome, run, onSeek, say }: ActRowProps): JSX.Element {
   const what = outcome.refusal ?? landedLine(outcome, run);
   const body = (
     <>
@@ -123,77 +130,24 @@ function TraceRow({ outcome, run, onSeek, say }: { readonly outcome: ActOutcome;
 }
 
 /**
- * THE PANEL.
+ * WHAT THE RUN LOOKED LIKE FROM INSIDE — the footprintjs recorder's own
+ * sentences, in order and not re-worded.
  *
- * ```tsx
- * <ProtTrace run={surface.run} outcomes={surface.run?.outcomes ?? live} onSeek={(id) => view.seek(id).then((r) => (r.ok ? null : r.sentence))} />
- * ```
- *
- * Collapsed by default once the run is done and expanded while it runs — and a
- * reader who opens or closes it OWNS it from then on (`chosen`), because a
- * panel that slammed shut under somebody reading it would be the screen
- * disagreeing with the reader.
+ * Its own disclosure rather than the stepper's, because it is about the WHOLE
+ * run and not about any one stage: the recorder narrates the chart's traversal,
+ * and a copy of it under each circle would be the same account said three times.
+ * Nothing at all when the recorder said nothing.
  */
-export function ProtTrace({ run, outcomes, onSeek }: ProtTraceProps): JSX.Element {
-  const [chosen, setChosen] = useState<boolean | null>(null);
-  const [said, setSaid] = useState<string | null>(null);
-  const running = run === null;
-  const open = chosen ?? running;
-  const refused = outcomes.filter((o) => o.refusal !== null).length;
-  const landed = outcomes.filter((o) => o.commit !== null).length;
-
+export function RunNarrative({ run }: { readonly run: ProtRun | null }): JSX.Element | null {
+  if (run === null || run.narrative.length === 0) return null;
   return (
-    <section aria-label="the acts this run dispatched, in order" style={{ font: '12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif', color: '#3c4856', border: '1px solid #dfe4ea', borderRadius: 8, background: '#f8fafc', padding: '.6rem .75rem', margin: '.6rem 0 0' }}>
-      <button
-        type="button"
-        onClick={() => setChosen(!open)}
-        aria-expanded={open}
-        style={{ font: 'inherit', fontWeight: 600, color: '#20303f', background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', gap: '.4rem', alignItems: 'baseline' }}
-      >
-        <span aria-hidden>{open ? '▾' : '▸'}</span>
-        <span>
-          {running ? 'The run, as it happens' : 'The run, act by act'} — {count(outcomes.length)} {outcomes.length === 1 ? 'act' : 'acts'} dispatched, {count(landed)} landed a commit, {count(refused)}{' '}
-          {refused === 1 ? 'was refused' : 'were refused'}
-          {running ? ' so far' : ''}
-        </span>
-      </button>
-      {!open ? null : (
-        <>
-          <p style={{ margin: '.4rem 0 .2rem', color: '#5a6572' }}>
-            One row per act the two stages really dispatched, in the order they dispatched them — not the stages the definition declares: a row that is missing is an act that did not happen, and a greyed box
-            would be a promise.{' '}
-            {running
-              ? 'The cursor these rows seek to arrives with the desk, when the last act has landed — so a row clicked now answers that instead of moving anything.'
-              : 'Click a row to move the read-only cursor to the commit that act landed.'}
-          </p>
-          {outcomes.length === 0 ? (
-            <p role="status" style={{ margin: '.3rem 0 0' }}>
-              {running ? 'nothing has come back yet — the first act is in flight' : 'no stage has run on this session, so no act has been dispatched and there is nothing on this trace'}
-            </p>
-          ) : (
-            <ol aria-label="the acts this run dispatched, in dispatch order" style={{ listStyle: 'none', padding: 0, margin: '.3rem 0 0' }}>
-              {outcomes.map((outcome, index) => (
-                <TraceRow key={`${outcome.stage}/${outcome.act}/${String(index)}`} outcome={outcome} run={run} onSeek={onSeek} say={setSaid} />
-              ))}
-            </ol>
-          )}
-          {said === null ? null : (
-            <p role="status" style={{ margin: '.4rem 0 0', color: '#8a2b2b' }}>
-              the session refused that seek, in its own words: {said}
-            </p>
-          )}
-          {run === null || run.narrative.length === 0 ? null : (
-            <details style={{ marginTop: '.5rem' }}>
-              <summary style={{ cursor: 'pointer' }}>What the run looked like from inside — the recorder&rsquo;s own {count(run.narrative.length)} sentences, in order and not re-worded here</summary>
-              <ol style={{ margin: '.3rem 0 0', paddingLeft: '1.2rem', color: '#5a6572' }}>
-                {run.narrative.map((sentence, index) => (
-                  <li key={`${String(index)}:${sentence.slice(0, 24)}`}>{sentence}</li>
-                ))}
-              </ol>
-            </details>
-          )}
-        </>
-      )}
-    </section>
+    <details style={{ marginTop: '.5rem' }}>
+      <summary style={{ cursor: 'pointer' }}>What the run looked like from inside — the recorder&rsquo;s own {count(run.narrative.length)} sentences, in order and not re-worded here</summary>
+      <ol style={{ margin: '.3rem 0 0', paddingLeft: '1.2rem', color: '#5a6572' }}>
+        {run.narrative.map((sentence, index) => (
+          <li key={`${String(index)}:${sentence.slice(0, 24)}`}>{sentence}</li>
+        ))}
+      </ol>
+    </details>
   );
 }

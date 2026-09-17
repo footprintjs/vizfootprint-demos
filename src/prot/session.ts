@@ -116,19 +116,42 @@ export interface UnlandedRefusals {
  * branch path, and reading them anywhere else would mean recomputing them —
  * which is the one thing a demo about provenance may not do.
  *
- * WHY it must not be re-read per request: a view's clause reaches every table.
- * With a residue picked in the 3D view the window would narrow to one row, and a
- * bar chart of one bar is not the picture the reader was promised — it is the
- * picture of their own click. So this is read ONCE, immediately after the stages
- * land and BEFORE any clause can exist; the cells narrow in the browser
- * afterwards, from these rows, and say so. (`../exo/session.ts` ·
- * `derivedRowsAt` is the same decision, one table over.)
+ * WHY IT IS READ WITH NOBODY'S EYES (`viewId: null`), and why that is what makes
+ * re-reading safe. A window asked with no `viewId` at all is the
+ * whole-dashboard truth — EVERY live clause filters it — so with a residue
+ * picked in the 3D view it narrows to one row, and a bar chart of one bar is
+ * not the picture the reader was promised, it is the picture of their own
+ * click. That is why this used to be read exactly ONCE, before any clause could
+ * exist; and reading once is what froze the pictures, because the columns are
+ * resolved at the CURSOR and a boot-time answer is the boot's cursor forever.
+ *
+ * The library has the third state this needs and the demo was not using it:
+ * `viewId: null` means **no clause at all** — the table as it stands at the
+ * cursor (`vizfootprint` · `src/session/types.ts` · `ViewQuery.viewId`, whose
+ * three states are a value, `null` and absent). So the window is the whole
+ * table at the cursor, per cursor, and the cells go on narrowing it in the
+ * browser from these rows exactly as they did. (`../exo/session.ts` ·
+ * `derivedRowsAt` is still read once, and that desk lands no act behind a
+ * cursor a reader can move to.)
  */
 export interface ResiduesAtCursor {
   /** One row per residue, in the table's own order. */
   readonly rows: readonly Row[];
   /** `null` when the session answered; the library's refusal sentence when it did not. */
   readonly refused: string | null;
+  /**
+   * The commit the window was read AT, as the session stamped it
+   * (`ViewQueryResult.cursor`) — `null` on a session with no commit on it.
+   *
+   * It exists so a page can SAY which commit its pictures are drawn at, out of
+   * the read's own answer rather than out of whatever it believes the cursor to
+   * be. Those two can differ for a beat (`web/src/protRows.ts` ·
+   * `useResiduesAtCursor` says exactly when), and the honest thing to print is
+   * the one the rows came with. It is also what tells a re-reader that the
+   * boot's answer is already this cursor's, so the first paint costs no second
+   * read.
+   */
+  readonly cursor: string | null;
 }
 
 export interface ProtSurface {
@@ -199,16 +222,22 @@ export async function probeTheUnlandedColumns(session: InteractionSession): Prom
 }
 
 /**
- * THE ONE READ — every residue at the cursor, with whatever the stages have
- * landed on it. See {@link ResiduesAtCursor} for why once and why here.
+ * THE READ — every residue at the cursor, with whatever the stages have landed
+ * on it by then. See {@link ResiduesAtCursor} for whose eyes and why.
  *
  * The limit is the RESIDUE COUNT: the table can never have more rows than the
  * parse produced, and a window narrower than the table would draw a chart
  * missing residues nobody filtered out.
  */
 export async function residuesAt(session: InteractionSession, tables: ProtTables): Promise<ResiduesAtCursor> {
-  const window = await session.viewQuery({ table: RESIDUES_TABLE, limit: tables.residues.length });
-  return window.ok ? { rows: window.rows, refused: null } : { rows: [], refused: window.rejected };
+  // `viewId: null` = NOBODY'S EYES — the whole table at the cursor, with no
+  // live clause applied. Leaving it out would apply every one of them.
+  const window = await session.viewQuery({ table: RESIDUES_TABLE, viewId: null, limit: tables.residues.length });
+  // A REFUSAL IS STAMPED WITH ITS CURSOR TOO. It has no window to read one off,
+  // so it asks the session — and the field must be filled either way, because a
+  // caller that re-reads whenever the stamp disagrees with the cursor would read
+  // a refusing table forever if a refusal came back unstamped.
+  return window.ok ? { rows: window.rows, refused: null, cursor: window.cursor } : { rows: [], refused: window.rejected, cursor: session.cursor() };
 }
 
 /**
@@ -238,7 +267,7 @@ export function openProtSurface(artifact: StructureArtifact): ProtSurface {
  * column. What the two new charts then find is that their column is not on
  * them, which is exactly the state this door exists to open.
  */
-const unrunResidues = (tables: ProtTables): ResiduesAtCursor => ({ rows: tables.residues as readonly Row[], refused: null });
+const unrunResidues = (tables: ProtTables): ResiduesAtCursor => ({ rows: tables.residues as readonly Row[], refused: null, cursor: null });
 
 /**
  * THE ASYNC SURFACE WITH ITS STAGES STILL UNRUN — the one moment a caller can

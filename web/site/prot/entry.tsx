@@ -7,12 +7,14 @@
  *   `landing`  nobody has asked yet: the desk's title, one search box and one
  *              named example (`web/src/protLanding.tsx`). A reader who arrives
  *              here FROM a refusal sees it, verbatim, above the box.
- *   `reading`  an entry is being opened. The trace panel is already on screen
- *              and expanded, filling as each act lands — the boot hands it
- *              every outcome as it comes back (`src/prot/orchestrator.ts` ·
- *              `ProtRunWatch`).
- *   `ready`    the desk, with the entry's credit, WHAT THIS DESK CANNOT SAY
- *              about this entry beside it, and the trace at the bottom.
+ *   `reading`  an entry is being opened. The STEPPER is already on screen,
+ *              filling as each act lands — the boot hands it every outcome as it
+ *              comes back (`src/prot/orchestrator.ts` · `ProtRunWatch`) — and it
+ *              says in a sentence that there is no cursor to move yet.
+ *   `ready`    the desk, with the entry's credit and WHAT THIS DESK CANNOT SAY
+ *              about this entry above it. The stepper is at the top and IS the
+ *              cursor: clicking a stage seeks the record and every picture
+ *              follows (`web/src/protDesk.tsx`, `web/src/protRows.ts`).
  *   `broken`   something threw. The sentence, and nothing drawn.
  *
  * ── THE BOOT, in the order a server would do it ─────────────────────────────
@@ -39,20 +41,21 @@
  */
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createSessionView, sessionSheetData, sessionSource } from 'vizfootprint-ui';
+import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
-import 'storydeck/storydeck.css';
-import { Desk } from 'vizfootprint-studio/desk';
 import { loadStructureOverHttp } from '../../../src/prot/http.js';
 import { entryCredit, protTables, skippedTotal, type EntryCredit } from '../../../src/prot/etl.js';
-import { PROT_WORDS, RESIDUES_TABLE, protCaption } from '../../../src/prot/def.js';
+import { PROT_WORDS, RESIDUES_TABLE } from '../../../src/prot/def.js';
 import { openProtSurfaceAsync, protSurfaceProblems, type ProtSurface } from '../../../src/prot/session.js';
 import { EXAMPLE_ENTRY, browserArchive, openEntryBytes } from '../../../src/prot/archive.js';
 import { blockingSentence, entryNotes, readEntryBytes, type EntryNote } from '../../../src/prot/entryNotes.js';
 import type { ActOutcome } from '../../../src/prot/orchestrator.js';
 import { EntryNotes, ProtLanding, entryInUrl, urlForEntry } from '../../src/protLanding.js';
-import { ProtTrace } from '../../src/protTrace.js';
-import { PROT_STORY_FIGURE, useProtCells, type ProtDeskData } from '../../src/protCells.js';
+import { useResiduesAtCursor, type ResiduesNow } from '../../src/protRows.js';
+import { ProtDesk } from '../../src/protDesk.js';
+import { ProtStepper } from '../../src/protStepper.js';
+import { stepperStages } from '../../src/protStages.js';
+import type { ProtDeskData } from '../../src/protCells.js';
 import type { Row } from '../../src/derive.js';
 import { Broken, Reading, WhatIsMissing, sentenceOf, siteBase } from '../boot.js';
 
@@ -104,27 +107,38 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
 function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; onSearchAgain(): void }): JSX.Element {
   const { surface, checks, notes } = booted;
   /**
-   * ONE session view, and the trace panel shares it.
+   * ONE session view, and EVERY piece of this page reads it — the stepper, the
+   * charts, the chips, the commit log, the gaps, the sheet and the rows at the
+   * cursor.
    *
-   * It is memoised rather than built in the JSX because the panel below the
-   * desk is a CONTROL for the same cursor: two views over one session would be
-   * two cursors, and a reader clicking a trace row would move the one the desk
-   * is not reading.
+   * It is memoised rather than built in the JSX because the stepper is a CONTROL
+   * for the same cursor the charts are folded at: two views over one session
+   * would be two cursors, and a reader clicking a stage would move the one the
+   * pictures are not reading.
    */
   const view = useMemo(() => createSessionView(sessionSource(surface.session), { as: 'user', defaultLayout: 'grid' }), [surface.session]);
+  /**
+   * THE ROWS AT THE CURSOR, RE-READ WHEN IT MOVES — `web/src/protRows.ts` ·
+   * `useResiduesAtCursor`, and the whole reason the stepper is a control.
+   *
+   * This used to be `surface.residues`: the boot's one read, handed to the cells
+   * as data, which froze every picture at the boot's cursor while the record
+   * moved underneath it.
+   */
+  const residues = useResiduesAtCursor(view, surface.session, surface.tables, surface.residues);
   const data: ProtDeskData = {
     // THE SESSION'S ROWS, not the ETL's — three of the five columns the new
-    // charts draw are acts' outputs and are not in the data at all
-    // (`src/prot/session.ts` · `residuesAt` says why this is read once). A
-    // refused read falls back to the parse's own rows, which still carry
-    // everything the file said: the two act-fed charts then find their column
-    // missing and print the library's sentence, which is the true state.
+    // charts draw are acts' outputs and are not in the data at all, so they
+    // exist only where the act landed and only the session can say so
+    // (`src/prot/session.ts` · `residuesAt`). A refused read falls back to the
+    // parse's own rows, which still carry everything the file said — and the
+    // refusal is PRINTED below rather than covered by that fallback.
     // ONE CAST, at the one crossing this page makes: the library's `Row` has
     // `unknown` values and a cell's `Row` has the four a cell can draw. The
     // exoplanet page's `rowsOf` is the same cast for the same reason — the rows
     // really are records of those values, and a page is where the two vocabularies
     // meet.
-    residues: (surface.residues.refused === null ? surface.residues.rows : surface.tables.residues) as readonly Row[],
+    residues: (residues.refused === null ? residues.rows : surface.tables.residues) as readonly Row[],
     counts: surface.tables.counts,
     skipped: surface.tables.skipped,
     structure: surface.structure,
@@ -135,34 +149,57 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
   return (
     <>
       <EntryNotes entry={booted.entry} notes={notes} cost={booted.cost} onSearchAgain={onSearchAgain} />
-      <Desk
+      {/*
+        THE COMPOSED DESK, not the packaged one (`web/src/protDesk.tsx` says
+        why, and names every piece of the packaged desk this page does without).
+        The COUNTING CAPTION reaches it through the session rather than through a
+        prop: the def declares the dashboard's `caption` slot as
+        `protCaption(tables)`, so the summary on screen is the definition's own
+        words at the cursor and the page cannot disagree with it.
+      */}
+      <ProtDesk
         view={view}
-        charts={(desk) => useProtCells(desk, data)}
-        data={{ table: RESIDUES_TABLE, sheet: () => sessionSheetData(surface.session, { table: RESIDUES_TABLE }), checks }}
-        story={{
-          // THE COUNTING CAPTION, not the constant: `PROT_WORDS.caption` counts
-          // nothing on purpose (the landing shows it before any entry is open),
-          // and the desk shows the one folded from this entry's own rows
-          // (`src/prot/def.ts` · `protCaption`) — the same words the definition
-          // declares, so the Story tab and the title band cannot disagree.
-          declared: { title: PROT_WORDS.title, caption: protCaption(surface.tables) },
-          author: 'the desk',
-          figure: PROT_STORY_FIGURE,
-          emptyNote: 'No bookmarks named on this lineage yet — name a bookmark in the time strip and it becomes a section here.',
-        }}
-      />
-      <ProtTrace
+        data={data}
         run={surface.run}
         outcomes={surface.run?.outcomes ?? []}
-        // THE PANEL IS A CONTROL: a row's click moves this view's read-only
-        // cursor, and a seek the session refuses comes back as the session's own
-        // sentence for the panel to print (`vizfootprint-ui` · `SessionView.seek`).
-        onSeek={async (commitId) => {
-          const answered = await view.seek(commitId);
-          return answered.ok ? null : answered.sentence;
-        }}
+        checks={checks}
+        session={surface.session}
+        table={RESIDUES_TABLE}
+        rowsNote={<RowsNote residues={residues} />}
       />
     </>
+  );
+}
+
+/**
+ * WHICH COMMIT THE PICTURES ARE DRAWN AT, and what went wrong if anything did.
+ *
+ * Three states, three sentences, and none of them is silent:
+ *
+ *   - a read IN FLIGHT — the rows on screen are still the previous cursor's, and
+ *     the page says so rather than blanking the charts;
+ *   - a REFUSED window — the library's own sentence, verbatim, above pictures
+ *     that fall back to the file's own columns. The fallback is real and is
+ *     therefore named: a page that swapped the rows quietly would be showing the
+ *     parse and calling it the record;
+ *   - a read that answered — the commit the rows came from, so the pictures and
+ *     the stepper can never be read as disagreeing about where the cursor is.
+ */
+function RowsNote({ residues }: { readonly residues: ResiduesNow }): JSX.Element {
+  const NOTE: React.CSSProperties = { font: '12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif', margin: '.4rem 0 0' };
+  if (residues.refused !== null) {
+    return (
+      <p role="status" style={{ ...NOTE, color: '#8a2b2b' }}>
+        the rows at this commit were refused, in the library&rsquo;s own words: <i>{residues.refused}</i> — the pictures below fall back to the columns the file itself gave, so nothing an act landed is on them
+      </p>
+    );
+  }
+  return (
+    <p role="status" style={{ ...NOTE, color: '#5a6572' }}>
+      {residues.reading
+        ? 'reading the rows at the commit you just moved to — the pictures below are still the previous one’s until it answers'
+        : `every picture below is drawn from the ${residues.rows.length.toLocaleString('en-US')} residue rows as they stand at ${residues.cursor === null ? 'the root of this log — no act has landed yet' : `commit ${residues.cursor}`}`}
+    </p>
   );
 }
 
@@ -258,13 +295,12 @@ function Page(): JSX.Element {
       <Reading
         what={`entry ${phase.entry}${phase.entry === EXAMPLE_ENTRY ? " from this repository's own committed bytes" : ' from the archive'}, the 3D viewer that draws it, and the two stages that find its contacts and measure its surface`}
         extra={
-          <ProtTrace
-            run={null}
-            outcomes={phase.outcomes}
-            // the cursor is the session view's, and there is no session view yet:
-            // said in a sentence rather than by a control that does nothing
-            onSeek={() => Promise.resolve('the run is still going, so there is no cursor to move yet — the desk arrives with the last act')}
-          />
+          // THE SAME STEPPER a reader will use on the desk, already on screen
+          // and filling as each act lands. `onSeek: null` is the truth here: the
+          // cursor is the session view's and there is no session view yet, so the
+          // circles are not buttons and the stepper says so in a sentence rather
+          // than offering a control that would refuse every click.
+          <ProtStepper stages={stepperStages(phase.outcomes, null)} run={null} here={null} onSeek={null} />
         }
       />
     );
