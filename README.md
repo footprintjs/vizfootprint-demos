@@ -53,6 +53,28 @@ for what that costs and what it doesn't.
   HEADLESS, in the stage, over their own parse: an analysis that needed a
   renderer could not run before the screen existed, and could not run in a test
   at all.
+  Then the desk **opens on a question**. A search box takes an entry id (`1ay7`)
+  or words (*barstar*), asks the archive's own full-text and data APIs from the
+  browser, and opens whatever a reader picks — the address carries it
+  (`?entry=1AY7`) so a page is what you share, and the committed entry stays the
+  EXAMPLE, read off this repository's own bytes with no request at all. Going
+  from one curated entry to any entry in the archive is **refusals, not charts**,
+  and each one is a sentence read off the bytes or off the archive's answer: an
+  id that does not exist (in the archive's own words), a search that matches
+  nothing (its 204), a file the archive publishes in mmCIF only, an entry above
+  this desk's declared atom ceiling *with nothing downloaded*, a deposition of
+  116 models (*the desk reads the first*, and the rest reach neither the parse
+  nor the viewer), the chains that are nucleic acid and therefore have no row,
+  the insertion-coded residues the minted key cannot spell, and an entry with
+  one chain — which has no interface, so that picture says so instead of drawing
+  a bar of zero per residue.
+  And the **trace at the bottom is a control**: one row per act the run really
+  dispatched, in order, each clickable to the commit it landed — a refused act is
+  a row with its sentence, an act that landed no commit is not clickable and says
+  why, and there are **no greyed boxes for acts nobody dispatched**, because a
+  missing row is the truth and a promise is not. It fills as the stages run and
+  collapses when they are done, and the recorder's own sentences ride under it,
+  not re-worded.
 
 All four run the real dashboard, the real ETL, the real definition — the one
 thing the published pages cannot do unattended is hold a server-side model
@@ -85,7 +107,7 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors, and the Sheet's two: `GET /api/window` (one window of rows) and `POST /api/find` (where the next match is — the body is the library's `FindQuery`); the grid desk answers the same two under `/api/grid/`. Each parses strictly and answers the session verbatim: a query the door cannot read is a 400 with a sentence, never a default |
 | `web/` | 3, 4, 6 | the front door, the cockpit, the Grammar panel, the jump box, the Analyst panel |
 | `data/prot/` | 1 · data | one wwPDB entry (CC0), the fetch that downloaded it and the provenance record it wrote — the one committed file that is an ARTIFACT rather than a table |
-| `src/prot/` | 1–4 | the PDB atom records → one residue table with every skipped record counted, the declared dashboard (one table, three views, a chart kind the library has never heard of), the surface |
+| `src/prot/` | 1–4 | the PDB atom records → one residue table with every skipped record counted, the declared dashboard (one table, three views, a chart kind the library has never heard of), the surface — plus the ARCHIVE's three doors (`archive.ts`: search, one entry's record, the file; the gate that refuses a size before downloading it) and what this desk cannot say about an entry it was not built with (`entryNotes.ts`: one model only, and a sentence per skipped chain, insertion code and missing interface) |
 | `web/site/` | 3, 4, 6 | the STATIC site: an index and the four desks, each reading its tables over http with no server behind it |
 | `web/story/` | 6 | the SINGLE-FILE story page: its entry, its desk, and the captured desk it carries |
 | `scripts/` | — | `story-capture.ts` — the CDC desk's story, off a running server; `exo-capture.ts` — the exoplanet walk, taken IN PROCESS because that demo has no server |

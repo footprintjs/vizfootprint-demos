@@ -125,7 +125,7 @@ export interface ProtTables {
  * the 1-based column ranges the format document gives, turned into JS offsets
  * once here so no call site does the arithmetic twice.
  */
-const AT = {
+export const ATOM_COLUMNS = {
   name: [12, 16],
   altLoc: [16, 17],
   resName: [17, 20],
@@ -137,12 +137,23 @@ const AT = {
   z: [46, 54],
 } as const;
 
+/**
+ * The same offsets under the short name this file's own parse uses. Exported
+ * above rather than copied, because `./entryNotes.ts` reads the same columns to
+ * say WHAT was skipped and a second table of numbers is a second thing to keep
+ * in step.
+ */
+const AT = ATOM_COLUMNS;
+
 /** The three backbone atoms a torsion is measured from. */
 const BACKBONE = ['N', 'CA', 'C'] as const;
 type Backbone = (typeof BACKBONE)[number];
 const isBackbone = (name: string): name is Backbone => (BACKBONE as readonly string[]).includes(name);
 
-const field = (line: string, at: readonly [number, number]): string => line.slice(at[0], at[1]).trim();
+/** One fixed-column field of a coordinate record, trimmed — the only way this repository reads one. */
+export const atomField = (line: string, at: readonly [number, number]): string => line.slice(at[0], at[1]).trim();
+
+const field = atomField;
 
 /** A 3-D point, in the file's own Ångströms. */
 type Point = readonly [number, number, number];

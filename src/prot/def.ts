@@ -3,6 +3,14 @@
  * the first third-party chart this repository has ever hosted.
  *
  * ── The file, and whose it is ───────────────────────────────────────────────
+ * This definition is built from WHATEVER ENTRY the host parsed — `protDef` takes
+ * the tables and the bytes — so every count in its prose below is folded from
+ * those rows and none of it is typed. The entry described here is the EXAMPLE,
+ * the one file this repository committed (`src/prot/archive.ts` ·
+ * `EXAMPLE_ENTRY`); the search box opens any other
+ * (`web/src/protLanding.tsx`), and what this desk cannot say about one is read
+ * off its bytes by `./entryNotes.ts`.
+ *
  *   entry      `1AY7` — a two-chain protein–protein complex. The depositors
  *              call chain A GUANYL-SPECIFIC RIBONUCLEASE SA and chain B
  *              BARSTAR (its own COMPND records; nothing here says more about
@@ -166,12 +174,40 @@ const SHEET: ActorMeta = {
   does: 'read the rows behind every picture, oldest chain first, and export the receipt',
 };
 
-/** The dashboard's DECLARED words — the def's prose entry and the page's fallback read this one constant. */
+/**
+ * The dashboard's DECLARED words — the title, and the caption a reader sees
+ * before any entry is open (the landing's own description).
+ *
+ * THE CAPTION HERE COUNTS NOTHING, and that is the packet that opened the
+ * archive's door: it used to say "185 residues", which is true of the committed
+ * example and false of every other entry a reader can now pick. The counting
+ * version is {@link protCaption}, folded from the rows the host parsed, and the
+ * def declares THAT one — so the words on the desk cannot outrun the entry they
+ * are about.
+ */
+const CAPTION_TAIL =
+  'drawn in three dimensions by Mol* — code this project did not write — and again as the two angles that describe each residue’s backbone. Both of those are read straight off the file. The other two pictures are not there when the page opens: a stage finds every non-covalent contact in the entry, a second rolls a solvent probe over it, and each one lands its evidence as a commit. Until a stage ends its chart is refused at the read, in the library’s own words, and stepping the cursor back behind that commit refuses it again — the screen un-builds because the log does.';
+
 export const PROT_WORDS = {
   title: 'One residue, four pictures — and two of them arrive',
-  caption:
-    'A protein–protein complex as its depositors solved it: 185 residues, drawn in three dimensions by Mol* — code this project did not write — and again as the two angles that describe each backbone. Both of those are read straight off the file. The other two pictures are not there when the page opens: a stage finds every non-covalent contact in the entry, a second rolls a solvent probe over it, and each one lands its evidence as a commit. Until a stage ends its chart is refused at the read, in the library’s own words, and stepping the cursor back behind that commit refuses it again — the screen un-builds because the log does.',
+  caption: `A protein structure as its depositors solved it, ${CAPTION_TAIL}`,
 } as const;
+
+/**
+ * The dashboard's caption WITH THIS ENTRY'S OWN COUNTS in it — the one the def
+ * declares, and the one the desk shows. See {@link PROT_WORDS}.
+ *
+ * The counts are folded from the rows the host parsed, and the rest of the
+ * sentence is the same prose the landing shows, from the same constant — so the
+ * two can never say different things about the machinery while differing about
+ * the entry.
+ */
+export function protCaption(tables: ProtTables): string {
+  const { counts } = tables;
+  const chains = counts.chains.map((c) => `${c.chain}: ${String(c.residues)}`).join(', ');
+  const scale = counts.chains.length === 0 ? 'not one residue with a backbone to measure' : `${String(counts.residues)} residues in ${String(counts.chains.length)} ${counts.chains.length === 1 ? 'chain' : 'chains'} (${chains})`;
+  return `A protein structure as its depositors solved it: ${scale}, ${CAPTION_TAIL}`;
+}
 
 // ── the table, declared ──────────────────────────────────────────────────────
 
@@ -383,7 +419,7 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
       viewId: 'dashboard',
       slots: {
         title: { text: PROT_WORDS.title, author: { kind: 'human', by: 'the dashboard author' } },
-        caption: { text: PROT_WORDS.caption, author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        caption: { text: protCaption(tables), author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
       },
     },
     {
@@ -397,7 +433,7 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
         },
         altLong: {
           text:
-            `The two chains of the entry — ${chains} residues — drawn as a cartoon by Mol*, a molecular viewer this project did not write and does not control. ` +
+            `The ${String(counts.chains.length)} ${counts.chains.length === 1 ? 'chain' : 'chains'} of the entry — ${chains} residues — drawn as a cartoon by Mol*, a molecular viewer this project did not write and does not control. ` +
             `WHERE EVERY RESIDUE SITS COMES FROM THE FILE and from no binding on this dashboard: there is no x channel, no y channel and no zoom this dashboard records. The camera is the viewer's own, which is why the view declares it cannot be navigated — a request to move it would be refused in words rather than lost. ` +
             `What the dashboard DOES decide is colour, and it decides it from the rows: the residue picked here or elsewhere is lit, a residue another view's selection drops is greyed, and a residue the file gives no backbone angle for is painted in the absence colour rather than in the colour of zero. ` +
             `${String(counts.phiAbsent + counts.psiAbsent)} of the ${String(counts.residues)} residues are in that last group — the first and the last residue of each chain, which have no neighbour to measure a torsion against.`,
@@ -430,13 +466,13 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
       viewId: INTERFACE_VIEW,
       slots: {
         title: { text: 'Contacts across the interface, residue by residue', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
-        altShort: { text: 'A bar chart of how many contacts across the two chains each residue is part of. Empty until the stage that counts them has landed.', author: { kind: 'human' }, levels: ['construction'] },
+        altShort: { text: 'A bar chart of how many contacts to another chain each residue is part of. Empty until the stage that counts them has landed.', author: { kind: 'human' }, levels: ['construction'] },
         altLong: {
           text:
-            `One bar per residue, as tall as the number of non-covalent contacts that residue makes with the OTHER chain. ` +
+            `One bar per residue, as tall as the number of non-covalent contacts that residue makes with ANOTHER CHAIN of the same entry. ` +
             `THIS PICTURE IS NOT THERE WHEN THE PAGE OPENS, and that is the point of the desk: the column it draws is landed by an act, and until that act has landed the library refuses a read of it in its own words — no column, named — which the caption prints instead of drawing an empty axis. Step the time cursor back behind that commit and it is refused again. ` +
             `The contacts are Mol*'s, found by its own interaction engine over a headless parse of the same ${String(counts.residues)} residues, and which KINDS are looked for is read off that engine rather than chosen here. ` +
-            `A residue with no contact across the chains has a bar of zero, which is a real count of nothing — while the tightest crossing contact of such a residue is ABSENT, because "does not touch the other chain" is not a distance.`,
+            `A residue with no contact across the chains has a bar of zero, which is a real count of nothing — while the tightest crossing contact of such a residue is ABSENT, because "does not touch another chain" is not a distance. An entry with ONE chain has no interface at all, and the desk says that sentence instead of drawing a bar of zero per residue (\`./entryNotes.ts\`).`,
           author: { kind: 'human' },
           levels: ['construction'],
           basis: { columns: [RESIDUE_KEY, 'chain', INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN] },
@@ -448,13 +484,13 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
       viewId: SURFACE_VIEW,
       slots: {
         title: { text: 'How much of each residue the solvent can reach', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
-        altShort: { text: 'Two lines — one per chain — of each residue’s solvent-accessible surface area against its residue number. Empty until the stage that computes it has landed.', author: { kind: 'human' }, levels: ['construction'] },
+        altShort: { text: 'One line per chain of each residue’s solvent-accessible surface area against its residue number. Empty until the stage that computes it has landed.', author: { kind: 'human' }, levels: ['construction'] },
         altLong: {
           text:
             `Each residue's accessible surface area in square ångström, drawn against the number the depositors gave it, with one line per chain. ` +
-            `BOTH CHAINS SHARE THE HORIZONTAL AXIS: ${numberedRanges(tables)}, so a slot holds one residue of each and the two lines are told apart by colour, not by position. A line's x may not be an identifier — the library refuses that by name — so the axis is the number, and this sentence is what stops a reader taking it for one chain. ` +
+            `THE CHAINS SHARE THE HORIZONTAL AXIS: ${numberedRanges(tables)}, so one slot can hold a residue of each and the lines are told apart by colour, not by position. A line's x may not be an identifier — the library refuses that by name — so the axis is the number, and this sentence is what stops a reader taking it for one chain. ` +
             `LIKE THE BARS BESIDE IT, this picture arrives with its stage: the column is landed by an act, refused at the read before it and refused again behind it. ` +
-            `The value is Shrake–Rupley as Mol* implements it, at that engine's own default parameters, computed with the deposited waters taken away — so a residue is small here because the other chain is in the way, which is what makes the two pictures on this desk one story.`,
+            `The value is Shrake–Rupley as Mol* implements it, at that engine's own default parameters, computed with the deposited waters taken away — so a residue is small here because a neighbouring chain is in the way, which is what makes the two pictures on this desk one story.`,
           author: { kind: 'human' },
           levels: ['construction'],
           basis: { columns: ['resnum', 'chain', SASA_COLUMN, RELATIVE_SASA_COLUMN] },

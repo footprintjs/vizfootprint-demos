@@ -74,7 +74,7 @@ import type { Dashboard } from 'vizfootprint/def';
 import type { Row } from 'vizfootprint/data';
 import { INTERFACE_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
 import { INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from './analyses.js';
-import { runProtStages, type ProtRun } from './orchestrator.js';
+import { runProtStages, type ProtRun, type ProtRunWatch } from './orchestrator.js';
 import { protTables, type ProtTables } from './etl.js';
 
 /**
@@ -268,10 +268,13 @@ export async function openProtSurfaceUnrun(artifact: StructureArtifact): Promise
  * stages) and the sentences from step two are kept, because a visitor arrives
  * at the end of it.
  */
-export async function openProtSurfaceAsync(artifact: StructureArtifact): Promise<ProtSurface> {
+export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtRunWatch): Promise<ProtSurface> {
   const unrun = await openProtSurfaceUnrun(artifact);
   const refusals = await probeTheUnlandedColumns(unrun.session);
-  const run = await runProtStages(unrun.session);
+  // `watch` is the SCREEN's copy of the acts, act by act, and it changes nothing
+  // about the run (`./orchestrator.ts` · ProtRunWatch): a host that passes none
+  // gets exactly today's boot.
+  const run = await runProtStages(unrun.session, watch);
   // read HERE and nowhere else: this is the one moment the session is guaranteed
   // to hold no clause, which is the only moment this window is the whole table
   const residues = await residuesAt(unrun.session, unrun.tables);

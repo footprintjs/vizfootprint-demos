@@ -25,6 +25,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement, type ReactElement } from 'react';
+import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { INTERFACE_VIEW, PAIRS_VIEW, RESIDUE_KEY, SURFACE_VIEW } from '../src/prot/def.js';
 import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
@@ -95,6 +96,8 @@ function cellMarkup(surface: ProtSurface, viewId: string): string {
     structure: surface.structure,
     run: surface.run,
     refusals: surface.refusals,
+    // the committed entry has nothing to report — see `tests/prot-notes.test.ts`
+    notes: [],
   };
   let built: ReturnType<typeof useProtCells> = [];
   function Probe(): null {
@@ -253,7 +256,7 @@ describe('after both stages: the pictures draw, and the cursor takes them away a
     expect(bar).not.toContain('nothing to draw yet');
     expect(bar).toContain('<svg');
     // the caption's numbers are the act's, never recomputed in the cell
-    expect(bar).toContain('21 of the 224 contacts in the entry cross the two chains');
+    expect(bar).toContain('21 of the 224 contacts in the entry cross from one chain to another');
     expect(bar).toContain('220 hydrogen bond');
     expect(bar).toContain('317 water-or-hetero-end');
     // WHICH PROVIDERS RAN is on the page, because an absent kind means "nobody
@@ -265,8 +268,10 @@ describe('after both stages: the pictures draw, and the cursor takes them away a
     expect(run).toContain('<svg');
     expect(run).toContain('1.4 Å probe sampled at 92 points per atom');
     expect(run).toContain('17 of the 185 residues have an area of exactly zero');
-    // BOTH CHAINS SHARE THE AXIS, said out loud under the picture it affects
-    expect(run).toContain('BOTH CHAINS SHARE THE AXIS');
+    // THE CHAINS SHARE THE AXIS, said out loud under the picture it affects —
+    // and worded for however many chains the entry has, because this desk now
+    // opens any of them (`src/prot/entryNotes.ts`)
+    expect(run).toContain('THE CHAINS SHARE THE AXIS — A is numbered 1–96 and B is numbered 1–89');
 
     // and the receipt draws the pairs, with the finding under it
     const pairs = cellMarkup(surface, PAIRS_VIEW);
@@ -333,5 +338,92 @@ describe('after both stages: the pictures draw, and the cursor takes them away a
     // and both cells print their sentence
     const there2: ProtSurface = { ...surface, residues: there };
     for (const viewId of [INTERFACE_VIEW, SURFACE_VIEW]) expect(cellMarkup(there2, viewId)).toContain('nothing to draw yet');
+  });
+});
+
+/**
+ * THE SCREEN WATCHES THE RUN FILL — the trace panel is expanded while the
+ * stages dispatch, so the outcomes have to arrive DURING the run and not only
+ * with it (`src/prot/orchestrator.ts` · `ProtRunWatch`).
+ *
+ * The session here is a double, and it stands in for exactly one method: the
+ * orchestrator calls `declareAnalysis` and nothing else. That is what lets this
+ * test assert the INTERLEAVING — dispatch, outcome, dispatch, outcome — which a
+ * real run proves too slowly to prove three times and does not show as an
+ * order.
+ */
+describe('the run, as it happens', () => {
+  it('offers each act’s outcome the moment it comes back, in dispatch order, before the run answers', async () => {
+    const happened: string[] = [];
+    let landed = 0;
+    const session = {
+      declareAnalysis: (act: string) => {
+        happened.push(`dispatched ${act}`);
+        landed += 1;
+        return Promise.resolve({ commit: { id: `c${String(landed)}` }, materialized: ['a-column'], result: { ok: true, output: null } });
+      },
+      // THE CAST, and its whole justification: `InteractionSession` is the
+      // library's live object (providers, engines, a gap ledger) and the
+      // orchestrator touches ONE method of it. Standing in for that one method
+      // is what makes the interleaving above assertable.
+    } as unknown as Parameters<typeof runProtStages>[0];
+
+    const run = await runProtStages(session, { onOutcome: (outcome) => happened.push(`watched ${outcome.act} → ${outcome.commit ?? 'nothing'}`) });
+
+    expect(happened).toEqual([
+      `dispatched ${PAIRS_ACT}`,
+      `watched ${PAIRS_ACT} → c1`,
+      `dispatched ${CONTACTS_ACT}`,
+      `watched ${CONTACTS_ACT} → c2`,
+      `dispatched ${SURFACE_ACT}`,
+      `watched ${SURFACE_ACT} → c3`,
+    ]);
+    // the same rows arrive again on the finished run — one owner, twice delivered
+    expect(run.outcomes.map((o) => o.act)).toEqual([...PROT_ACT_ORDER]);
+    expect(run.outcomes.map((o) => o.commit)).toEqual(['c1', 'c2', 'c3']);
+  });
+
+  it('answers exactly today’s run when nobody is watching', async () => {
+    const dispatched: string[] = [];
+    const session = {
+      declareAnalysis: (act: string) => {
+        dispatched.push(act);
+        return Promise.resolve({ commit: { id: act }, materialized: [], result: { ok: true, output: null } });
+      },
+    } as unknown as Parameters<typeof runProtStages>[0];
+    const run = await runProtStages(session);
+    expect(dispatched).toEqual([...PROT_ACT_ORDER]);
+    expect(run.outcomes.every((o) => o.refusal === null)).toBe(true);
+  });
+});
+
+/**
+ * THE TRACE PANEL IS A CONTROL FOR THE RECORD — and the cursor it moves is the
+ * one the desk reads.
+ *
+ * `tests/prot-trace.test.tsx` clicks the rows and asserts which commit id the
+ * panel asked for. This is the other half, without a browser: the page hands
+ * the panel and the desk ONE session view (`web/site/prot/entry.tsx` ·
+ * `StaticProtDesk`), so a seek through it moves the cursor every picture on
+ * this desk is folded at — and a commit that is not on the log comes back as
+ * the SESSION's own sentence, which is what the panel prints.
+ */
+describe('a row’s seek reaches the cursor the desk is folded at', () => {
+  it('moves it to that act’s commit, and refuses an unknown one in the session’s words', async () => {
+    const surface = await openProtSurfaceAsync(ARTIFACT);
+    const view = createSessionView(sessionSource(surface.session), { as: 'user' });
+    await view.refresh();
+
+    const landed = surface.run?.outcomes[0]?.commit ?? null;
+    expect(landed).not.toBeNull();
+    // the page's own handler, in one line: `view.seek(id)` → `{ ok }` or a sentence
+    expect(await view.seek(landed!)).toEqual({ ok: true });
+    expect(view.getState().cursor).toBe(landed);
+
+    const refused = await view.seek('no-such-commit');
+    expect(refused.ok).toBe(false);
+    expect(!refused.ok && refused.sentence).toContain('no-such-commit');
+    // …and NOTHING moved: a refused seek is a sentence, not a jump
+    expect(view.getState().cursor).toBe(landed);
   });
 });

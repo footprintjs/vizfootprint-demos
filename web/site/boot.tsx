@@ -42,13 +42,23 @@ export function sentenceOf(error: unknown): string {
 const SHELL: React.CSSProperties = { font: '14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif', color: '#1c2530', background: '#f7f8fa', minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem', margin: 0 };
 const CARD: React.CSSProperties = { maxWidth: '46rem', background: '#fff', border: '1px solid #dfe4ea', borderRadius: 10, padding: '1.5rem 1.75rem' };
 
-/** While the tables are on the wire. It names the megabytes, because a page that looks stuck is worse than a page that says it is fetching 8 MB. */
-export function Reading({ what }: { readonly what: string }): JSX.Element {
+/**
+ * While the tables are on the wire. It names the megabytes, because a page that
+ * looks stuck is worse than a page that says it is fetching 8 MB.
+ *
+ * `extra` is for a boot that has something to SHOW while it waits. The protein
+ * desk's does: its two stages dispatch three acts before the first paint, and
+ * the trace panel is handed each one as it lands
+ * (`src/prot/orchestrator.ts` · `ProtRunWatch`) so a reader watches the run
+ * fill rather than watching a sentence about it.
+ */
+export function Reading({ what, extra }: { readonly what: string; readonly extra?: ReactNode }): JSX.Element {
   return (
     <div style={SHELL}>
       <div style={CARD}>
         <h1 style={{ margin: '0 0 .5rem', fontSize: '1.05rem' }}>Reading {what}</h1>
         <p style={{ margin: 0, color: '#5a6572' }}>The page is fetching the committed files over http and running the same ETL the server runs. Nothing is cached yet, so the first load carries the whole snapshot.</p>
+        {extra}
       </div>
     </div>
   );

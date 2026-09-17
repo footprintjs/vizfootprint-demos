@@ -12,7 +12,7 @@
  *   `rama`       the two backbone angles, one dot per residue, drawn by the
  *                library's own `VizScatter`. A drag across the phi axis is an
  *                interval commit, and the 3D view greys what it drops.
- *   `interface`  how many contacts across the two chains each residue is in —
+ *   `interface`  how many contacts to another chain each residue is in —
  *                a `VizBar` over a column an ACT lands ({@link interfaceBars}).
  *   `surface`    how much of each residue the solvent can reach — a `VizLine`
  *                over two more ({@link surfaceRun}).
@@ -54,7 +54,7 @@
  *
  * And three more, for the two new pictures: WHICH interaction providers Mol* was
  * asked for (an absent kind means nobody looked, not that there are none), WHICH
- * parameters the probe rolled at, and the fact that the two chains SHARE the
+ * parameters the probe rolled at, and the fact that the chains SHARE the
  * run's axis. All three are read off the acts' own answers and recomputed
  * nowhere.
  *
@@ -70,6 +70,7 @@ import { PAINT_COLOR, PAINT_MEANING, PAINT_WORDS, VALUE_PALETTE, molstarRenderer
 import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
 import { INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from '../../src/prot/analyses.js';
 import type { ProtCounts, SkippedRecords } from '../../src/prot/etl.js';
+import type { EntryNote } from '../../src/prot/entryNotes.js';
 import type { ProtRun } from '../../src/prot/orchestrator.js';
 import type { StructureArtifact, UnlandedRefusals } from '../../src/prot/session.js';
 import { emitIntent, type Row } from './derive.js';
@@ -107,6 +108,18 @@ export interface ProtDeskData {
    * never paraphrased, and never a spinner.
    */
   readonly refusals: UnlandedRefusals;
+  /**
+   * WHAT THIS ENTRY IS, AND WHAT THIS DESK CANNOT SAY ABOUT IT — read off the
+   * bytes by `src/prot/entryNotes.ts` · `entryNotes`, empty for an entry with
+   * nothing wrong (the committed example is one).
+   *
+   * The host shows all of them beside the credit, where the entry is named.
+   * ONE of them also belongs at a picture, and so reaches this file: an entry
+   * with a single chain has no interface, and the interface cell says that
+   * sentence instead of drawing a bar of zero per residue. A cell that drew the
+   * zeros would be answering a question the entry cannot be asked.
+   */
+  readonly notes: readonly EntryNote[];
 }
 
 const count = (n: number): string => n.toLocaleString('en-US');
@@ -327,7 +340,18 @@ export function surfaceRun(residues: readonly Row[], xField: string, yField: str
  * states, and the reason the other three desks' cells are written the same way.
  */
 export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly DeskChart[] {
-  const { residues, counts, skipped, structure, run, refusals } = data;
+  const { residues, counts, skipped, structure, run, refusals, notes } = data;
+  /**
+   * THE ONE NOTE THAT BELONGS AT A PICTURE — an entry whose residues table
+   * holds a single chain (`src/prot/entryNotes.ts` · `entryNotes`, code
+   * `one-chain`).
+   *
+   * The interface act still LANDS on such an entry: every residue gets a real
+   * count of zero crossing contacts, which is a true column and a useless
+   * picture — one bar of zero per residue. So the cell prints the note's
+   * sentence, which says why the entry cannot be asked this question at all.
+   */
+  const noInterface = notes.find((note) => note.code === 'one-chain') ?? null;
   const { state, view, columns, shown } = desk;
   const selFor = desk.selFor;
 
@@ -344,7 +368,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
 
   const dots = useMemo(() => ramaDots(residues, phiField, psiField), [residues, phiField, psiField]);
   const bars = useMemo(() => interfaceBars(residues, barCategory, barValue), [residues, barCategory, barValue]);
-  /** How many residues touch the other chain AT ALL — counted from the bars on screen, so the caption cannot outrun the picture. */
+  /** How many residues touch ANOTHER chain at all — counted from the bars on screen, so the caption cannot outrun the picture. */
   const interfaceTouching = useMemo(() => bars.filter((b) => b.count > 0).length, [bars]);
   /**
    * HAS THE STAGE LANDED? — asked of the WHOLE table, once per act-fed chart,
@@ -522,7 +546,14 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
       caption: (
         <>
           {[
-            !interfaceLanded
+            // THE ENTRY'S OWN SENTENCE FIRST, when there is no interface to draw
+            // at all — see `noInterface` above. The library's refusal below is
+            // ALSO printed while the stage has not landed, because both are true
+            // and neither implies the other.
+            noInterface?.sentence ?? null,
+            noInterface !== null && interfaceLanded
+              ? null
+              : !interfaceLanded
               ? // THE REFUSAL, VERBATIM — the library's own sentence, collected by a
                 // real gesture on this session before the stage ran
                 // (`src/prot/session.ts` · probeTheUnlandedColumns). Not a
@@ -530,10 +561,10 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
                 // and the reason is a fact about the log, so the reason is what is
                 // printed.
                 `nothing to draw yet — the library refused a click on this chart in its own words: “${refusals[INTERFACE_VIEW] ?? `no column "${barValue}" in table "residues"`}”. The column arrives when the interactions stage lands its second act, and steps back out of the table the moment the time cursor moves behind that commit`
-              : `${count(bars.length)} residues, each bar as tall as the number of contacts that residue makes with the OTHER chain — ${count(interfaceTouching)} of them touch it at all, and the rest are a real count of zero`,
+              : `${count(bars.length)} residues, each bar as tall as the number of contacts that residue makes with ANOTHER CHAIN of this entry — ${count(interfaceTouching)} of them touch one at all, and the rest are a real count of zero`,
             run?.pairs?.counts === undefined
               ? null
-              : `${count(run.pairs.counts.crossing)} of the ${count(run.pairs.counts.rows)} contacts in the entry cross the two chains; the kinds present are ${run.pairs.counts.byKind.map((k) => `${count(k.contacts)} ${k.kind}`).join(', ')}`,
+              : `${count(run.pairs.counts.crossing)} of the ${count(run.pairs.counts.rows)} contacts in the entry cross from one chain to another; the kinds present are ${run.pairs.counts.byKind.map((k) => `${count(k.contacts)} ${k.kind}`).join(', ')}`,
             run?.pairs?.counts === undefined
               ? null
               : // WHICH KINDS COULD EVER APPEAR — read off the engine, never chosen
@@ -544,7 +575,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
             run?.pairs?.dropped === undefined
               ? null
               : `and every contact the table does NOT carry is counted with its reason — ${run.pairs.dropped.map((d) => `${count(d.contacts)} ${d.reason}`).join(', ')}`,
-            !interfaceLanded ? null : 'click a bar to select that residue: the 3D view lights it, the scatter keeps its dot and the sheet narrows to it',
+            !interfaceLanded || noInterface !== null ? null : 'click a bar to select that residue: the 3D view lights it, the scatter keeps its dot and the sheet narrows to it',
           ]
             .filter((s): s is string => s !== null)
             .join(' · ')}
@@ -552,7 +583,11 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
         </>
       ),
       render: ({ width, height }) =>
-        !interfaceLanded ? (
+        noInterface !== null ? (
+          <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+            {noInterface.sentence}
+          </div>
+        ) : !interfaceLanded ? (
           <div role="status" style={{ padding: 12, opacity: 0.7 }}>
             {refusals[INTERFACE_VIEW] ?? `no column "${barValue}" in table "residues"`}
           </div>
@@ -585,14 +620,18 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
               : `${count(runPoints.length)} residues, each one's solvent-accessible surface area in square ångström against the number the depositors gave it, one line per chain`,
             !surfaceLanded
               ? null
-              : // THE AXIS, said out loud: both chains are numbered from 1, so the
-                // slots are shared and the colour is the only thing telling the two
-                // lines apart. The library refuses an identifier on a line's x by
-                // name, which is why the axis is the number and this sentence exists.
-                `BOTH CHAINS SHARE THE AXIS — ${numberedRanges(residues, counts)} — so a slot holds one residue of each and the colour, not the position, says which chain you are reading`,
+              : // THE AXIS, said out loud: the chains of this entry are numbered
+                // independently, so the slots are shared and the colour is the only
+                // thing telling the lines apart. The library refuses an identifier on
+                // a line's x by name, which is why the axis is the number and this
+                // sentence exists — and an entry with ONE chain is a different
+                // sentence, because nothing is shared then.
+                counts.chains.length === 1
+                  ? `the axis is this entry's one chain's own numbering — ${numberedRanges(residues, counts)} — so a slot holds exactly one residue`
+                  : `THE CHAINS SHARE THE AXIS — ${numberedRanges(residues, counts)} — so one slot can hold a residue of each and the colour, not the position, says which chain you are reading`,
             run?.surface?.counts === undefined
               ? null
-              : `Shrake–Rupley as Mol* implements it, at the engine's own defaults: a ${String(run.surface.counts.probeSize)} Å probe sampled at ${count(run.surface.counts.spherePoints)} points per atom, with non-polymer atoms ${run.surface.counts.nonPolymer ? 'occluding' : 'NOT occluding'} — so the deposited waters are taken away and a residue is small here because the other chain is in the way`,
+              : `Shrake–Rupley as Mol* implements it, at the engine's own defaults: a ${String(run.surface.counts.probeSize)} Å probe sampled at ${count(run.surface.counts.spherePoints)} points per atom, with non-polymer atoms ${run.surface.counts.nonPolymer ? 'occluding' : 'NOT occluding'} — so the deposited waters are taken away and a residue is small here because a neighbouring chain is in the way`,
             run?.surface?.counts === undefined
               ? null
               : `${count(run.surface.counts.buried)} of the ${count(run.surface.counts.landed)} residues have an area of exactly zero — the probe cannot touch them anywhere — and ${count(run.surface.counts.noValue)} have no value at all; the relative value beside it is ABSENT rather than zero for ${count(run.surface.counts.noReference)} residues, the ones whose type has no published maximum to divide by`,
@@ -614,7 +653,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
             data={runPoints}
             dateField={runX}
             valueField={runY}
-            xLabel={`${runX} (residue number, both chains)`}
+            xLabel={`${runX} (residue number, every chain)`}
             yLabel={`${runY} (Å²)`}
             ariaLabel={desk.altShort(SURFACE_VIEW)}
             columns={columns}

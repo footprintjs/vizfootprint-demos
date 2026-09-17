@@ -25,7 +25,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildDashboard } from 'vizfootprint/agent';
 import type { DashboardDef } from 'vizfootprint/agent';
-import { INTERFACE_VIEW, PAIRS_VIEW, PROT_VIEWS, PROT_WORDS, RAMA_VIEW, RESIDUES_TABLE, RESIDUE_KEY, SHEET_VIEW, STRUCTURE_VIEW, SURFACE_VIEW, protDef, protGrains } from '../src/prot/def.js';
+import { INTERFACE_VIEW, PAIRS_VIEW, PROT_VIEWS, PROT_WORDS, RAMA_VIEW, RESIDUES_TABLE, RESIDUE_KEY, SHEET_VIEW, STRUCTURE_VIEW, SURFACE_VIEW, protCaption, protDef, protGrains } from '../src/prot/def.js';
 import { ACT_KEY_COLUMN, ACT_TABLE, INTERACTION_COLUMNS, INTERACTION_SCHEMA, INTERACTIONS_TABLE, INTERFACE_CONTACTS_COLUMN, PROT_ACT_ORDER, PROT_STAGES, SASA_COLUMN } from '../src/prot/analyses.js';
 import { protTables } from '../src/prot/etl.js';
 import { loadStructureText } from '../src/prot/snapshot.js';
@@ -189,7 +189,13 @@ describe('the def the desk ships', () => {
   it('carries the dashboard’s declared words once, where the page reads them', () => {
     const dashboard = DEF.prose?.find((p) => p.viewId === 'dashboard');
     expect(dashboard?.slots.title?.text).toBe(PROT_WORDS.title);
-    expect(dashboard?.slots.caption?.text).toBe(PROT_WORDS.caption);
+    // THE CAPTION THE DEF DECLARES COUNTS THIS ENTRY: `PROT_WORDS.caption` counts
+    // nothing (the landing shows it before any entry is open) and `protCaption`
+    // is the same prose with the parse's own numbers in it — which is what lets
+    // this desk open an entry it was not written for without lying about it.
+    expect(dashboard?.slots.caption?.text).toBe(protCaption(TABLES));
+    expect(dashboard?.slots.caption?.text).toContain('185 residues in 2 chains (A: 96, B: 89)');
+    expect(PROT_WORDS.caption).not.toContain('185');
     // the counted sentences are DERIVED from the rows, so they cannot drift from the picture
     const long = DEF.prose?.find((p) => p.viewId === RAMA_VIEW)?.slots.altLong?.text ?? '';
     expect(long).toContain(`${String(TABLES.counts.bothPresent)} of the ${String(TABLES.counts.residues)} residues are drawn`);

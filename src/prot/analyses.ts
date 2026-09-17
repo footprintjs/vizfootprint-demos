@@ -299,7 +299,7 @@ function contactsAnalysis(structureText: string): AnalysisDef<readonly KeyedRow[
     inputs: RESIDUE_INPUTS,
     honesty: {
       notes:
-        'One row of `residues` is one residue, so these three columns are a FOLD of the pair table onto its ends. `interface_separation` is ABSENT — never 0 — for a residue with no contact across the chains: "does not touch the other chain" is not a distance.',
+        'One row of `residues` is one residue, so these three columns are a FOLD of the pair table onto its ends. `interface_separation` is ABSENT — never 0 — for a residue with no contact across the chains: "does not touch another chain" is not a distance.',
     },
     build: () =>
       libraryChart(
@@ -355,7 +355,7 @@ function surfaceAnalysis(structureText: string): AnalysisDef<readonly KeyedRow[]
     inputs: RESIDUE_INPUTS,
     honesty: {
       notes:
-        'Shrake–Rupley as Mol* implements it, at the engine\'s OWN default parameters (read, not set: probe 1.4 Å, 92 sphere points, non-polymer atoms not occluding). The value is the accessible surface of the two chains with the deposited solvent taken away, so an interface residue is small because the OTHER CHAIN is in the way. The relative value is absent — never 0 — where the reference table has no maximum for the residue type, because the engine\'s own convenience would have divided by alanine\'s and said nothing.',
+        'Shrake–Rupley as Mol* implements it, at the engine\'s OWN default parameters (read, not set: probe 1.4 Å, 92 sphere points, non-polymer atoms not occluding). The value is the accessible surface of the whole polymer with the deposited solvent taken away, so an interface residue is small because a NEIGHBOURING CHAIN is in the way. The relative value is absent — never 0 — where the reference table has no maximum for the residue type, because the engine\'s own convenience would have divided by alanine\'s and said nothing.',
     },
     build: () =>
       libraryChart(
@@ -424,7 +424,7 @@ export const PROT_STAGES: readonly {
     label: 'Every non-covalent contact in the entry',
     acts: [
       { id: PAIRS_ACT, intent: 'find every non-covalent contact Mol*\'s interaction engine reports between residues of this entry, and cut one row per contact — dropping, with a reason and a count, every contact with an end the residues table has no row for' },
-      { id: CONTACTS_ACT, intent: 'fold those contacts onto the residues they touch: how many each residue is in, how many of those cross to the other chain, and the tightest of the crossing ones — absent, never zero, for a residue that touches no other chain' },
+      { id: CONTACTS_ACT, intent: 'fold those contacts onto the residues they touch: how many each residue is in, how many of those cross to a different chain, and the tightest of the crossing ones — absent, never zero, for a residue that touches no other chain' },
     ],
   },
   {

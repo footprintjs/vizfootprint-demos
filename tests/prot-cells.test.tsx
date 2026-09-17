@@ -57,6 +57,11 @@ const DATA: ProtDeskData = {
   structure: loadStructure(),
   run: null,
   refusals: { [INTERFACE_VIEW]: 'no column "interface_contacts" in table "residues"', [SURFACE_VIEW]: 'no column "sasa" in table "residues"' },
+  // NOTHING TO REPORT about this entry, and that is the true answer for it: one
+  // model, two protein chains, no insertion code (`src/prot/entryNotes.ts` ·
+  // `entryNotes` answers an empty list, which `tests/prot-notes.test.ts`
+  // asserts against these very bytes).
+  notes: [],
 };
 
 /** A desk with nothing selected, nothing said and nothing to say — the quietest true projection. */

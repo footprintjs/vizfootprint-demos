@@ -116,6 +116,28 @@ async function landAct(session: InteractionSession, act: string, intent: string)
   }
 }
 
+/**
+ * SOMEBODY WATCHING THE RUN GO BY — the one thing a promise cannot give a
+ * reader.
+ *
+ * `runProtStages` answers once, at the end, which is the right shape for the
+ * data and the wrong shape for the SCREEN: the desk's trace panel is expanded
+ * while the run is in flight so a reader watches it fill, and a panel handed
+ * only the finished run has nothing to fill with. So an act's outcome is
+ * offered the moment it comes back, in dispatch order, and the same rows arrive
+ * again on {@link ProtRun.outcomes} when the run ends — one owner, twice
+ * delivered, never two accounts.
+ *
+ * It is the HOST'S OWN CALLBACK, running inside the stage that dispatched the
+ * act: a watcher that throws fails that stage, the way any other line of a
+ * stage function would. The library's isolation law is about RECORDERS
+ * (footprintjs: "recorder errors never abort traversal"), and this is not one —
+ * saying so is cheaper than pretending an exception here is harmless.
+ */
+export interface ProtRunWatch {
+  onOutcome?(outcome: ActOutcome): void;
+}
+
 /** What one stage of the chart writes into its own state — the summary, never the rows. See the file header. */
 interface StageSummary {
   readonly stage: string;
@@ -126,7 +148,7 @@ interface StageSummary {
  * THE TWO STAGES, RUN — build the chart over this session and execute it once.
  *
  * ```ts
- * const run = await runProtStages(surface.session);
+ * const run = await runProtStages(surface.session, { onOutcome: (o) => rows.push(o) });
  * run.outcomes.map((o) => `${o.stage}/${o.act} → ${o.commit ?? o.refusal}`);
  * run.pairs?.counts.crossing;   // 21 — the contacts across the interface
  * run.narrative.length;         // the recorder's sentences, one per line
@@ -136,7 +158,7 @@ interface StageSummary {
  * closes over the session: one executor runs one chart at a time, and a chart
  * shared between two sessions would be a chart pointing at the wrong one.
  */
-export async function runProtStages(session: InteractionSession): Promise<ProtRun> {
+export async function runProtStages(session: InteractionSession, watch?: ProtRunWatch): Promise<ProtRun> {
   const { narrative } = await import('footprintjs/recorders');
   /**
    * What the stages produced, gathered OUTSIDE the chart's state — see the file
@@ -158,6 +180,8 @@ export async function runProtStages(session: InteractionSession): Promise<ProtRu
       const outcome: ActOutcome = { stage: stage.stage, act: act.id, commit: landed.commit, refusal: landed.refusal, materialized: landed.materialized };
       acts.push(outcome);
       outcomes.push(outcome);
+      // the screen's copy, offered as it happens — see {@link ProtRunWatch}
+      watch?.onOutcome?.(outcome);
     }
     scope.$setValue(stage.stage, { stage: stage.stage, acts } satisfies StageSummary);
   };
