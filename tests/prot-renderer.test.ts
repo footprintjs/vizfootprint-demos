@@ -39,7 +39,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { buildDashboard } from 'vizfootprint/agent';
-import { createSessionView, selectionForView, sessionSource, type SessionView, type SessionViewState } from 'vizfootprint-ui';
+import { RENDERER_PROTOCOL_VERSION, createSessionView, selectionForView, sessionSource, speaksSameMajor, type SessionView, type SessionViewState } from 'vizfootprint-ui';
 import { runConformance, type ConformanceReport, type RenderState } from 'vizfootprint-ui';
 import { PAINT_COLOR, VALUE_PALETTE, molstarHello, molstarRenderer, paintOf, pointOf, saidOf, type PaintBucket, type ResidueAddress, type StructureViewerPort } from '../web/src/molstarRenderer.js';
 import { RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, protDef } from '../src/prot/def.js';
@@ -132,7 +132,7 @@ class ViewerDouble implements StructureViewerPort {
 // ── the session ──────────────────────────────────────────────────────────────
 
 async function realView(): Promise<SessionView> {
-  const session = buildDashboard(protDef(TABLES)).createSession({ as: 'user' });
+  const session = buildDashboard(protDef(TABLES, TEXT)).createSession({ as: 'user' });
   const view = createSessionView(sessionSource(session), { as: 'user' });
   await view.refresh();
   return view;
@@ -244,7 +244,13 @@ describe('the hello is what the mount really delivers', () => {
     // `transforms` is absent, not empty: the renderer computes nothing, and
     // `bindRenderer` refuses a renderer that declares otherwise
     expect(hello.transforms).toBeUndefined();
-    expect(hello.protocolVersion).toBe('1.9');
+    // THE VERSION IS NOT PINNED HERE, and that is deliberate: pinning the exact
+    // protocol number is the LIBRARY's job (it has its own tests for what is and
+    // is not in a version), and a literal in a demo test breaks on every additive
+    // minor the contract gains. What matters to this desk is that the renderer it
+    // ships and the library it binds through still SPEAK — the same major, which
+    // is the rule `bindRenderer` itself applies before it will bind at all.
+    expect(speaksSameMajor(hello.protocolVersion, RENDERER_PROTOCOL_VERSION)).toBe(true);
   });
 
   it('a click past the molecule is the contract’s CLEARED point, not a selection of nothing', () => {
@@ -260,7 +266,7 @@ describe('what the renderer paints, from the rows and the fold', () => {
     document.body.append(el);
     const double = new ViewerDouble();
     const mounted = molstarRenderer({ structure: { text: TEXT }, keyField: RESIDUE_KEY, viewer: async () => double }).mount(el, {
-      protocolVersion: '1.9',
+      protocolVersion: RENDERER_PROTOCOL_VERSION,
       viewId: STRUCTURE_VIEW,
       callbacks: { emit: () => {}, hover: () => {}, reencodeRequest: () => {}, navigate: () => {} },
     });
@@ -375,7 +381,7 @@ describe('the async mount, and the three ways it can go', () => {
         await held;
         return double;
       },
-    }).mount(el, { protocolVersion: '1.9', viewId: STRUCTURE_VIEW, callbacks: { emit: () => {}, hover: () => {}, reencodeRequest: () => {}, navigate: () => {} } });
+    }).mount(el, { protocolVersion: RENDERER_PROTOCOL_VERSION, viewId: STRUCTURE_VIEW, callbacks: { emit: () => {}, hover: () => {}, reencodeRequest: () => {}, navigate: () => {} } });
 
     // the mount is NOT empty while the viewer starts, and it says which state it is in
     expect(el.childElementCount).toBe(2);
@@ -413,7 +419,7 @@ describe('the async mount, and the three ways it can go', () => {
         await held;
         return double;
       },
-    }).mount(el, { protocolVersion: '1.9', viewId: STRUCTURE_VIEW, callbacks: { emit: () => {}, hover: () => {}, reencodeRequest: () => {}, navigate: () => {} } });
+    }).mount(el, { protocolVersion: RENDERER_PROTOCOL_VERSION, viewId: STRUCTURE_VIEW, callbacks: { emit: () => {}, hover: () => {}, reencodeRequest: () => {}, navigate: () => {} } });
     mounted.unmount();
     expect(el.childElementCount).toBe(0);
     release?.();
@@ -431,7 +437,7 @@ describe('the async mount, and the three ways it can go', () => {
       viewer: async () => {
         throw new Error('this browser gave Mol* no WebGL context');
       },
-    }).mount(el, { protocolVersion: '1.9', viewId: STRUCTURE_VIEW, callbacks: { emit: () => {}, hover: () => {}, reencodeRequest: () => {}, navigate: () => {} } });
+    }).mount(el, { protocolVersion: RENDERER_PROTOCOL_VERSION, viewId: STRUCTURE_VIEW, callbacks: { emit: () => {}, hover: () => {}, reencodeRequest: () => {}, navigate: () => {} } });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(el.textContent).toContain('The 3D viewer could not start: this browser gave Mol* no WebGL context');
     // the hello still promised what it promised: a capability is about the mount,

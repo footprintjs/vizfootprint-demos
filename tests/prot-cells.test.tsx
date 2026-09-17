@@ -30,20 +30,33 @@ import type { ReactElement } from 'react';
 import { buildDashboard } from 'vizfootprint/agent';
 import { createSessionView, selectionForView, sessionSource, type RenderSelection, type SessionView, type SessionViewState } from 'vizfootprint-ui';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
-import { RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, protDef } from '../src/prot/def.js';
+import { INTERFACE_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW, protDef } from '../src/prot/def.js';
 import { protTables, skippedTotal } from '../src/prot/etl.js';
 import { loadStructure, loadStructureText } from '../src/prot/snapshot.js';
 import { paintOf } from '../web/src/molstarRenderer.js';
-import { ramaDots, useProtCells, type ProtDeskData } from '../web/src/protCells.js';
+import { interfaceBars, ramaDots, surfaceRun, useProtCells, type ProtDeskData } from '../web/src/protCells.js';
 import type { Row } from '../web/src/derive.js';
 
 const TEXT = loadStructureText();
 const TABLES = protTables(TEXT);
+/**
+ * The desk's data with NO STAGE RUN — the file's own columns and nothing else.
+ *
+ * That is the honest default for these tests: they are about the 3D view, the
+ * scatter and the shared selection, all of which are read straight off the
+ * entry. The two act-fed cells are covered where their evidence is —
+ * `tests/prot-progression.test.ts` runs the stages and asserts what each chart
+ * does before and after — and `refusals` here carries what a REAL session
+ * refused those two charts with, so the cells that print it print the library's
+ * sentence rather than a string this file invented.
+ */
 const DATA: ProtDeskData = {
   residues: TABLES.residues as readonly Row[],
   counts: TABLES.counts,
   skipped: TABLES.skipped,
   structure: loadStructure(),
+  run: null,
+  refusals: { [INTERFACE_VIEW]: 'no column "interface_contacts" in table "residues"', [SURFACE_VIEW]: 'no column "sasa" in table "residues"' },
 };
 
 /** A desk with nothing selected, nothing said and nothing to say — the quietest true projection. */
@@ -95,7 +108,7 @@ function propsOf<T>(id: string, desk: DeskProjection = QUIET): T {
 
 /** A real session view over the real entry — the one the static page hands the desk. */
 async function realView(): Promise<SessionView> {
-  const session = buildDashboard(protDef(TABLES)).createSession({ as: 'user' });
+  const session = buildDashboard(protDef(TABLES, TEXT)).createSession({ as: 'user' });
   const view = createSessionView(sessionSource(session), { as: 'user' });
   await view.refresh();
   return view;
@@ -109,6 +122,59 @@ function deskOver(state: SessionViewState): DeskProjection {
     selFor: (self: string | null) => selectionForView(state.selections, self, 'intersect', state.links, state.cleared),
   } as unknown as DeskProjection;
 }
+
+describe('the two folds the act-fed cells draw through', () => {
+  /** Four rows with the columns an act would have landed, and one without — the shape both folds are judged on. */
+  const LANDED: readonly Row[] = [
+    { residue_key: 'A:1', chain: 'A', resnum: 1, interface_contacts: 2, sasa: 10 },
+    { residue_key: 'A:2', chain: 'A', resnum: 2, interface_contacts: 0, sasa: 20 },
+    { residue_key: 'B:1', chain: 'B', resnum: 1, interface_contacts: 3, sasa: 30 },
+    { residue_key: 'B:10', chain: 'B', resnum: 10, interface_contacts: 1, sasa: 40 },
+  ];
+
+  it('makes no bar at all from a row with no column, and a bar of ZERO from a real count of none', () => {
+    // BEFORE THE ACT: the column is absent from every row, so there is nothing to
+    // draw — which is what lets the cell print the library's refusal instead of an
+    // empty axis
+    expect(interfaceBars(DATA.residues, RESIDUE_KEY, 'interface_contacts')).toEqual([]);
+    // AFTER IT: four bars, and the residue that touches no other chain has a bar
+    // of height zero, because zero contacts is a measurement
+    const bars = interfaceBars(LANDED, RESIDUE_KEY, 'interface_contacts');
+    expect(bars).toEqual([
+      { category: 'A:1', count: 2 },
+      { category: 'A:2', count: 0 },
+      { category: 'B:1', count: 3 },
+      { category: 'B:10', count: 1 },
+    ]);
+  });
+
+  it('SUMS per category, so a re-encode to a coarser column reads as a total rather than a pile of bars', () => {
+    // the category is whatever the fold binds, and a reader can move it: bound to
+    // `chain` the two slots carry their chains' own totals, not 4 overlapping bars
+    expect(interfaceBars(LANDED, 'chain', 'interface_contacts')).toEqual([
+      { category: 'A', count: 2 },
+      { category: 'B', count: 4 },
+    ]);
+  });
+
+  it('orders the run’s band NUMERICALLY when its axis is a number, and leaves a category axis in the table’s order', () => {
+    expect(surfaceRun(DATA.residues, 'resnum', 'sasa', 'chain')).toEqual([]);
+    // both chains share the residue numbering, so slot "1" holds one point of each
+    // — and "10" comes after "2", which is exactly what an appearance-ordered band
+    // would get wrong
+    const run = surfaceRun(LANDED, 'resnum', 'sasa', 'chain');
+    expect(run).toEqual([
+      { category: '1', value: 10, series: 'A' },
+      { category: '1', value: 30, series: 'B' },
+      { category: '2', value: 20, series: 'A' },
+      { category: '10', value: 40, series: 'B' },
+    ]);
+    // a STRING axis is a legal band for a line (the library's own requirement
+    // widens x to a string) and nothing here knows a better order for one, so the
+    // table's own order is kept
+    expect(surfaceRun(LANDED, 'chain', 'sasa', 'chain').map((p) => ('category' in p ? p.category : ''))).toEqual(['A', 'A', 'B', 'B']);
+  });
+});
 
 describe('the two cells the desk draws', () => {
   it('draws 181 dots — one per residue with BOTH angles — and none for the four without', () => {
@@ -211,7 +277,7 @@ describe('one selection, two pictures — through a real session', () => {
 
   it('why({kind:"chart"}) says “the definition’s own” before anybody acts — this desk lands no acts', async () => {
     const view = await realView();
-    const session = buildDashboard(protDef(TABLES)).createSession({ as: 'user' });
+    const session = buildDashboard(protDef(TABLES, TEXT)).createSession({ as: 'user' });
     for (const viewId of [STRUCTURE_VIEW, RAMA_VIEW]) {
       const answer = session.why({ kind: 'chart', viewId });
       expect(answer.ok).toBe(false);
@@ -227,7 +293,7 @@ describe('one selection, two pictures — through a real session', () => {
   });
 
   it('after the click, why() names the SAME commit for both pictures — the 3D view’s own input, the scatter’s reaching clause', async () => {
-    const session = buildDashboard(protDef(TABLES)).createSession({ as: 'user' });
+    const session = buildDashboard(protDef(TABLES, TEXT)).createSession({ as: 'user' });
     const landed = await session.dispatch({
       verb: 'select',
       viewId: STRUCTURE_VIEW,

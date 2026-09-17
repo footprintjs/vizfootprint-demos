@@ -6,10 +6,16 @@
  * none of it. The library's contract does not enforce that — nothing in a
  * renderer protocol can — so it is enforced HERE, at two levels:
  *
- * 1. IN THE SOURCE, always. Exactly one module may name `molstar`:
- *    `web/src/molstarViewer.ts`, the adapter. Everything else reaches it
- *    through the DYNAMIC import inside `molstarRenderer`'s mount, which is what
- *    gives rollup a chunk boundary to cut at.
+ * 1. IN THE SOURCE, always. Exactly one module may name `molstar` STATICALLY:
+ *    `web/src/molstarViewer.ts`, the adapter. Everything else reaches Mol*
+ *    through a DYNAMIC import, which is what gives rollup a chunk boundary to
+ *    cut at — `molstarRenderer`'s mount for the viewer, and the three compute
+ *    modules of `src/prot/` for the interaction and surface engines
+ *    (`src/prot/molstar.ts` says why every import in that folder is dynamic).
+ *    THE COMPUTE HALF IS A DIFFERENT SUBTREE OF THE SAME PACKAGE: the reader,
+ *    the model and the two engines are not the plugin, so they are their own
+ *    chunk — but a static import of either would still land on the page's first
+ *    paint, for an act nobody has dispatched yet.
  * 2. IN THE BUNDLE, when there is one. `npm run site:build` writes
  *    `dist/site/`, and the walk below follows each page's STATIC import closure
  *    (rollup writes `from"./x.js"` for a static import and `import("./y.js")`
@@ -51,6 +57,26 @@ describe('the source keeps Mol* behind one door', () => {
       .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'))
       .filter((f) => readFileSync(join(web, f), 'utf8').includes("from 'molstar/"));
     expect(named).toEqual(['molstarViewer.ts']);
+  });
+
+  it('the three compute modules reach the engines by DYNAMIC import, and name molstar in types only', () => {
+    const prot = join(REPO, 'src', 'prot');
+    const files = readdirSync(prot).filter((f) => f.endsWith('.ts'));
+    const naming = files.filter((f) => readFileSync(join(prot, f), 'utf8').includes("'molstar/"));
+    // THREE MODULES, and no more: the parse, the interaction fold, the surface
+    // fold. `analyses.ts` and `orchestrator.ts` go through them and name Mol*
+    // nowhere, which is what keeps the def's own module free of it.
+    expect(naming.sort()).toEqual(['interactions.ts', 'molstar.ts', 'surface.ts']);
+    for (const file of naming) {
+      const code = readFileSync(join(prot, file), 'utf8');
+      // every VALUE import is `await import(...)`; every static one is a `import
+      // type`, which the bundler erases. A plain `import { x } from 'molstar/…'`
+      // in any of these would pull an engine into the page's first paint.
+      for (const line of code.split('\n').filter((l) => l.includes("from 'molstar/"))) {
+        expect(line.trimStart(), `${file} statically imports a molstar VALUE`).toMatch(/^import type /);
+      }
+      expect(code, `${file} should reach molstar through a dynamic import`).toMatch(/import\('molstar\//);
+    }
   });
 
   it('the renderer reaches that adapter by a DYNAMIC import, which is the chunk boundary', () => {

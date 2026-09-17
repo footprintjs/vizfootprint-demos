@@ -1,6 +1,6 @@
 /**
- * THE PROTEIN DESK'S CELLS — a third-party 3D view and a first-party scatter,
- * over one table.
+ * THE PROTEIN DESK'S CELLS — a third-party 3D view, three first-party charts and
+ * a receipt, over one table.
  *
  * The shell (`vizfootprint-studio/desk`) draws the band, the ✎, the ✕, the time
  * strip, the editor and the sheet; what is here is this demo's own:
@@ -12,6 +12,27 @@
  *   `rama`       the two backbone angles, one dot per residue, drawn by the
  *                library's own `VizScatter`. A drag across the phi axis is an
  *                interval commit, and the 3D view greys what it drops.
+ *   `interface`  how many contacts across the two chains each residue is in —
+ *                a `VizBar` over a column an ACT lands ({@link interfaceBars}).
+ *   `surface`    how much of each residue the solvent can reach — a `VizLine`
+ *                over two more ({@link surfaceRun}).
+ *   `pairs`      every contact the engine found, as rows: the act's own answer,
+ *                which is the one thing on this desk that is not in the data
+ *                space at all.
+ *
+ * ── THE TWO CELLS THAT ARRIVE, and what they draw before they can ───────────
+ * `interface` and `surface` are declared over columns no act has landed yet.
+ * Until their stage runs there is nothing to draw, and what they draw instead is
+ * **the library's own refusal sentence, verbatim** — collected by a real gesture
+ * on the real session before the stages
+ * (`src/prot/session.ts` · `probeTheUnlandedColumns`) and handed in on
+ * {@link ProtDeskData.refusals}. Not a spinner, not an empty axis, not a
+ * paraphrase: a picture that cannot be drawn says why, in the words of whatever
+ * refused it. Step the time cursor back behind the commit and the same sentence
+ * returns, because the rows the cell is built from lost the column again.
+ *
+ * `interfaceLanded` and `surfaceLanded` are what tell that state apart from a
+ * reader's own filter — see them for why the two questions are asked separately.
  *
  * ── The captions carry the silences ─────────────────────────────────────────
  * Four things about this desk are quiet unless somebody says them, so each is
@@ -31,24 +52,37 @@
  *      no commit carries their version — the one thing on this desk that is not
  *      on the trace, said under the picture it affects.
  *
+ * And three more, for the two new pictures: WHICH interaction providers Mol* was
+ * asked for (an absent kind means nobody looked, not that there are none), WHICH
+ * parameters the probe rolled at, and the fact that the two chains SHARE the
+ * run's axis. All three are read off the acts' own answers and recomputed
+ * nowhere.
+ *
  * ── And one thing this file may NOT do ──────────────────────────────────────
  * Decide what colour a residue is. That decision is the renderer's
  * ({@link paintOf}, from the rows and the fold), and the legend below reads the
  * SAME constants it paints from — one owner, two readers.
  */
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { VizScatter, bindRenderer, type BoundRenderer, type ChartEmission, type ContractGap, type RenderRow, type RenderSelection, type ScatterDatum } from 'vizfootprint-ui';
+import { VizBar, VizLine, VizScatter, VizTable, bindRenderer, keepPredicate, type BarDatum, type BoundRenderer, type ChartEmission, type ContractGap, type LinePoint, type RenderRow, type RenderSelection, type ScatterDatum } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection } from 'vizfootprint-studio/desk';
 import { PAINT_COLOR, PAINT_MEANING, PAINT_WORDS, VALUE_PALETTE, molstarRenderer, type PaintWord } from './molstarRenderer.js';
-import { RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW } from '../../src/prot/def.js';
+import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
+import { INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from '../../src/prot/analyses.js';
 import type { ProtCounts, SkippedRecords } from '../../src/prot/etl.js';
-import type { StructureArtifact } from '../../src/prot/session.js';
+import type { ProtRun } from '../../src/prot/orchestrator.js';
+import type { StructureArtifact, UnlandedRefusals } from '../../src/prot/session.js';
 import { emitIntent, type Row } from './derive.js';
 
-export { STRUCTURE_VIEW, RAMA_VIEW };
+export { STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
 
-/** The cells the story figure is built from, in the order a reader meets them. */
-export const PROT_STORY_FIGURE = [STRUCTURE_VIEW, RAMA_VIEW] as const;
+/**
+ * The cells the story figure is built from, in the order a reader meets them.
+ *
+ * The two ACT-FED charts are in it, and deliberately: a story column that
+ * skipped them would tell the desk's story without the half that arrives.
+ */
+export const PROT_STORY_FIGURE = [STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW] as const;
 
 // ── what the page hands in ───────────────────────────────────────────────────
 
@@ -60,6 +94,19 @@ export interface ProtDeskData {
   readonly skipped: readonly SkippedRecords[];
   /** The file the 3D view draws, as the host holds it (no version — see `src/prot/session.ts`). */
   readonly structure: StructureArtifact;
+  /**
+   * What the two stages landed, and the pair table they cut — `null` on a
+   * surface whose stages were never run. The two act-fed cells read their
+   * counts from here and RECOMPUTE none of them.
+   */
+  readonly run: ProtRun | null;
+  /**
+   * The sentences the library refused each unlanded chart with, before the
+   * stages ran (`src/prot/session.ts` · `probeTheUnlandedColumns`). A cell whose
+   * column is not on its rows prints the one for its own view — verbatim,
+   * never paraphrased, and never a spinner.
+   */
+  readonly refusals: UnlandedRefusals;
 }
 
 const count = (n: number): string => n.toLocaleString('en-US');
@@ -159,6 +206,37 @@ export function StructureCell(props: StructureCellProps): JSX.Element {
 const placed = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /**
+ * WHAT EACH CHAIN IS NUMBERED, folded from the rows on screen — the twin of
+ * `src/prot/def.ts` · `numberedRanges`, and it exists for the reason every
+ * count in this file does: the caption and the picture are built from the same
+ * rows, so neither can outrun the other.
+ *
+ * From `resnum` and never from the residue COUNT: a chain of 96 residues
+ * numbered 1–96 is a coincidence of this entry, and a caption built from the
+ * count would be quietly wrong about its own axis on a chain with a gap.
+ */
+function numberedRanges(residues: readonly Row[], counts: ProtCounts): string {
+  return counts.chains
+    .map(({ chain }) => {
+      const numbers = residues.filter((r) => r['chain'] === chain).map((r) => Number(r['resnum'])).filter((n) => Number.isFinite(n));
+      return numbers.length === 0 ? `${chain} has no numbered residue on screen` : `${chain} is numbered ${count(Math.min(...numbers))}–${count(Math.max(...numbers))}`;
+    })
+    .join(' and ');
+}
+
+/**
+ * THE RECEIPT'S COLUMNS, in the order the act declares them — read off
+ * {@link INTERACTION_COLUMNS} and never listed again here.
+ *
+ * All thirteen, because this table IS the receipt: a contact whose atoms and
+ * feature words were hidden could not be checked against the file, and checking
+ * it against the file is what `tests/prot-interactions.test.ts` does with three
+ * of these rows. The headers are the field names, which are the names the def's
+ * meanings are written about.
+ */
+export const PAIR_TABLE_COLUMNS: readonly string[] = INTERACTION_COLUMNS.map((c) => c.name);
+
+/**
  * The dots of the Ramachandran scatter: one per residue that has BOTH angles.
  *
  * A residue with one angle and not the other has no place on this plane — an
@@ -176,6 +254,72 @@ export function ramaDots(residues: readonly Row[], xField: string, yField: strin
 }
 
 /**
+ * The bars of the interface chart: one per DISTINCT value of the category field,
+ * as tall as the SUM of the column the `residueContacts` act landed.
+ *
+ * A row with no such column contributes NO BAR — not a bar of zero — and that is
+ * the distinction this whole cell is about: before the act the column is not
+ * there and the chart draws nothing at all, while after it a residue that
+ * touches no other chain has a real count of 0 and gets a bar of height zero.
+ * `placed` tells the two apart, because `undefined` is a missing column and `0`
+ * is a count.
+ *
+ * WHY A SUM AND NOT ONE DATUM PER ROW. The category is whatever the encoding
+ * fold binds, and a reader can move it: bound to the residue key it is unique,
+ * so each bar is one residue's own value and the sum is a sum of one. Bound to
+ * `chain` it is not, and a datum per row would hand `VizBar` 185 bars in two
+ * slots. Summing makes that re-encode read as what it says — the contacts of a
+ * whole chain — instead of as a pile of overlapping bars, and it is the
+ * treatment the other desks' bars already give a category.
+ */
+export function interfaceBars(residues: readonly Row[], categoryField: string, valueField: string): readonly BarDatum[] {
+  const totals = new Map<string, number>();
+  for (const row of residues) {
+    const value = row[valueField];
+    if (!placed(value)) continue;
+    const category = String(row[categoryField]);
+    totals.set(category, (totals.get(category) ?? 0) + value);
+  }
+  return [...totals.entries()].map(([category, count]) => ({ category, count }));
+}
+
+/**
+ * The points of the surface run: one per residue, on the BAND of residue
+ * numbers, split into one series per chain.
+ *
+ * `category` and not `date`, and the reason is the library's: `VizLine` places
+ * a point on a run of dates or in a band slot, and a residue number is neither
+ * a date nor a magnitude (`src/prot/def.ts` declares it `scale: 'discrete'` —
+ * residue 88 is not eleven times residue 8). So the slots are the numbers, both
+ * chains share them, and the caption says so.
+ *
+ * The points are sorted by that number, which is what fixes the band's ORDER: a
+ * band takes its slot order from the order the points arrive in, so handing
+ * them over in row order would put chain A's 1–96 first and then silently
+ * append any number chain B has that chain A lacks. Sorting is one line and it
+ * makes the axis mean what a reader reads off it.
+ */
+export function surfaceRun(residues: readonly Row[], xField: string, yField: string, seriesField: string): readonly LinePoint[] {
+  const points = residues.flatMap((r) => {
+    const x = r[xField];
+    const y = r[yField];
+    // a y that is not a number is not a magnitude, and an x that is nothing at
+    // all is not a slot — but an x that is a STRING is a perfectly good band
+    // label, because the encoding plane lets a line's x be one and a reader can
+    // move that binding to `chain` or `resname`
+    if (y === null || y === undefined || !placed(y) || x === null || x === undefined) return [];
+    return [{ x, point: { category: String(x), value: y, series: String(r[seriesField]) } }];
+  });
+  // SORT ONLY WHEN THE AXIS IS A NUMBER. The band takes its slot order from the
+  // order the points arrive in, so a numeric axis is sorted numerically — which
+  // is what makes residue 10 sit after residue 9 rather than after residue 1 —
+  // and a category axis is left in the table's own order, because nothing here
+  // knows a better one for it.
+  const numeric = points.every((p) => placed(p.x));
+  return (numeric ? [...points].sort((a, b) => Number(a.x) - Number(b.x)) : points).map((p) => p.point);
+}
+
+/**
  * The cells, over the desk's projection.
  *
  * Called once, from the desk's own body, so the memos below are real hooks and
@@ -183,17 +327,48 @@ export function ramaDots(residues: readonly Row[], xField: string, yField: strin
  * states, and the reason the other three desks' cells are written the same way.
  */
 export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly DeskChart[] {
-  const { residues, counts, skipped, structure } = data;
+  const { residues, counts, skipped, structure, run, refusals } = data;
   const { state, view, columns, shown } = desk;
   const selFor = desk.selFor;
 
   /** WHICH FIELD A CHANNEL ENCODES — the session's answer at the cursor, never a constant written here. */
   const phiField = desk.bound(RAMA_VIEW, 'x', 'phi');
   const psiField = desk.bound(RAMA_VIEW, 'y', 'psi');
+  const barCategory = desk.bound(INTERFACE_VIEW, 'category', RESIDUE_KEY);
+  const barValue = desk.bound(INTERFACE_VIEW, 'y', INTERFACE_CONTACTS_COLUMN);
+  const runX = desk.bound(SURFACE_VIEW, 'x', 'resnum');
+  const runY = desk.bound(SURFACE_VIEW, 'y', SASA_COLUMN);
+  const runSeries = desk.bound(SURFACE_VIEW, 'color', 'chain');
 
   const sel = [state.selections, state.links, state.cleared] as const;
 
   const dots = useMemo(() => ramaDots(residues, phiField, psiField), [residues, phiField, psiField]);
+  const bars = useMemo(() => interfaceBars(residues, barCategory, barValue), [residues, barCategory, barValue]);
+  /** How many residues touch the other chain AT ALL — counted from the bars on screen, so the caption cannot outrun the picture. */
+  const interfaceTouching = useMemo(() => bars.filter((b) => b.count > 0).length, [bars]);
+  /**
+   * HAS THE STAGE LANDED? — asked of the WHOLE table, once per act-fed chart,
+   * and asked separately from "are there marks to draw".
+   *
+   * The two are not the same question and conflating them would print a refusal
+   * about the log when the truth was a reader's own filter: the run below
+   * narrows its points under every other view's clause, so an empty picture can
+   * mean "nobody has landed this column" OR "your selection keeps nothing".
+   * These flags answer only the first, off the unfiltered rows, so each cell's
+   * empty state says the true thing.
+   */
+  const interfaceLanded = useMemo(() => residues.some((r) => placed(r[barValue])), [residues, barValue]);
+  const surfaceLanded = useMemo(() => residues.some((r) => placed(r[runY])), [residues, runY]);
+  /**
+   * The contact rows the act handed back, exactly as it handed them back.
+   *
+   * NOT read from the session, and that is the whole point of the receipt cell:
+   * these rows are not in the data space, so there is no `viewQuery` that would
+   * answer with them and no clause that could narrow them
+   * (`src/prot/analyses.ts`). They come off {@link ProtDeskData.run}, which is
+   * the act's own answer, held beside the session.
+   */
+  const pairRows = useMemo(() => (run?.pairs?.rows ?? []) as readonly Row[], [run]);
 
   /** The rows the 3D view is handed: every residue, as the contract's plain records. */
   const structureRows = useMemo<readonly RenderRow[]>(() => residues as readonly RenderRow[], [residues]);
@@ -208,6 +383,31 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
     () => selFor(RAMA_VIEW),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
     [...sel],
+  );
+  const interfaceSelection = useMemo(
+    () => selFor(INTERFACE_VIEW),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+    [...sel],
+  );
+  const surfaceSelection = useMemo(
+    () => selFor(SURFACE_VIEW),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+    [...sel],
+  );
+
+  /**
+   * The run's points, NARROWED BY EVERY OTHER VIEW'S CLAUSE — the one cell on
+   * this desk that filters its own data instead of dimming it, because
+   * `VizLine` takes no selection: the library's own line is "controlled like its
+   * siblings: the consumer passes the (already crossfiltered) raw points". So
+   * the consumer does, with `keepPredicate`, which excludes this view's own
+   * clause by contract — otherwise a drag on this axis would move its own
+   * target.
+   */
+  const runPoints = useMemo(
+    () => surfaceRun(residues.filter(keepPredicate(surfaceSelection) as (row: Row) => boolean), runX, runY, runSeries),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- surfaceSelection is memoised on the same slices
+    [residues, runX, runY, runSeries, surfaceSelection],
   );
 
   /** How many residues the file gives no angle for: the absence, counted from the rows the desk holds. */
@@ -315,6 +515,156 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
           onReencode={reencode}
         />
       ),
+    },
+    {
+      id: INTERFACE_VIEW,
+      weight: 4,
+      caption: (
+        <>
+          {[
+            !interfaceLanded
+              ? // THE REFUSAL, VERBATIM — the library's own sentence, collected by a
+                // real gesture on this session before the stage ran
+                // (`src/prot/session.ts` · probeTheUnlandedColumns). Not a
+                // paraphrase and not a spinner: this picture has nothing to draw
+                // and the reason is a fact about the log, so the reason is what is
+                // printed.
+                `nothing to draw yet — the library refused a click on this chart in its own words: “${refusals[INTERFACE_VIEW] ?? `no column "${barValue}" in table "residues"`}”. The column arrives when the interactions stage lands its second act, and steps back out of the table the moment the time cursor moves behind that commit`
+              : `${count(bars.length)} residues, each bar as tall as the number of contacts that residue makes with the OTHER chain — ${count(interfaceTouching)} of them touch it at all, and the rest are a real count of zero`,
+            run?.pairs?.counts === undefined
+              ? null
+              : `${count(run.pairs.counts.crossing)} of the ${count(run.pairs.counts.rows)} contacts in the entry cross the two chains; the kinds present are ${run.pairs.counts.byKind.map((k) => `${count(k.contacts)} ${k.kind}`).join(', ')}`,
+            run?.pairs?.counts === undefined
+              ? null
+              : // WHICH KINDS COULD EVER APPEAR — read off the engine, never chosen
+                // here. An absent word means nobody asked for it, which is a
+                // different statement from "there are none", and only this line
+                // can tell a reader which one they are looking at.
+                `Mol* was asked for ${run.pairs.counts.providersOn.join(', ')} and NOT for ${run.pairs.counts.providersOff.join(', ')} — those are the engine's own defaults, read rather than set, so a kind missing from the list above may simply be a kind nobody looked for`,
+            run?.pairs?.dropped === undefined
+              ? null
+              : `and every contact the table does NOT carry is counted with its reason — ${run.pairs.dropped.map((d) => `${count(d.contacts)} ${d.reason}`).join(', ')}`,
+            !interfaceLanded ? null : 'click a bar to select that residue: the 3D view lights it, the scatter keeps its dot and the sheet narrows to it',
+          ]
+            .filter((s): s is string => s !== null)
+            .join(' · ')}
+          {desk.words(INTERFACE_VIEW)}
+        </>
+      ),
+      render: ({ width, height }) =>
+        !interfaceLanded ? (
+          <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+            {refusals[INTERFACE_VIEW] ?? `no column "${barValue}" in table "residues"`}
+          </div>
+        ) : (
+          <VizBar
+            viewId={INTERFACE_VIEW}
+            data={bars}
+            field={barCategory}
+            label={`contacts across the interface, per ${barCategory}`}
+            ariaLabel={desk.altShort(INTERFACE_VIEW)}
+            selection={interfaceSelection}
+            columns={columns}
+            fits={desk.fitsOf(INTERFACE_VIEW)}
+            encoding={shown[INTERFACE_VIEW] ?? {}}
+            width={width}
+            height={height}
+            onEmit={emit(INTERFACE_VIEW, 'select')}
+            onReencode={reencode}
+          />
+        ),
+    },
+    {
+      id: SURFACE_VIEW,
+      weight: 4,
+      caption: (
+        <>
+          {[
+            !surfaceLanded
+              ? `nothing to draw yet — the library refused a drag across this chart in its own words: “${refusals[SURFACE_VIEW] ?? `no column "${runY}" in table "residues"`}”. The column arrives when the surface stage lands, one commit after the interactions stage`
+              : `${count(runPoints.length)} residues, each one's solvent-accessible surface area in square ångström against the number the depositors gave it, one line per chain`,
+            !surfaceLanded
+              ? null
+              : // THE AXIS, said out loud: both chains are numbered from 1, so the
+                // slots are shared and the colour is the only thing telling the two
+                // lines apart. The library refuses an identifier on a line's x by
+                // name, which is why the axis is the number and this sentence exists.
+                `BOTH CHAINS SHARE THE AXIS — ${numberedRanges(residues, counts)} — so a slot holds one residue of each and the colour, not the position, says which chain you are reading`,
+            run?.surface?.counts === undefined
+              ? null
+              : `Shrake–Rupley as Mol* implements it, at the engine's own defaults: a ${String(run.surface.counts.probeSize)} Å probe sampled at ${count(run.surface.counts.spherePoints)} points per atom, with non-polymer atoms ${run.surface.counts.nonPolymer ? 'occluding' : 'NOT occluding'} — so the deposited waters are taken away and a residue is small here because the other chain is in the way`,
+            run?.surface?.counts === undefined
+              ? null
+              : `${count(run.surface.counts.buried)} of the ${count(run.surface.counts.landed)} residues have an area of exactly zero — the probe cannot touch them anywhere — and ${count(run.surface.counts.noValue)} have no value at all; the relative value beside it is ABSENT rather than zero for ${count(run.surface.counts.noReference)} residues, the ones whose type has no published maximum to divide by`,
+            !surfaceLanded ? null : `drag across the axis to keep a range of residue numbers — every other picture narrows with it, and this one narrows too: ${count(runPoints.length)} of the ${count(counts.residues)} residues are drawn under the selections in force`,
+          ]
+            .filter((s): s is string => s !== null)
+            .join(' · ')}
+          {desk.words(SURFACE_VIEW)}
+        </>
+      ),
+      render: ({ width, height }) =>
+        !surfaceLanded ? (
+          <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+            {refusals[SURFACE_VIEW] ?? `no column "${runY}" in table "residues"`}
+          </div>
+        ) : (
+          <VizLine
+            viewId={SURFACE_VIEW}
+            data={runPoints}
+            dateField={runX}
+            valueField={runY}
+            xLabel={`${runX} (residue number, both chains)`}
+            yLabel={`${runY} (Å²)`}
+            ariaLabel={desk.altShort(SURFACE_VIEW)}
+            columns={columns}
+            fits={desk.fitsOf(SURFACE_VIEW)}
+            encoding={shown[SURFACE_VIEW] ?? {}}
+            width={width}
+            height={height}
+            onEmit={emit(SURFACE_VIEW, 'filter')}
+            onReencode={reencode}
+          />
+        ),
+    },
+    {
+      id: PAIRS_VIEW,
+      weight: 3,
+      caption: (
+        <>
+          {[
+            pairRows.length === 0
+              ? 'the interactions stage has not landed on this session — no act has cut a contact table, so there is nothing here and no refusal to quote either: this picture reads the act’s own answer rather than a column of a table'
+              : `${count(pairRows.length)} contacts, as the engine reported them: the two residues, the two atoms, what the engine calls each end, its word for the contact and how far apart the two features' centres are`,
+            // THE FINDING, in front of the reader, at the picture it shapes.
+            'THIS TABLE IS NOT IN THE DATA SPACE. The library lands a computed table into the dashboard only when the act is a declared aggregate — the group columns, the key and the relation back to the parent all come from that declaration — and a contact table found by somebody else’s interaction engine is an aggregate of nothing the derive grammar can spell. So these rows ride on the act’s own answer: the commit that cut them is on the log, but no clause reaches them, no selection narrows them, and a click here would be a gesture about nothing, which is why this view declares it cannot probe',
+            pairRows.length === 0 || run?.pairs?.counts === undefined
+              ? null
+              : run.pairs.counts.throughAlternateLocation === 0
+                ? null
+                : `${count(run.pairs.counts.throughAlternateLocation)} of these contacts run through an ALTERNATE LOCATION of one of their atoms — an atom the residues table's own parse did not keep (it keeps the first location and counts the rest). The residue still has a row, so nothing is orphaned; the two parses simply disagree about how many atoms that residue has, and this is the count of where`,
+          ]
+            .filter((s): s is string => s !== null)
+            .join(' · ')}
+          {desk.words(PAIRS_VIEW)}
+        </>
+      ),
+      render: ({ width, height }) =>
+        pairRows.length === 0 ? (
+          <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+            the interactions stage has not landed on this session — no contact table has been cut
+          </div>
+        ) : (
+          <VizTable
+            viewId={PAIRS_VIEW}
+            data={pairRows}
+            columns={PAIR_TABLE_COLUMNS}
+            idField="interaction_key"
+            ariaLabel={desk.altShort(PAIRS_VIEW)}
+            width={width}
+            height={height}
+          />
+        ),
     },
   ];
 }

@@ -1,6 +1,6 @@
 /**
- * THE PROTEIN DESK'S DEFINITION — one table, three views, and the first
- * third-party chart this repository has ever hosted.
+ * THE PROTEIN DESK'S DEFINITION — one table, six views, three declared acts, and
+ * the first third-party chart this repository has ever hosted.
  *
  * ── The file, and whose it is ───────────────────────────────────────────────
  *   entry      `1AY7` — a two-chain protein–protein complex. The depositors
@@ -21,16 +21,28 @@
  *              (`./etl.ts` · `skippedOf`).
  *
  * ── The question this desk asks ─────────────────────────────────────────────
- * **Where is a residue, and what shape is its backbone there?** The file
- * answers the first in three dimensions and the second in two angles, and this
- * desk puts one reader in front of both: the same residue, picked in a real 3D
- * molecular viewer or on a Ramachandran scatter, is the same row in both
- * pictures and in the sheet.
+ * **Where is a residue, what shape is its backbone there — and what is it
+ * touching?** The file answers the first in three dimensions and the second in
+ * two angles, and this desk puts one reader in front of both: the same residue,
+ * picked in a real 3D molecular viewer or on a Ramachandran scatter, is the same
+ * row in both pictures and in the sheet.
+ *
+ * The third question the file does NOT answer, and two declared acts do
+ * (`./analyses.ts`): a stage finds every non-covalent contact in the entry with
+ * Mol*'s own interaction engine, and a second rolls a solvent probe over it.
+ * Each lands its evidence as a commit with its own chart — so two of the six
+ * views ARRIVE, and the read of either is refused in the library's own words
+ * until its stage has ended and again the moment a reader steps the cursor back
+ * behind that commit. That progression is what this desk is now for; every
+ * other statement below is about what makes it honest.
  *
  * ── The one thing a reader must know about the 3D view ──────────────────────
  * `structure` is drawn by Mol* — somebody else's code, wrapped as a CONFORMED
- * RENDERER (`web/src/molstarRenderer.ts`, protocol 1.9). Two consequences are
- * declared rather than explained:
+ * RENDERER (`web/src/molstarRenderer.ts`, at whatever protocol version
+ * `vizfootprint-ui` · `RENDERER_PROTOCOL_VERSION` names; pinning the number
+ * here would rot on every additive minor, so the renderer reads it and
+ * `tests/prot-renderer.test.ts` asserts the two still speak the same MAJOR).
+ * Two consequences are declared rather than explained:
  *
  *   1. it has NO positional channel. Where a residue is drawn comes from the
  *      file's coordinates, not from a binding, so the only channel it declares
@@ -46,11 +58,12 @@
  *      commits, and these are not.
  */
 import type { LinkDecl } from 'vizfootprint/def';
-import type { DashboardDef, DataSourceDef, ViewEncodingDecl } from 'vizfootprint/agent';
+import type { AnalysisSlot, DashboardDef, DataSourceDef, ViewEncodingDecl } from 'vizfootprint/agent';
 import type { EncodingRules } from 'vizfootprint/def';
 import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
 import type { ProtTables, ResidueRow } from './etl.js';
+import { ACT_KEY_COLUMN, ACT_TABLE, CONTACTS_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, protAnalyses } from './analyses.js';
 
 // ── the views, named once ────────────────────────────────────────────────────
 
@@ -58,15 +71,56 @@ import type { ProtTables, ResidueRow } from './etl.js';
 export const STRUCTURE_VIEW = 'structure';
 /** The Ramachandran scatter — phi against psi, one dot per residue. */
 export const RAMA_VIEW = 'rama';
+/**
+ * STAGE A'S CHART — how many contacts across the interface each residue is in,
+ * over sequence position. A BAR and not a heatmap, and the choice has a reason:
+ * a heatmap of chain-A residue against chain-B residue is the picture of the
+ * PAIRS, and the pairs are the one thing on this desk that cannot be on the
+ * grammar (`./analyses.ts` says why). A bar is the picture of the COLUMN, the
+ * column is in the data space, and the whole point of the packet is a chart
+ * that is refused before its act and drawn after it.
+ */
+export const INTERFACE_VIEW = 'interface';
+/** STAGE B'S CHART — accessible surface area over sequence position, one run per chain. */
+export const SURFACE_VIEW = 'surface';
+/**
+ * THE RECEIPT — the pair table, as rows.
+ *
+ * Not a chart and not on the grammar: it draws the rows the `interactionPairs`
+ * act hands back in its own answer, because the library lands a computed table
+ * into the data space only for a `builtin: 'aggregate'` record
+ * (`./analyses.ts`). It is declared as a VIEW all the same, so the desk's
+ * actor registry, its words and its capability envelope say out loud what this
+ * picture can and cannot do — a picture with no declaration is the thing this
+ * repository refuses, and "it has no clause and cannot be filtered" is a
+ * statement worth making rather than leaving to be discovered.
+ */
+export const PAIRS_VIEW = 'pairs';
 /** The residue table. */
 export const SHEET_VIEW = 'sheet';
 
 /** Every view this def declares, in the order a reader meets them. */
-export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, SHEET_VIEW] as const;
+export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW] as const;
 
 /** The one table, and the column its rows are identified by — both named once, so no reader spells either. */
 export const RESIDUES_TABLE = 'residues';
 export const RESIDUE_KEY = 'residue_key';
+
+/**
+ * THE TWO NAMES `./analyses.ts` HAS TO SPELL, judged against these — once, at
+ * load.
+ *
+ * That module cannot import them (this one imports IT, because it declares the
+ * acts), so it spells them itself and this is the guard. WHY A THROW AND NOT A
+ * COMMENT: both ways it can drift are silent — the acts would read a table that
+ * is not there and align to a column that is not there, and the two charts over
+ * their output would simply never draw. The `../nndss/population.ts` ·
+ * `BROUGHT` precedent: a demo that will not start beats one whose column is a
+ * name nothing lands.
+ */
+if (ACT_TABLE !== RESIDUES_TABLE || ACT_KEY_COLUMN !== RESIDUE_KEY) {
+  throw new Error(`the acts are declared over "${ACT_TABLE}"."${ACT_KEY_COLUMN}" and this def declares "${RESIDUES_TABLE}"."${RESIDUE_KEY}" — src/prot/analyses.ts and src/prot/def.ts have drifted`);
+}
 
 /**
  * NO LAYER ADDRESSES ON THIS DESK, and that is worth one sentence because the
@@ -91,17 +145,32 @@ const RAMA: ActorMeta = {
   label: 'Backbone angles, residue by residue',
   does: 'drag across the phi axis to keep a range of backbone angles — the 3D view greys every residue the range drops',
 };
+const INTERFACE: ActorMeta = {
+  actor: 'user',
+  label: 'Contacts across the interface, residue by residue',
+  does: 'click a bar to select that residue — but only once the act that counts the contacts has landed; before it, the library refuses the gesture by naming the column it cannot read',
+};
+const SURFACE: ActorMeta = {
+  actor: 'user',
+  label: 'How much of each residue the solvent can reach',
+  does: 'drag across the run to keep a range of sequence positions — and, as with the bars, only once the act that rolled the probe has landed',
+};
+const PAIRS: ActorMeta = {
+  actor: 'user',
+  label: 'Every contact the engine found, as rows',
+  does: 'read the pairs, the atoms, the engine’s own word for each one and how far apart the two ends are — this table has no gesture at all, because its rows are not in the data space',
+};
 const SHEET: ActorMeta = {
   actor: 'user',
-  label: 'Every residue, as the file gives it',
-  does: 'read the rows behind both pictures, oldest chain first, and export the receipt',
+  label: 'Every residue, as the file gives it — and everything the two stages landed on it',
+  does: 'read the rows behind every picture, oldest chain first, and export the receipt',
 };
 
 /** The dashboard's DECLARED words — the def's prose entry and the page's fallback read this one constant. */
 export const PROT_WORDS = {
-  title: 'One residue, two pictures',
+  title: 'One residue, four pictures — and two of them arrive',
   caption:
-    'A protein–protein complex as its depositors solved it: 185 residues, drawn in three dimensions by Mol* — code this project did not write — and again as the two angles that describe each backbone. Click a residue in either picture and the other one answers, because both are reading the same row.',
+    'A protein–protein complex as its depositors solved it: 185 residues, drawn in three dimensions by Mol* — code this project did not write — and again as the two angles that describe each backbone. Both of those are read straight off the file. The other two pictures are not there when the page opens: a stage finds every non-covalent contact in the entry, a second rolls a solvent probe over it, and each one lands its evidence as a commit. Until a stage ends its chart is refused at the read, in the library’s own words, and stepping the cursor back behind that commit refuses it again — the screen un-builds because the log does.',
 } as const;
 
 // ── the table, declared ──────────────────────────────────────────────────────
@@ -216,7 +285,7 @@ export const PROT_ENCODING_RULES: EncodingRules = {
 };
 
 /**
- * TWO ENCODING SURFACES, and the third view declares none.
+ * FOUR ENCODING SURFACES, and two views declare none.
  *
  * `rama` is an ordinary first-party scatter over the default table: phi on x,
  * psi on y, both measures in degrees, both sometimes absent. No frame is
@@ -230,13 +299,52 @@ export const PROT_ENCODING_RULES: EncodingRules = {
  * `structure` declares the ONE channel it has. See {@link PROT_ENCODING_RULES}
  * for what the plane does with a kind it has never heard of.
  *
- * `sheet` declares none, for the reason all three other demos' sheets declare
- * none: it shows rows, not a mark.
+ * **`interface` and `surface` ARE DECLARED BEFORE THEIR COLUMNS EXIST, and that
+ * is the point of this packet.** Both bind a column that no act has landed yet
+ * — `interface_contacts` and `sasa` — so on a fresh session the two charts
+ * cannot draw, and the LIBRARY is what says so: a gesture at either is refused
+ * `needs-column`, *no column "interface_contacts" in table "residues"*, which
+ * `./session.ts` · `probeTheUnlandedColumns` collects before the acts and the
+ * cells print verbatim. After the stage lands the same gesture is accepted;
+ * seek the cursor back behind that commit and it is refused again, word for
+ * word. No spinner, no empty axis, no claim.
+ *
+ * TWO THINGS ABOUT THE CHANNELS, both deliberate:
+ *
+ *   - the bar binds `category` AND `y`. `category` because that is the channel
+ *     `VizBar` emits on (a click is one residue), `y` because that is the
+ *     channel the requirements table judges as a QUANTITY for a bar kind
+ *     (`vizfootprint/encoding` · `CHART_REQUIREMENTS.bar`) — the exoplanet
+ *     desk's bar needs no `y` because its bars are a COUNT of rows, and these
+ *     are a column's values. An identifier on a bar's category is legal and the
+ *     library says why in its own words; on a LINE's x it is not, which is the
+ *     next point.
+ *   - the run's x is `resnum` and NOT the residue key, because
+ *     `CHART_REQUIREMENTS.line` refuses an identifier on x by name: *an
+ *     identifier along a run is a lie about order*. So both chains are drawn
+ *     over the SAME residue numbering (1–96 and 1–89 — they overlap), split
+ *     into two series by `color: 'chain'`, and the caption says that out loud
+ *     rather than letting a reader take one axis for one chain.
+ *
+ * WHAT THE DOOR DOES NOT JUDGE, measured rather than assumed: a VIEW-level
+ * `initial` binding is not checked against the table's columns at all — a def
+ * binding `value: 'utter_nonsense_column'` builds clean, even with
+ * `encodingRules.onInvalid: 'refuse'`. The exoplanet desk gets that judgement
+ * because its bindings sit on a LAYER, and `layerSurfacesOf` judges a layer's
+ * fields against its table. So the four bindings here are declarations of
+ * INTENT that nothing verifies at build; what verifies them is the read, at
+ * every cursor, which is the honest place for it and the reason this packet has
+ * a progression to prove at all.
+ *
+ * `pairs` and `sheet` declare none, for the reason all four demos' sheets do:
+ * they show rows, not a mark.
  */
 function protEncodings(): readonly ViewEncodingDecl[] {
   return [
     { viewId: RAMA_VIEW, chartKind: 'scatter', channels: ['x', 'y'], initial: { x: 'phi', y: 'psi' } },
     { viewId: STRUCTURE_VIEW, chartKind: 'structure', channels: ['color'], initial: { color: 'chain' } },
+    { viewId: INTERFACE_VIEW, chartKind: 'bar', channels: ['category', 'y'], initial: { category: RESIDUE_KEY, y: INTERFACE_CONTACTS_COLUMN } },
+    { viewId: SURFACE_VIEW, chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } },
   ];
 }
 
@@ -248,6 +356,25 @@ function protEncodings(): readonly ViewEncodingDecl[] {
  * a constant would tell a screen-reader user one population while the caption
  * beside it counted another.
  */
+/**
+ * WHAT EACH CHAIN IS NUMBERED, read off the rows — `A is numbered 1–96 and B is
+ * numbered 1–89`.
+ *
+ * Folded from `resnum` rather than from the residue COUNT, because the two are
+ * not the same statement: a chain of 96 residues numbered 1–96 is a coincidence
+ * of this entry (the depositors numbered both chains contiguously from 1), and
+ * a chain with a gap in its numbering would make a caption built from the count
+ * quietly wrong about its own axis.
+ */
+function numberedRanges(tables: ProtTables): string {
+  return tables.counts.chains
+    .map(({ chain }) => {
+      const numbers = tables.residues.filter((r) => r.chain === chain).map((r) => r.resnum);
+      return `${chain} is numbered ${String(Math.min(...numbers))}–${String(Math.max(...numbers))}`;
+    })
+    .join(' and ');
+}
+
 function protProse(tables: ProtTables): readonly ProseDecl[] {
   const { counts } = tables;
   const chains = counts.chains.map((c) => `${c.chain} (${String(c.residues)})`).join(' and ');
@@ -300,6 +427,51 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
       },
     },
     {
+      viewId: INTERFACE_VIEW,
+      slots: {
+        title: { text: 'Contacts across the interface, residue by residue', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        altShort: { text: 'A bar chart of how many contacts across the two chains each residue is part of. Empty until the stage that counts them has landed.', author: { kind: 'human' }, levels: ['construction'] },
+        altLong: {
+          text:
+            `One bar per residue, as tall as the number of non-covalent contacts that residue makes with the OTHER chain. ` +
+            `THIS PICTURE IS NOT THERE WHEN THE PAGE OPENS, and that is the point of the desk: the column it draws is landed by an act, and until that act has landed the library refuses a read of it in its own words — no column, named — which the caption prints instead of drawing an empty axis. Step the time cursor back behind that commit and it is refused again. ` +
+            `The contacts are Mol*'s, found by its own interaction engine over a headless parse of the same ${String(counts.residues)} residues, and which KINDS are looked for is read off that engine rather than chosen here. ` +
+            `A residue with no contact across the chains has a bar of zero, which is a real count of nothing — while the tightest crossing contact of such a residue is ABSENT, because "does not touch the other chain" is not a distance.`,
+          author: { kind: 'human' },
+          levels: ['construction'],
+          basis: { columns: [RESIDUE_KEY, 'chain', INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN] },
+        },
+        howToRead: { author: { kind: 'derived' } },
+      },
+    },
+    {
+      viewId: SURFACE_VIEW,
+      slots: {
+        title: { text: 'How much of each residue the solvent can reach', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        altShort: { text: 'Two lines — one per chain — of each residue’s solvent-accessible surface area against its residue number. Empty until the stage that computes it has landed.', author: { kind: 'human' }, levels: ['construction'] },
+        altLong: {
+          text:
+            `Each residue's accessible surface area in square ångström, drawn against the number the depositors gave it, with one line per chain. ` +
+            `BOTH CHAINS SHARE THE HORIZONTAL AXIS: ${numberedRanges(tables)}, so a slot holds one residue of each and the two lines are told apart by colour, not by position. A line's x may not be an identifier — the library refuses that by name — so the axis is the number, and this sentence is what stops a reader taking it for one chain. ` +
+            `LIKE THE BARS BESIDE IT, this picture arrives with its stage: the column is landed by an act, refused at the read before it and refused again behind it. ` +
+            `The value is Shrake–Rupley as Mol* implements it, at that engine's own default parameters, computed with the deposited waters taken away — so a residue is small here because the other chain is in the way, which is what makes the two pictures on this desk one story.`,
+          author: { kind: 'human' },
+          levels: ['construction'],
+          basis: { columns: ['resnum', 'chain', SASA_COLUMN, RELATIVE_SASA_COLUMN] },
+        },
+        howToRead: { author: { kind: 'derived' } },
+      },
+    },
+    {
+      viewId: PAIRS_VIEW,
+      // NO `howToRead`, for the same reason the sheet has none: it declares no
+      // encoding surface, so there are no bindings to derive a line from.
+      slots: {
+        title: { text: 'Every contact the engine found, as rows', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        altShort: { text: 'A table of every non-covalent contact in the entry: its two residues, the two atoms, the engine’s word for it and how far apart they are.', author: { kind: 'human' }, levels: ['construction'] },
+      },
+    },
+    {
       viewId: SHEET_VIEW,
       // NO `howToRead` here, and the def door is why: a derived how-to-read line
       // is built from the view's BINDINGS, and the sheet declares no encoding
@@ -308,7 +480,7 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
       // derive from*. The same sentence is what the structure view would earn if
       // it declared no surface either (see {@link PROT_ENCODING_RULES}).
       slots: {
-        title: { text: 'Every residue, as the file gives it', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        title: { text: 'Every residue, as the file gives it — and every column the two stages landed on it', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
       },
     },
   ];
@@ -336,37 +508,83 @@ function protLinks(): readonly LinkDecl[] {
 }
 
 /**
- * THE GRAIN AT EVERY ADDRESS THAT DRAWS: `[]` — one mark per ROW.
+ * THE GRAIN AT EVERY ADDRESS THAT DRAWS RESIDUES: `[]` — one mark per ROW.
  *
- * Both pictures put one mark on one residue, and a row of this table IS one
- * residue, because `residue_key` is the table's declared key. So `[]` is the
- * true statement and `['residue_key']` would be a second one: it says the marks
- * stand for GROUPS keyed by the residue, which for a key column is a grouping
- * of one row each — and it would make every edge out of these views a
+ * Every picture but one puts one mark on one residue, and a row of this table
+ * IS one residue, because `residue_key` is the table's declared key. So `[]` is
+ * the true statement and `['residue_key']` would be a second one: it says the
+ * marks stand for GROUPS keyed by the residue, which for a key column is a
+ * grouping of one row each — and it would make every edge out of these views a
  * grain-crossing edge that the def door then requires a `fold` sentence for.
  * A fold that describes no fold is the kind of prose this repository exists to
  * delete.
+ *
+ * ── AND ONE ADDRESS WITH NO GRAIN AT ALL: `pairs` ───────────────────────────
+ * The receipt's marks are PAIRS of residues, so the grain law says to declare
+ * it at that address — and there is nothing to declare it against. A grain
+ * names GROUP KEYS, and a key is a column of the table the address reads; the
+ * table `pairs` reads is the one the `interactionPairs` act cuts, which the
+ * library never lands in the data space (`./analyses.ts`). So
+ * `{ viewId: 'pairs', keys: ['residue_a', 'residue_b'] }` names two columns no
+ * declared table has, and the door refuses it by name — *grains[5].keys[0]
+ * "residue_a" is not a column of table "residues"* — which is the door being
+ * right: this def really cannot say what it would be saying.
+ *
+ * Declaring `keys: []` instead would be WORSE than saying nothing: it means
+ * "one mark per row of the table this address reads", and the rows the receipt
+ * draws are not rows of `residues` at all. So the grain is ABSENT, and this
+ * paragraph is the declaration — the same shape `./http.ts` uses for the
+ * version no carrier will vouch for.
  */
 export function protGrains(): readonly { readonly viewId: string; readonly keys: readonly string[] }[] {
-  return PROT_VIEWS.map((viewId) => ({ viewId, keys: [] }));
+  return PROT_VIEWS.filter((viewId) => viewId !== PAIRS_VIEW).map((viewId) => ({ viewId, keys: [] }));
 }
 
 // ── the def ──────────────────────────────────────────────────────────────────
 
 /**
- * The def over one parsed entry.
+ * The def over one parsed entry — and over the BYTES it was parsed from.
  *
  * ```ts
- * const def = protDef(protTables(readFileSync('data/prot/1ay7.pdb', 'utf8')));
+ * const text = readFileSync('data/prot/1ay7.pdb', 'utf8');
+ * const def = protDef(protTables(text), text);
  * def.defaultTable;                       // 'residues'
- * buildDashboard(def).def.encodings;      // the scatter's two channels, the structure's one
+ * Object.keys(def.analyses ?? {});        // the three acts, declared
+ * buildDashboard(def).def.encodings;      // four surfaces, two of them over columns no act has landed
  * ```
+ *
+ * ── WHY THE TEXT IS A SECOND PARAMETER ─────────────────────────────────────
+ * The three declared acts read the STRUCTURE, not the rows: they parse a
+ * headless Mol* model of their own and compute over its atoms
+ * (`./analyses.ts`). So the def has to be built over the same bytes the ETL
+ * read, and the honest way to say that is to ask for them — a def whose acts
+ * read a file and whose signature does not mention one would be a def that
+ * fetches something behind its caller's back. Every door that has the bytes
+ * already has them: `./session.ts` from the artifact, `./cards.ts` from its
+ * input.
+ *
+ * The text is NOT copied into the declaration. It is closed over by the acts,
+ * and what rides on their commits is its character count — the one thing about
+ * this file a host can vouch for (`./http.ts` and `./session.ts` say why no
+ * carrier will vouch for more).
  */
-export function protDef(tables: ProtTables): DashboardDef {
+export function protDef(tables: ProtTables, structureText: string): DashboardDef {
   return {
     meta: { title: 'A protein complex — vizfootprint on one PDB entry' },
     data: protSources(tables.residues),
-    actors: { [STRUCTURE_VIEW]: STRUCTURE, [RAMA_VIEW]: RAMA, [SHEET_VIEW]: SHEET },
+    actors: {
+      [STRUCTURE_VIEW]: STRUCTURE,
+      [RAMA_VIEW]: RAMA,
+      [INTERFACE_VIEW]: INTERFACE,
+      [SURFACE_VIEW]: SURFACE,
+      [PAIRS_VIEW]: PAIRS,
+      [SHEET_VIEW]: SHEET,
+    },
+    // THE THREE ACTS, over the bytes this def was built on. Declared here and
+    // dispatched by `./orchestrator.ts`, two stages in order — and `PROT_STAGES`
+    // is the one list that says which act belongs to which stage, so the
+    // captions and the chart cannot disagree about it.
+    analyses: protAnalyses(structureText),
     encodings: protEncodings(),
     grains: protGrains(),
     // THE HONEST CAPABILITY ENVELOPE, one view at a time.
@@ -389,9 +607,26 @@ export function protDef(tables: ProtTables): DashboardDef {
     // and the renderer's hello still declares `emissionKinds: ['point']`,
     // because a renderer may only promise what its own mount delivers. Both
     // statements are true at their own tier.
+    //
+    // THE TWO NEW CHARTS, and the receipt beside them:
+    // `interface` emits a POINT and nothing else — `VizBar`'s gesture is a
+    // click on one bar, which is one residue. Not an interval: a bar chart has
+    // no brush, and the actor meta says "drag" nowhere.
+    // `surface` emits an INTERVAL and nothing else — `VizLine`'s only gesture
+    // is its horizontal brush, which here is a range of residue numbers. It has
+    // no point click, so a `point` would be a voice the picture lacks.
+    // `pairs` CANNOT probe, and for a reason no other view on this desk has:
+    // its rows are not in the data space at all (`./analyses.ts`), so there is
+    // no clause a gesture on it could even be ABOUT. It is not a consumer
+    // either — no clause narrows it, because no clause can reach a table the
+    // session does not know. It is the one picture on this desk outside the
+    // grammar, and the declaration is where that is said.
     capabilities: [
       { viewId: STRUCTURE_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: RAMA_VIEW, canProbe: true, encodings: ['interval'] },
+      { viewId: INTERFACE_VIEW, canProbe: true, encodings: ['point'] },
+      { viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] },
+      { viewId: PAIRS_VIEW, canProbe: false },
       { viewId: SHEET_VIEW, canProbe: false },
     ],
     links: protLinks(),

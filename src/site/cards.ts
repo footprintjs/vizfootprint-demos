@@ -102,8 +102,10 @@ export function loadSiteCardsInput(): SiteCardsInput {
     exo: { tables: loadExo(), ...((walk) => (walk === undefined ? {} : { captured: walk }))(exoWalk()) },
     // the protein desk reads ONE file, and not through the library's source port:
     // a structure file is not rows, CSV or JSON (`src/prot/http.ts` says what
-    // that costs), so this is the one card input that is a bare read
-    prot: { tables: protTables(loadStructureText()) },
+    // that costs), so this is the one card input that is a bare read — and the
+    // TEXT goes in beside the rows, because that desk's three declared acts are
+    // declared over the bytes rather than over the table (`src/prot/analyses.ts`)
+    prot: ((text) => ({ tables: protTables(text), structureText: text }))(loadStructureText()),
   };
 }
 

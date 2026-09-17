@@ -25,12 +25,12 @@ import { Desk } from 'vizfootprint-studio/desk';
 import { loadStructureOverHttp } from '../../../src/prot/http.js';
 import { entryCredit, skippedTotal, type EntryCredit } from '../../../src/prot/etl.js';
 import { PROT_WORDS, RESIDUES_TABLE } from '../../../src/prot/def.js';
-import { openProtSurfaceAsync, type ProtSurface } from '../../../src/prot/session.js';
+import { openProtSurfaceAsync, protSurfaceProblems, type ProtSurface } from '../../../src/prot/session.js';
 import { PROT_STORY_FIGURE, useProtCells, type ProtDeskData } from '../../src/protCells.js';
 import type { Row } from '../../src/derive.js';
 import { Broken, Reading, WhatIsMissing, sentenceOf, siteBase } from '../boot.js';
 
-/** What the boot produces: a live session, the rows it will draw, the data checks, and whose entry this is. */
+/** What the boot produces: a live session with three commits on it, the rows it will draw, the data checks, and whose entry this is. */
 interface Booted {
   readonly surface: ProtSurface;
   readonly checks: readonly string[];
@@ -40,16 +40,29 @@ interface Booted {
 async function boot(): Promise<Booted> {
   const artifact = await loadStructureOverHttp(siteBase());
   const surface = await openProtSurfaceAsync(artifact);
-  return { surface, checks: await surface.dashboard.lintData(), credit: entryCredit(artifact.text) };
+  return { surface, checks: [...(await surface.dashboard.lintData()), ...protSurfaceProblems(surface)], credit: entryCredit(artifact.text) };
 }
 
 function StaticProtDesk({ booted }: { readonly booted: Booted }): JSX.Element {
   const { surface, checks } = booted;
   const data: ProtDeskData = {
-    residues: surface.tables.residues as readonly Row[],
+    // THE SESSION'S ROWS, not the ETL's — three of the five columns the new
+    // charts draw are acts' outputs and are not in the data at all
+    // (`src/prot/session.ts` · `residuesAt` says why this is read once). A
+    // refused read falls back to the parse's own rows, which still carry
+    // everything the file said: the two act-fed charts then find their column
+    // missing and print the library's sentence, which is the true state.
+    // ONE CAST, at the one crossing this page makes: the library's `Row` has
+    // `unknown` values and a cell's `Row` has the four a cell can draw. The
+    // exoplanet page's `rowsOf` is the same cast for the same reason — the rows
+    // really are records of those values, and a page is where the two vocabularies
+    // meet.
+    residues: (surface.residues.refused === null ? surface.residues.rows : surface.tables.residues) as readonly Row[],
     counts: surface.tables.counts,
     skipped: surface.tables.skipped,
     structure: surface.structure,
+    run: surface.run,
+    refusals: surface.refusals,
   };
   return (
     <Desk
@@ -95,7 +108,7 @@ function Page(): JSX.Element {
     };
   }, []);
 
-  if (state.status === 'reading') return <Reading what="one protein structure (169 KB) and the 3D viewer that draws it" />;
+  if (state.status === 'reading') return <Reading what="one protein structure (169 KB), the 3D viewer that draws it, and the two stages that find its contacts and measure its surface" />;
   if (state.status === 'broken') return <Broken sentence={state.sentence} />;
   const { surface, credit } = state.booted;
   return (

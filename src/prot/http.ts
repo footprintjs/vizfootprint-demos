@@ -14,6 +14,15 @@
  *   - no `version` (an ETag, a Last-Modified, a hash of the bytes) and
  *     therefore no stamp on any commit;
  *   - no `retrievedAt`, so the Sources tab has nothing to show;
+ *
+ * SINCE `vizfootprint@0379d58` THE LIBRARY HAS THE DECLARATION this paragraph
+ * asks for — a RESOURCE (`{ format: 'bytes' | 'text', via, at }`) lands through
+ * the same carriers, carries a version, is stamped on every commit and rides the
+ * renderer's handshake (`vizfootprint` · `src/source/README.md`; the contract's
+ * Law 9). This desk found that gap and does NOT yet use the door: adopting it is
+ * its own packet, and until then the hand-fetch below is what runs. So the cost
+ * listed here is real TODAY and no longer the library's — say which, rather than
+ * letting the prose rot.
  *   - no typed refusal — `unavailable`, `too-large`, `timeout`, `unauthorized`
  *     are the carrier's vocabulary (`SOURCE_REFUSALS`), and what a caller gets
  *     here is whatever `fetch` threw, wrapped in a sentence written below;

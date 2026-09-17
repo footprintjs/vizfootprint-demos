@@ -33,14 +33,26 @@ for what that costs and what it doesn't.
   table **can be clicked** — before the act that mints it has landed, the same
   click is refused in a sentence naming the act, which the page shows.
 - **[Protein](https://footprintjs.github.io/vizfootprint-demos/prot/)** — one
-  residue, two pictures: a protein–protein complex drawn in three dimensions by
-  **Mol\***, somebody else's molecular viewer, joined to this interaction
-  grammar through the library's renderer contract and nothing else — and drawn
-  again as the two backbone angles of every residue. A click in either picture
-  is the same row in the other and in the sheet. It is the first THIRD-PARTY
-  chart in this repository, and the first desk whose picture is drawn from a
-  file rather than from rows: what that costs — bytes that carry no version,
-  on no commit — is said under the viewer rather than hidden.
+  residue, four pictures, and two of them **arrive**. A protein–protein complex
+  drawn in three dimensions by **Mol\***, somebody else's molecular viewer,
+  joined to this interaction grammar through the library's renderer contract and
+  nothing else — and drawn again as the two backbone angles of every residue. A
+  click in either picture is the same row in the other and in the sheet. It is
+  the first THIRD-PARTY chart in this repository, and the first desk whose
+  picture is drawn from a file rather than from rows: what that costs — bytes
+  that carry no version, on no commit — is said under the viewer rather than
+  hidden.
+  Then it becomes a **pipeline**. Two more stages run over the same committed
+  bytes — one finds every non-covalent contact in the entry with Mol\*'s own
+  interaction engine, the other rolls a solvent probe over it — and each lands
+  its evidence as a commit, with its own chart. **Before a stage runs, its chart
+  is refused at the read** and the cell prints the library's own sentence (*no
+  column "interface_contacts" in table "residues"*) rather than a spinner;
+  **step the time cursor back behind that commit and it is refused again, word
+  for word.** The screen un-builds because the log does. Both engines run
+  HEADLESS, in the stage, over their own parse: an analysis that needed a
+  renderer could not run before the screen existed, and could not run in a test
+  at all.
 
 All four run the real dashboard, the real ETL, the real definition — the one
 thing the published pages cannot do unattended is hold a server-side model
