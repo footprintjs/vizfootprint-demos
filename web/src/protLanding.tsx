@@ -11,6 +11,12 @@
  * has not shown that the machinery is general — it has shown that the captions
  * were typed carefully.
  *
+ * ── THIS FILE IS THE SEARCH'S COMPOSITION, not its clothes ─────────────────
+ * The clothes are `./workbench/Search.tsx` (presentational) over
+ * `./workbench/results.ts` (the rules) over `./workbench/theme.css` (the
+ * tokens). This file is the ASKING: which door a reader's words go through,
+ * what is in flight, and what came back.
+ *
  * ── WHICH DOOR A READER'S WORDS GO THROUGH ─────────────────────────────────
  * One rule, and it is `src/prot/archive.ts` · `looksLikeEntryId`: four
  * characters that look like an id open that entry directly (`1ay7` and `1AY7`
@@ -37,6 +43,8 @@
 import { useRef, useState } from 'react';
 import { EXAMPLE_ENTRY, entryIdRefusal, listEntries, looksLikeEntryId, searchArchive, type ArchiveFetch, type ListedEntry } from '../../src/prot/archive.js';
 import type { EntryNote } from '../../src/prot/entryNotes.js';
+import { NoMatch, ResultList, SearchColumn, SearchForm, SearchHeader, SearchHero, SearchProse, TextLink } from './workbench/Search.js';
+import { SEARCH_BREADTH, SEARCH_RULE, resultRows } from './workbench/results.js';
 
 /** The query parameter that carries the entry, so a reader can share what they are looking at. */
 export const ENTRY_PARAM = 'entry';
@@ -85,11 +93,10 @@ type Asked =
   | { readonly status: 'idle' }
   | { readonly status: 'searching'; readonly words: string }
   | { readonly status: 'listed'; readonly words: string; readonly total: number; readonly rows: readonly ListedEntry[] }
-  | { readonly status: 'refused'; readonly sentence: string };
+  | { readonly status: 'refused'; readonly words: string; readonly sentence: string };
 
-const SHELL: React.CSSProperties = { font: '14px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif', color: '#1c2530', background: '#f7f8fa', minHeight: '100vh', display: 'grid', placeItems: 'start center', padding: '3rem 1.25rem' };
-const CARD: React.CSSProperties = { maxWidth: '46rem', width: '100%', background: '#fff', border: '1px solid #dfe4ea', borderRadius: 10, padding: '1.6rem 1.75rem' };
-const ROW: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', font: '13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif', padding: '.5rem .6rem', borderRadius: 6, border: '1px solid #e2e7ec', background: '#fff', color: '#20303f' };
+/** The field's accessible name — it carries no visible label, and a test names it by this. */
+const FIELD = 'a PDB entry id, or words to search the archive for';
 
 /**
  * THE LANDING.
@@ -120,7 +127,7 @@ export function ProtLanding({ title, caption, doors, refusal, onOpen }: ProtLand
     const found = await searchArchive(trimmed, doors);
     if (waitingFor.current !== trimmed) return;
     if (!found.ok) {
-      setAsked({ status: 'refused', sentence: found.sentence });
+      setAsked({ status: 'refused', words: trimmed, sentence: found.sentence });
       return;
     }
     const rows = await listEntries(found.value.ids, doors);
@@ -128,88 +135,80 @@ export function ProtLanding({ title, caption, doors, refusal, onOpen }: ProtLand
     setAsked({ status: 'listed', words: trimmed, total: found.value.total, rows });
   }
 
+  const form = (compact: boolean): JSX.Element => (
+    <SearchForm
+      value={words}
+      placeholder={`an entry id like ${EXAMPLE_ENTRY}, or words like "ribonuclease inhibitor"`}
+      fieldLabel={FIELD}
+      submitLabel="Analyse"
+      compact={compact}
+      onChange={setWords}
+      onSubmit={() => void ask()}
+    />
+  );
+
+  /** The example, by name — and the sentence that says choosing it fetches nothing. */
+  const example = (
+    <SearchProse center>
+      <TextLink onPress={() => onOpen(EXAMPLE_ENTRY)}>Open the example, {EXAMPLE_ENTRY}</TextLink> — a ribonuclease bound to its inhibitor, and the one entry whose bytes this repository committed: choosing it reads
+      those bytes and calls the archive not at all, so the example works with the network unplugged.
+    </SearchProse>
+  );
+
+  /** What the reader arrived refused with, verbatim. */
+  const arrived =
+    refusal === null || refusal === undefined ? null : (
+      <p role="status" style={{ margin: '1.2rem 0 0', padding: '.6rem .7rem', background: 'var(--pw-glass-card)', border: '1px solid var(--pw-rule-button)', borderRadius: 'var(--pw-r-card)', color: 'var(--pw-refuse-ink)', fontSize: 13.5 }}>
+        {refusal}
+      </p>
+    );
+
+  // ── nobody has asked yet ──────────────────────────────────────────────────
+  if (asked.status === 'idle') {
+    return (
+      <SearchHero title={title}>
+        {form(false)}
+        {example}
+        <SearchProse center>{caption}</SearchProse>
+        <SearchProse center>{SEARCH_RULE}</SearchProse>
+        {arrived}
+      </SearchHero>
+    );
+  }
+
+  // ── asked: the header form, then whatever came back ───────────────────────
   return (
-    <div style={SHELL}>
-      <div style={CARD}>
-        <h1 style={{ margin: '0 0 .4rem', fontSize: '1.15rem' }}>{title}</h1>
-        <p style={{ margin: '0 0 1rem', color: '#5a6572', fontSize: '.92rem' }}>{caption}</p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void ask();
-          }}
-          style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}
-        >
-          <input
-            value={words}
-            onChange={(e) => setWords(e.target.value)}
-            aria-label="a PDB entry id, or words to search the archive for"
-            placeholder={`an entry id like ${EXAMPLE_ENTRY}, or words like "ribonuclease inhibitor"`}
-            style={{ flex: '1 1 18rem', font: 'inherit', padding: '.45rem .6rem', border: '1px solid #cfd6de', borderRadius: 6 }}
-          />
-          <button type="submit" style={{ font: 'inherit', padding: '.45rem .9rem', border: '1px solid #b9c4cf', borderRadius: 6, background: '#eef2f6', cursor: 'pointer' }}>
-            Open
-          </button>
-        </form>
-        <p style={{ margin: '.6rem 0 0', color: '#5a6572', fontSize: '.85rem' }}>
-          Four characters that look like an entry id ({EXAMPLE_ENTRY}, case-insensitive) open that entry from the RCSB Protein Data Bank&rsquo;s copy of the wwPDB archive. Anything else searches the
-          archive&rsquo;s full text and lists what it finds, with each entry&rsquo;s own title, method and chain count read off the archive&rsquo;s record. An empty box opens the example.
-        </p>
-        <p style={{ margin: '.5rem 0 0', fontSize: '.9rem' }}>
-          <button
-            type="button"
-            onClick={() => onOpen(EXAMPLE_ENTRY)}
-            style={{ font: 'inherit', background: 'none', border: 'none', padding: 0, color: '#1c5d99', textDecoration: 'underline', cursor: 'pointer' }}
-          >
-            Open the example, {EXAMPLE_ENTRY}
-          </button>{' '}
-          <span style={{ color: '#5a6572' }}>
-            — a ribonuclease bound to its inhibitor, and the one entry whose bytes this repository committed: choosing it reads those bytes and calls the archive not at all, so the example works with the
-            network unplugged.
-          </span>
-        </p>
-        {refusal === null || refusal === undefined ? null : (
-          <p role="status" style={{ margin: '1rem 0 0', padding: '.6rem .7rem', background: '#fdf7f7', border: '1px solid #e6c9c9', borderRadius: 6, color: '#8a2b2b', fontSize: '.88rem' }}>
-            {refusal}
+    <div style={{ minHeight: '100vh' }}>
+      <SearchHeader title={title}>{form(true)}</SearchHeader>
+      <SearchColumn>
+        {asked.status === 'searching' ? (
+          <p role="status" style={{ margin: '26px 0 0', fontSize: 14, color: 'var(--pw-mid-2)' }}>
+            asking the archive&rsquo;s full-text search for &ldquo;{asked.words}&rdquo;…
           </p>
+        ) : asked.status === 'refused' ? (
+          <NoMatch heading={`Nothing matched “${asked.words}”.`}>
+            {/* THE SERVICE'S OWN ANSWER, verbatim — the heading above is this page
+                stating the fact; this is the archive stating the reason. */}
+            <SearchProse>{asked.sentence}</SearchProse>
+            <SearchProse>{SEARCH_RULE}</SearchProse>
+            <SearchProse>{SEARCH_BREADTH}</SearchProse>
+            {example}
+          </NoMatch>
+        ) : (
+          <>
+            <ResultList
+              rows={resultRows(asked.rows)}
+              label="what the archive found"
+              heading={<>Entries matching &ldquo;{asked.words}&rdquo;</>}
+              count={`the archive reports ${asked.total.toLocaleString('en-US')} entries whose text matches “${asked.words}”; here are the first ${String(asked.rows.length)}`}
+              onOpen={onOpen}
+            />
+            <SearchProse>Each row is openable unless this desk says why not — the ceiling is judged on the archive&rsquo;s own record, before a structure file is downloaded at all.</SearchProse>
+            {example}
+          </>
         )}
-        {asked.status === 'idle' ? null : (
-          <div style={{ marginTop: '1.1rem' }}>
-            {asked.status === 'searching' ? (
-              <p role="status" style={{ margin: 0, color: '#5a6572' }}>
-                asking the archive&rsquo;s full-text search for &ldquo;{asked.words}&rdquo;…
-              </p>
-            ) : asked.status === 'refused' ? (
-              <p role="status" style={{ margin: 0, color: '#8a2b2b' }}>
-                {asked.sentence}
-              </p>
-            ) : (
-              <>
-                <p style={{ margin: '0 0 .4rem', color: '#5a6572', fontSize: '.88rem' }}>
-                  the archive reports {asked.total.toLocaleString('en-US')} entries whose text matches &ldquo;{asked.words}&rdquo;; here are the first {String(asked.rows.length)}, each one openable unless
-                  this desk says why not
-                </p>
-                <ol aria-label="what the archive found" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {asked.rows.map((row) => (
-                    <li key={row.entry} style={{ margin: '.3rem 0' }}>
-                      {row.refusal === null ? (
-                        <button type="button" style={{ ...ROW, cursor: 'pointer' }} onClick={() => onOpen(row.entry)}>
-                          <b>{row.entry}</b> — {row.line}
-                        </button>
-                      ) : (
-                        <div style={{ ...ROW, background: '#fdf7f7', borderColor: '#e6c9c9' }}>
-                          <b>{row.entry}</b>
-                          {row.line === null ? '' : ` — ${row.line}`} — <span style={{ color: '#8a2b2b' }}>{row.refusal}</span>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              </>
-            )}
-          </div>
-        )}
-      </div>
+        {arrived}
+      </SearchColumn>
     </div>
   );
 }
@@ -232,13 +231,13 @@ export function ProtLanding({ title, caption, doors, refusal, onOpen }: ProtLand
  */
 export function EntryNotes({ entry, notes, cost, onSearchAgain }: { readonly entry: string; readonly notes: readonly EntryNote[]; readonly cost: string | null; onSearchAgain(): void }): JSX.Element {
   return (
-    <div style={{ font: '12px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif', color: '#4a5462', margin: '.4rem 0 0' }}>
+    <div style={{ fontSize: 12, lineHeight: 1.55, color: 'var(--pw-mid-2)' }}>
       <p style={{ margin: 0 }}>
-        Showing entry <b>{entry}</b>.{' '}
-        <button type="button" onClick={onSearchAgain} style={{ font: 'inherit', background: 'none', border: 'none', padding: 0, color: '#1c5d99', textDecoration: 'underline', cursor: 'pointer' }}>
-          Open another entry
-        </button>{' '}
-        — the address carries this one (<code>?{ENTRY_PARAM}={entry}</code>), so this page is what you share.
+        Showing entry <b>{entry}</b>. <TextLink onPress={onSearchAgain}>Open another entry</TextLink> — the address carries this one (
+        <code style={{ fontFamily: 'var(--pw-font-mono)' }}>
+          ?{ENTRY_PARAM}={entry}
+        </code>
+        ), so this page is what you share.
       </p>
       {cost === null ? null : (
         <p style={{ margin: '.3rem 0 0' }}>
@@ -248,7 +247,7 @@ export function EntryNotes({ entry, notes, cost, onSearchAgain }: { readonly ent
       {notes.length === 0 ? null : (
         <ul aria-label={`what this desk cannot say about entry ${entry}`} style={{ margin: '.35rem 0 0', paddingLeft: '1.1rem' }}>
           {notes.map((note) => (
-            <li key={note.code} style={{ margin: '.2rem 0', color: note.blocking ? '#8a2b2b' : undefined }}>
+            <li key={note.code} style={{ margin: '.2rem 0', color: note.blocking ? 'var(--pw-refuse-ink)' : undefined }}>
               <b>{note.code}</b> — {note.sentence}
             </li>
           ))}

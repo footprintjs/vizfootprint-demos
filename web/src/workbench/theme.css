@@ -1,0 +1,362 @@
+/*
+ * THE WORKBENCH'S THEME — LAYER 1 OF FOUR, and it is tokens and nothing else.
+ *
+ * The author's ruling for this desk is four layers kept apart: theme,
+ * components, business logic, data logic. This file is the whole of the first
+ * one. Every colour, radius, shadow, blur and font family the protein
+ * workbench draws with is declared HERE, once, and named `--pw-*`. No
+ * component may hold a colour, a radius, a shadow or a font literal —
+ * `tests/prot-theme.test.ts` reads the component sources and fails if one
+ * does.
+ *
+ * WHY THAT IS NOT HOUSEKEEPING. A component that takes only props and only
+ * tokens is a component that can move into `vizfootprint-ui` and serve every
+ * desk. One with a hex in it can never move, because the hex is this desk's
+ * opinion baked into a shared part.
+ *
+ * ── THE THREE BLOCKS, and the order is the contract ─────────────────────────
+ *   1. `:root`                                     — the light palette;
+ *   2. `@media (prefers-color-scheme: dark)` under
+ *      `:root:not([data-theme="light"])`            — the OS's dark, unless a
+ *                                                     host forced light;
+ *   3. `:root[data-theme="dark"]`                   — a host forcing dark.
+ *
+ * Every token redefined in 2 is redefined in 3, and the test asserts that too:
+ * a token that went dark for the OS and stayed light for `data-theme` would be
+ * a page that looks different depending on how it was asked for the same thing.
+ *
+ * ── AND THE BRIDGE TO THE LIBRARY'S OWN TOKENS ─────────────────────────────
+ * The charts are `vizfootprint-ui`'s, and they are themed THROUGH THE LIBRARY'S
+ * OWN HOOK: its `--vzf-*` custom properties. The bridge is the one rule set
+ * below that is not a token declaration — `.vzf.pw-scope` — and it spends this
+ * desk's tokens on the library's names. It needs class specificity because the
+ * library declares its own defaults at `:where(.vzf)` (specificity zero) ON the
+ * same element, and an inherited `:root` value loses to a declaration on the
+ * element itself.
+ *
+ * Nothing here reaches INSIDE a chart's SVG. There is not one descendant
+ * selector under `.vzf-chart` in this file, and there must never be: a chart's
+ * internals are the library's, and restyling them from outside is how a host
+ * ends up owning a picture it did not draw.
+ */
+
+/* ── the type ──────────────────────────────────────────────────────────────
+   IBM Plex, as the design specifies it, from Google Fonts. It is a
+   THIRD-PARTY REQUEST from a page that otherwise makes none, and the desk says
+   so in its own omissions list (`web/src/protDesk.tsx` · `NotHere`) rather
+   than making it quietly. Each family carries a real fallback stack, so a
+   blocked request changes the letters and nothing else. */
+
+:root {
+  --pw-font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --pw-font-serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
+  --pw-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ── the ground ──────────────────────────────────────────────────────── */
+  --pw-ground: #e8edf2;
+  --pw-ground-image: repeating-linear-gradient(0deg, rgba(23, 45, 64, 0.035) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(23, 45, 64, 0.035) 0 1px, transparent 1px 32px),
+    radial-gradient(1100px 620px at 8% -8%, rgba(2, 100, 143, 0.2), transparent 62%), radial-gradient(900px 540px at 96% 6%, rgba(96, 82, 190, 0.16), transparent 58%),
+    radial-gradient(900px 600px at 70% 104%, rgba(190, 120, 70, 0.1), transparent 60%);
+
+  /* ── the ink, in four weights plus the two the prose uses ────────────── */
+  --pw-ink: #15181c;
+  --pw-prose: #22282e;
+  --pw-mid: #3d464e;
+  --pw-mid-2: #4c5862;
+  --pw-soft: #6b7681;
+  --pw-soft-2: #566270;
+  --pw-strike: #8d959c;
+
+  /* ── the rules, by weight ────────────────────────────────────────────── */
+  --pw-rule-faint: rgba(23, 45, 64, 0.07);
+  --pw-rule: rgba(23, 45, 64, 0.08);
+  --pw-rule-dl: rgba(23, 45, 64, 0.09);
+  --pw-rule-head: rgba(23, 45, 64, 0.12);
+  --pw-rule-divider: rgba(23, 45, 64, 0.13);
+  --pw-rule-button: rgba(23, 45, 64, 0.14);
+
+  /* ── the accent, and everything derived from it ──────────────────────── */
+  --pw-accent: #02648f;
+  --pw-accent-bright: #02648f;
+  --pw-on-accent: #ffffff;
+  --pw-accent-line: rgba(2, 100, 143, 0.45);
+  --pw-accent-ring-soft: rgba(2, 100, 143, 0.1);
+  --pw-accent-open-bg: rgba(2, 100, 143, 0.12);
+  --pw-accent-open-edge: rgba(2, 100, 143, 0.32);
+  --pw-mark-shadow: 0 6px 14px -6px rgba(2, 100, 143, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  --pw-mark-shadow-here: 0 0 0 5px rgba(2, 100, 143, 0.15), 0 8px 18px -8px rgba(2, 100, 143, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  --pw-submit-shadow: 0 12px 26px -12px rgba(2, 100, 143, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+
+  /* ── the refusal ─────────────────────────────────────────────────────── */
+  --pw-refuse: #a33a1f;
+  --pw-refuse-ink: #7e2e18;
+  --pw-refuse-badge-bg: #ffffff;
+  --pw-refuse-badge-edge: rgba(163, 58, 31, 0.85);
+  --pw-refuse-shadow: 0 6px 14px -6px rgba(163, 58, 31, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+  /* ── the two chains ───────────────────────────────────────────────────
+     Read in TypeScript as well as in CSS: the charts are the library's and it
+     takes its categorical colours through a function (`colorOf`), not through
+     a stylesheet. `web/src/workbench/tokens.ts` names these two and carries
+     the same bytes as a fallback for an environment with no stylesheet; the
+     theme test pins the two copies together. */
+  --pw-chain-a: #02648f;
+  --pw-chain-b: #a8551a;
+
+  /* ── the stage marks ─────────────────────────────────────────────────── */
+  --pw-mark-edge: rgba(23, 45, 64, 0.3);
+  --pw-mark-edge-solid: rgba(23, 45, 64, 0.24);
+  --pw-mark-hatch: repeating-linear-gradient(45deg, rgba(23, 45, 64, 0.13) 0 2px, transparent 2px 5px);
+  --pw-dash-near: repeating-linear-gradient(90deg, rgba(23, 45, 64, 0.32) 0 3px, transparent 3px 7px);
+  --pw-dash-far: repeating-linear-gradient(90deg, rgba(23, 45, 64, 0.2) 0 3px, transparent 3px 7px);
+  --pw-track: rgba(23, 45, 64, 0.13);
+  --pw-underline: rgba(23, 45, 64, 0.38);
+
+  /* ── the glass, one token per band the design gives its own opacity ──── */
+  --pw-glass-header: rgba(255, 255, 255, 0.58);
+  --pw-glass-facts: rgba(255, 255, 255, 0.32);
+  --pw-glass-nav: rgba(255, 255, 255, 0.38);
+  --pw-glass-panel: rgba(255, 255, 255, 0.62);
+  --pw-glass-hero: rgba(255, 255, 255, 0.66);
+  --pw-glass-card: rgba(255, 255, 255, 0.5);
+  --pw-glass-button: rgba(255, 255, 255, 0.55);
+  --pw-glass-mark: rgba(255, 255, 255, 0.38);
+  --pw-glass-mark-live: rgba(255, 255, 255, 0.6);
+  --pw-glass-mark-hatch: rgba(255, 255, 255, 0.42);
+  --pw-edge-hero: rgba(255, 255, 255, 0.65);
+  --pw-edge-card: rgba(255, 255, 255, 0.55);
+  --pw-inset-header: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --pw-inset-panel: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --pw-shadow-hero: 0 1px 2px rgba(23, 45, 64, 0.06), 0 24px 48px -28px rgba(23, 45, 64, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --pw-shadow-card: 0 1px 2px rgba(23, 45, 64, 0.05), 0 14px 30px -22px rgba(23, 45, 64, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --pw-blur-header: blur(20px) saturate(1.4);
+  --pw-blur-facts: blur(16px) saturate(1.3);
+  --pw-blur-nav: blur(18px) saturate(1.3);
+  --pw-blur-panel: blur(24px) saturate(1.35);
+  --pw-blur-hero: blur(28px) saturate(1.4);
+  --pw-blur-card: blur(22px) saturate(1.35);
+  --pw-blur-button: blur(10px) saturate(1.2);
+  --pw-blur-mark: blur(8px);
+  --pw-blur-hatch: blur(6px) saturate(1.1);
+
+  /* ── the 3D box, which is this desk's frame around somebody else's viewer */
+  --pw-viewer-bg: #05080b;
+  --pw-viewer-edge: rgba(255, 255, 255, 0.1);
+  --pw-viewer-inset: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 40px rgba(2, 100, 143, 0.12);
+  --pw-viewer-bracket: #2f3944;
+  --pw-viewer-ink: #8b97a3;
+  --pw-viewer-chip-ink: #cfd8e0;
+  --pw-viewer-chip-bg: rgba(255, 255, 255, 0.08);
+
+  /* ── the radii ───────────────────────────────────────────────────────── */
+  --pw-r-hero: 16px;
+  --pw-r-card: 13px;
+  --pw-r-viewer: 10px;
+  --pw-r-button: 9px;
+  --pw-r-input: 12px;
+  --pw-r-chip: 3px;
+  --pw-r-track: 2px;
+}
+
+/* ── 2. the OS's dark, unless a host forced light ──────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --pw-ground: #080c11;
+    --pw-ground-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 32px),
+      radial-gradient(1100px 620px at 8% -8%, rgba(69, 168, 212, 0.26), transparent 62%), radial-gradient(900px 540px at 96% 6%, rgba(120, 100, 220, 0.2), transparent 58%),
+      radial-gradient(900px 600px at 70% 104%, rgba(212, 140, 80, 0.1), transparent 60%);
+
+    --pw-ink: #e8ecf0;
+    --pw-prose: #dbe1e8;
+    --pw-mid: #c2cad2;
+    --pw-mid-2: #98a2ac;
+    --pw-soft: #7d8792;
+    --pw-soft-2: #98a2ac;
+    --pw-strike: #7d8792;
+
+    --pw-rule-faint: rgba(255, 255, 255, 0.07);
+    --pw-rule: rgba(255, 255, 255, 0.08);
+    --pw-rule-dl: rgba(255, 255, 255, 0.08);
+    --pw-rule-head: rgba(255, 255, 255, 0.14);
+    --pw-rule-divider: rgba(255, 255, 255, 0.14);
+    --pw-rule-button: rgba(255, 255, 255, 0.14);
+
+    --pw-accent: #45a8d4;
+    --pw-accent-bright: #6ec0e6;
+    --pw-on-accent: #0d1216;
+    --pw-accent-line: rgba(69, 168, 212, 0.55);
+    --pw-accent-ring-soft: rgba(69, 168, 212, 0.14);
+    --pw-accent-open-bg: rgba(69, 168, 212, 0.16);
+    --pw-accent-open-edge: rgba(69, 168, 212, 0.38);
+    --pw-mark-shadow: 0 8px 18px -8px rgba(69, 168, 212, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    --pw-mark-shadow-here: 0 0 0 5px rgba(69, 168, 212, 0.2), 0 10px 22px -10px rgba(69, 168, 212, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    --pw-submit-shadow: 0 12px 26px -12px rgba(69, 168, 212, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+    --pw-refuse: #d8714f;
+    --pw-refuse-ink: #e79c84;
+    --pw-refuse-badge-bg: #13161b;
+    --pw-refuse-badge-edge: rgba(216, 113, 79, 0.85);
+    --pw-refuse-shadow: 0 8px 18px -8px rgba(216, 113, 79, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+
+    --pw-chain-a: #45a8d4;
+    --pw-chain-b: #d9a05b;
+
+    --pw-mark-edge: rgba(255, 255, 255, 0.28);
+    --pw-mark-edge-solid: rgba(255, 255, 255, 0.24);
+    --pw-mark-hatch: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.15) 0 2px, transparent 2px 5px);
+    --pw-dash-near: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.34) 0 3px, transparent 3px 7px);
+    --pw-dash-far: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0 3px, transparent 3px 7px);
+    --pw-track: rgba(255, 255, 255, 0.14);
+    --pw-underline: rgba(255, 255, 255, 0.38);
+
+    --pw-glass-header: rgba(8, 12, 17, 0.55);
+    --pw-glass-facts: rgba(255, 255, 255, 0.04);
+    --pw-glass-nav: rgba(255, 255, 255, 0.05);
+    --pw-glass-panel: rgba(255, 255, 255, 0.07);
+    --pw-glass-hero: rgba(255, 255, 255, 0.07);
+    --pw-glass-card: rgba(255, 255, 255, 0.07);
+    --pw-glass-button: rgba(255, 255, 255, 0.07);
+    --pw-glass-mark: rgba(255, 255, 255, 0.05);
+    --pw-glass-mark-live: rgba(255, 255, 255, 0.07);
+    --pw-glass-mark-hatch: rgba(255, 255, 255, 0.05);
+    --pw-edge-hero: rgba(255, 255, 255, 0.12);
+    --pw-edge-card: rgba(255, 255, 255, 0.1);
+    --pw-inset-header: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    --pw-inset-panel: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    --pw-shadow-hero: 0 28px 56px -30px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.11);
+    --pw-shadow-card: 0 18px 36px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+    --pw-viewer-bracket: #262c34;
+  }
+}
+
+/* ── 3. a host forcing dark ────────────────────────────────────────────── */
+:root[data-theme='dark'] {
+  --pw-ground: #080c11;
+  --pw-ground-image: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 32px),
+    radial-gradient(1100px 620px at 8% -8%, rgba(69, 168, 212, 0.26), transparent 62%), radial-gradient(900px 540px at 96% 6%, rgba(120, 100, 220, 0.2), transparent 58%),
+    radial-gradient(900px 600px at 70% 104%, rgba(212, 140, 80, 0.1), transparent 60%);
+
+  --pw-ink: #e8ecf0;
+  --pw-prose: #dbe1e8;
+  --pw-mid: #c2cad2;
+  --pw-mid-2: #98a2ac;
+  --pw-soft: #7d8792;
+  --pw-soft-2: #98a2ac;
+  --pw-strike: #7d8792;
+
+  --pw-rule-faint: rgba(255, 255, 255, 0.07);
+  --pw-rule: rgba(255, 255, 255, 0.08);
+  --pw-rule-dl: rgba(255, 255, 255, 0.08);
+  --pw-rule-head: rgba(255, 255, 255, 0.14);
+  --pw-rule-divider: rgba(255, 255, 255, 0.14);
+  --pw-rule-button: rgba(255, 255, 255, 0.14);
+
+  --pw-accent: #45a8d4;
+  --pw-accent-bright: #6ec0e6;
+  --pw-on-accent: #0d1216;
+  --pw-accent-line: rgba(69, 168, 212, 0.55);
+  --pw-accent-ring-soft: rgba(69, 168, 212, 0.14);
+  --pw-accent-open-bg: rgba(69, 168, 212, 0.16);
+  --pw-accent-open-edge: rgba(69, 168, 212, 0.38);
+  --pw-mark-shadow: 0 8px 18px -8px rgba(69, 168, 212, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  --pw-mark-shadow-here: 0 0 0 5px rgba(69, 168, 212, 0.2), 0 10px 22px -10px rgba(69, 168, 212, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  --pw-submit-shadow: 0 12px 26px -12px rgba(69, 168, 212, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+
+  --pw-refuse: #d8714f;
+  --pw-refuse-ink: #e79c84;
+  --pw-refuse-badge-bg: #13161b;
+  --pw-refuse-badge-edge: rgba(216, 113, 79, 0.85);
+  --pw-refuse-shadow: 0 8px 18px -8px rgba(216, 113, 79, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+
+  --pw-chain-a: #45a8d4;
+  --pw-chain-b: #d9a05b;
+
+  --pw-mark-edge: rgba(255, 255, 255, 0.28);
+  --pw-mark-edge-solid: rgba(255, 255, 255, 0.24);
+  --pw-mark-hatch: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.15) 0 2px, transparent 2px 5px);
+  --pw-dash-near: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.34) 0 3px, transparent 3px 7px);
+  --pw-dash-far: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0 3px, transparent 3px 7px);
+  --pw-track: rgba(255, 255, 255, 0.14);
+  --pw-underline: rgba(255, 255, 255, 0.38);
+
+  --pw-glass-header: rgba(8, 12, 17, 0.55);
+  --pw-glass-facts: rgba(255, 255, 255, 0.04);
+  --pw-glass-nav: rgba(255, 255, 255, 0.05);
+  --pw-glass-panel: rgba(255, 255, 255, 0.07);
+  --pw-glass-hero: rgba(255, 255, 255, 0.07);
+  --pw-glass-card: rgba(255, 255, 255, 0.07);
+  --pw-glass-button: rgba(255, 255, 255, 0.07);
+  --pw-glass-mark: rgba(255, 255, 255, 0.05);
+  --pw-glass-mark-live: rgba(255, 255, 255, 0.07);
+  --pw-glass-mark-hatch: rgba(255, 255, 255, 0.05);
+  --pw-edge-hero: rgba(255, 255, 255, 0.12);
+  --pw-edge-card: rgba(255, 255, 255, 0.1);
+  --pw-inset-header: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --pw-inset-panel: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  --pw-shadow-hero: 0 28px 56px -30px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.11);
+  --pw-shadow-card: 0 18px 36px -24px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  --pw-viewer-bracket: #262c34;
+}
+
+/* ── the page's own ground, from the tokens above ─────────────────────── */
+body.pw-body {
+  margin: 0;
+  background-color: var(--pw-ground);
+  background-image: var(--pw-ground-image);
+  background-attachment: fixed;
+  color: var(--pw-ink);
+  font-family: var(--pw-font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * THE BRIDGE — this desk's tokens spent on the LIBRARY'S OWN NAMES.
+ *
+ * This is the only rule set in this file that is not a token declaration, and
+ * it is the whole of how the charts are themed: `vizfootprint-ui` reads
+ * `--vzf-*` off its own root, so the host says what those mean here and the
+ * charts stay entirely the library's. `.vzf.pw-scope` rather than `:root`
+ * because the library declares its defaults ON that element, at
+ * `:where(.vzf)`, and a declaration on an element beats one inherited from an
+ * ancestor whatever the specificity.
+ */
+.vzf.pw-scope {
+  --vzf-brand: var(--pw-accent);
+  --vzf-brand-deep: var(--pw-accent-bright);
+  --vzf-ink: var(--pw-ink);
+  --vzf-ink-soft: var(--pw-mid);
+  --vzf-ink-faint: var(--pw-mid-2);
+  --vzf-line: var(--pw-rule-divider);
+  --vzf-line-soft: var(--pw-rule-faint);
+  --vzf-paper: transparent;
+  --vzf-surface: var(--pw-glass-card);
+  --vzf-font-body: var(--pw-font-sans);
+  --vzf-font-display: var(--pw-font-serif);
+  --vzf-font-mono: var(--pw-font-mono);
+  --vzf-r-sm: var(--pw-r-chip);
+  --vzf-r-md: var(--pw-r-button);
+  --vzf-r-lg: var(--pw-r-card);
+}
+
+/* ── the one thing on this desk that moves ─────────────────────────────
+   The running stage's ring. It is here and not in a component because a
+   keyframe cannot be an inline style, and `prefers-reduced-motion` is a
+   reader's declared wish rather than a prop any component should carry. */
+@keyframes pw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pw-spin {
+  animation: pw-spin 1.15s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pw-spin {
+    animation: none;
+  }
+}

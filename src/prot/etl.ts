@@ -402,6 +402,36 @@ export interface EntryCredit {
   readonly experiment: string;
   readonly depositors: string;
   readonly citation: string;
+  /**
+   * The resolution the file states, in the file's own digits and WITHOUT a unit
+   * ({@link pdbResolution}) — `null` for an entry whose record says it does not
+   * apply, which is every method that does not diffract.
+   *
+   * It is READ rather than assumed because a workbench header that named a
+   * resolution the file does not state would be the page inventing a number
+   * about somebody's structure.
+   */
+  readonly resolution: string | null;
+}
+
+/**
+ * THE RESOLUTION, off `REMARK   2` — the one numeric fact about the experiment
+ * that is not in a header record of its own.
+ *
+ * The legacy format states it as `REMARK   2 RESOLUTION.    1.70 ANGSTROMS.`
+ * and, for a method where it has no meaning, as `RESOLUTION. NOT APPLICABLE.`
+ * — so the absence is a statement the file makes and `null` is the honest
+ * reading of it, not a parse failure.
+ *
+ * The digits come back EXACTLY as the file writes them (`1.70`, not `1.7`): a
+ * depositor's two decimal places are a claim about precision, and rounding
+ * them here would be this code editing somebody else's measurement.
+ */
+export function pdbResolution(text: string): string | null {
+  const line = text.split('\n').find((l) => l.startsWith('REMARK   2') && l.includes('RESOLUTION.'));
+  if (line === undefined) return null;
+  const found = /RESOLUTION\.\s+([0-9]+(?:\.[0-9]+)?)\s*ANGSTROM/.exec(line);
+  return found === null ? null : (found[1] ?? null);
 }
 
 export function entryCredit(text: string): EntryCredit {
@@ -412,5 +442,6 @@ export function entryCredit(text: string): EntryCredit {
     experiment: pdbRecord(text, 'EXPDTA'),
     depositors: pdbRecord(text, 'AUTHOR'),
     citation: pdbRecord(text, 'JRNL'),
+    resolution: pdbResolution(text),
   };
 }

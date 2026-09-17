@@ -41,6 +41,7 @@ import { PROT_FILES } from '../src/data/files.js';
 import { EntryNotes, ProtLanding, entryInUrl, urlForEntry } from '../web/src/protLanding.js';
 import { useProtCells, type ProtDeskData } from '../web/src/protCells.js';
 import type { Row } from '../web/src/derive.js';
+import { SEARCH_BREADTH, SEARCH_RULE } from '../web/src/workbench/results.js';
 import { RECORD_1AY7, fakeArchive, noSuchEntry, oneChainOnly, recordWith, searchAnswer } from './protFixture.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -163,8 +164,17 @@ describe('an id opens that entry; words ask the archive', () => {
     const said = page.words();
     expect(said).toContain('the archive reports 269 entries whose text matches “barstar”');
     expect(page.results()).toHaveLength(2);
-    expect(said).toContain('2CX6 — ribonuclease sa complex with barstar · x-ray diffraction · 2 chains · 1,678 atoms');
-    expect(said).toContain('1A19 — barstar · solution nmr · 1 chain · 1,678 atoms');
+    // THE SAME FACTS, SPLIT THE WAY THE DESIGN SPLITS THEM: the id in Mono, the
+    // deposited title on its own line, then the rest of the archive's own line
+    // beneath it (`src/prot/archive.ts` · `summaryParts`, one owner with
+    // `summaryLine`). Nothing is re-worded — only the rules moved.
+    const rows = page.results().map((li) => (li.textContent ?? '').replace(/\s+/g, ' '));
+    expect(rows[0]).toContain('2CX6');
+    expect(rows[0]).toContain('ribonuclease sa complex with barstar');
+    expect(rows[0]).toContain('x-ray diffraction · 2 chains · 1,678 atoms');
+    expect(rows[1]).toContain('1A19');
+    expect(rows[1]).toContain('barstar');
+    expect(rows[1]).toContain('solution nmr · 1 chain · 1,678 atoms');
     // one search and one record per listed id — no batch door nobody verified
     expect(calls.filter((c) => c.includes('/rcsbsearch/'))).toHaveLength(1);
     expect(calls.filter((c) => c.includes('/core/entry/'))).toHaveLength(2);
@@ -219,6 +229,61 @@ describe('an id opens that entry; words ask the archive', () => {
     const { doors } = fakeArchive(() => ({ status: 200, body: RECORD_1AY7 }));
     const page = await mount(<ProtLanding title="t" caption="c" doors={doors} refusal="the archive has no entry “9ZZZ”" onOpen={() => undefined} />);
     expect(page.words()).toContain('the archive has no entry “9ZZZ”');
+    await page.unmount();
+  });
+});
+
+describe('screen one, in its three states — the design’s clothes over the same behaviour', () => {
+  it('EMPTY: one centred column, the serif title, one field, one accent button, the example and the rule', async () => {
+    const { doors } = fakeArchive(() => ({ status: 200, body: RECORD_1AY7 }));
+    const page = await mount(<ProtLanding title={PROT_WORDS.title} caption={PROT_WORDS.caption} doors={doors} onOpen={() => undefined} />);
+    // the title is the DEF's, in the serif, as an h1
+    const heading = page.host.querySelector('h1');
+    expect(heading?.textContent).toBe(PROT_WORDS.title);
+    expect(heading?.getAttribute('style') ?? '').toContain('var(--pw-font-serif)');
+    // exactly one field and one submit, and the field carries the accessible name
+    expect(page.host.querySelectorAll('input')).toHaveLength(1);
+    expect(page.host.querySelectorAll('button[type="submit"]')).toHaveLength(1);
+    expect(page.host.querySelector('input')?.getAttribute('aria-label')).toBe('a PDB entry id, or words to search the archive for');
+    // no results column and no header band: nobody has asked yet
+    expect(page.host.querySelector('ol[aria-label="what the archive found"]')).toBeNull();
+    expect(page.words()).toContain(SEARCH_RULE.slice(0, 60));
+    await page.unmount();
+  });
+
+  it('RESULTS: the header form, one row per entry, and the row is the control', async () => {
+    const { doors } = fakeArchive((url) => {
+      if (url.includes('/rcsbsearch/')) return { status: 200, body: searchAnswer(['2CX6'], 1) };
+      return { status: 200, body: RECORD_1AY7 };
+    });
+    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={() => undefined} />);
+    await page.type('barstar');
+    await page.submit();
+    // the title moved into a header band beside the form, so there is no h1 any more
+    expect(page.host.querySelector('h1')).toBeNull();
+    expect(page.host.querySelector('h2')?.textContent).toContain('Entries matching');
+    expect(page.results()).toHaveLength(1);
+    // the WHOLE row is the control — the design has no separate "open" button
+    expect(page.host.querySelectorAll('ol[aria-label="what the archive found"] button')).toHaveLength(1);
+    await page.unmount();
+  });
+
+  it('NOTHING MATCHED: the serif apology, the service’s own sentence, the two real facts, then the example', async () => {
+    const { doors } = fakeArchive(() => ({ status: 204, body: '' }));
+    const page = await mount(<ProtLanding title="t" caption="c" doors={doors} onOpen={() => undefined} />);
+    await page.type('rnase sa hot spot map');
+    await page.submit();
+    const heading = page.host.querySelector('h2');
+    expect(heading?.textContent).toBe('Nothing matched “rnase sa hot spot map”.');
+    expect(heading?.getAttribute('style') ?? '').toContain('var(--pw-font-serif)');
+    const said = page.words();
+    // the archive's own answer, then the two facts, then the example — in that order
+    expect(said).toContain('the archive\'s search answered 204 (no content)');
+    expect(said.indexOf(SEARCH_RULE.slice(0, 40))).toBeGreaterThan(said.indexOf('204 (no content)'));
+    expect(said).toContain(SEARCH_BREADTH);
+    expect(said.indexOf('Open the example')).toBeGreaterThan(said.indexOf(SEARCH_BREADTH));
+    // no rows at all: a placeholder row would be a claim about an entry
+    expect(page.results()).toHaveLength(0);
     await page.unmount();
   });
 });

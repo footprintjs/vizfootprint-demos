@@ -4,9 +4,25 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Any entry in the archive — vizfootprint on a protein structure</title>
+    <!--
+      THE TYPE THE DESIGN SPECIFIES — IBM Plex Sans, Serif and Mono.
+
+      It is the one THIRD-PARTY REQUEST this page makes; every byte of data it
+      draws is the repository's own. The desk names the request in its own
+      omissions list (`web/src/protDesk.tsx` · `NotHere`) rather than making it
+      quietly, and each family carries a real fallback stack in
+      `web/src/workbench/theme.css`, so a blocked request changes the letters
+      and nothing else.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500&display=swap" />
     <style>
-      html, body, #root { height: 100%; margin: 0; }
-      body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f6f9; color: #17212b; }
+      /* LAYOUT ONLY. The ground, the ink and the type are the theme layer's
+         (`web/src/workbench/theme.css` · `body.pw-body`), which the page's own
+         entry adds the class for — so there is exactly one owner of every
+         colour on this page. */
+      html, body, #root { min-height: 100%; margin: 0; }
     </style>
   </head>
   <body>

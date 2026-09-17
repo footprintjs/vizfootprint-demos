@@ -66,6 +66,15 @@
  * Decide what colour a residue is. That decision is the renderer's
  * ({@link paintOf}, from the rows and the fold), and the legend below reads the
  * SAME constants it paints from — one owner, two readers.
+ *
+ * ── AND THE COLOUR IT DOES PASS ON, WHICH IS NOT ITS OWN EITHER ────────────
+ * A CHAIN's colour on the first-party charts arrives as an argument
+ * ({@link useProtCells}'s third parameter) and is handed to the library through
+ * the ONE hook it offers for a categorical scale — every chart's own `colorOf`.
+ * The values come from the theme layer (`./workbench/theme.css`, resolved by
+ * `./workbench/tokens.ts`) and the pairing from `./workbench/charts.ts`; this
+ * file chooses neither. Absent, every chart draws in the library's own ink,
+ * byte-identical to before the parameter existed.
  */
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { VizBar, VizLine, VizScatter, VizTable, bindRenderer, keepPredicate, type BarDatum, type BoundRenderer, type ChartEmission, type ContractGap, type LinePoint, type RenderRow, type RenderSelection, type ScatterDatum } from 'vizfootprint-ui';
@@ -78,6 +87,8 @@ import type { EntryNote } from '../../src/prot/entryNotes.js';
 import type { ProtRun } from '../../src/prot/orchestrator.js';
 import type { StructureArtifact, UnlandedRefusals } from '../../src/prot/session.js';
 import { emitIntent, type Row } from './derive.js';
+import { chainColorOf } from './workbench/charts.js';
+import type { WorkbenchInk } from './workbench/tokens.js';
 
 export { STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
 
@@ -340,14 +351,43 @@ export function surfaceRun(residues: readonly Row[], xField: string, yField: str
 }
 
 /**
+ * ONE CELL, PLUS THE LINE IN THE CORNER OF ITS CARD.
+ *
+ * `foot` is the footer's left half — WHAT THIS PICTURE PLOTTED, counted from
+ * the rows on screen. It lives on the cell rather than on the card's shell for
+ * the reason every count in this file lives here: the cell is what knows how
+ * many marks it drew, and a shell that counted for itself could disagree with
+ * the picture above the line. `null` for a picture with nothing to count yet —
+ * the card then draws no footer count rather than a zero.
+ */
+export interface ProtCell extends DeskChart {
+  readonly foot: string | null;
+}
+
+/**
  * The cells, over the desk's projection.
  *
  * Called once, from the desk's own body, so the memos below are real hooks and
  * behave like hooks — the rule `vizfootprint-studio/desk` · `DeskCharts`
  * states, and the reason the other three desks' cells are written the same way.
  */
-export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly DeskChart[] {
+export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: WorkbenchInk): readonly ProtCell[] {
   const { residues, counts, skipped, structure, run, refusals, notes } = data;
+  /**
+   * WHAT COLOUR A CHAIN IS DRAWN IN, told to the library through its own hook.
+   *
+   * `colorOf` is the one door `VizLine`, `VizBar` and `VizScatter` each offer
+   * for a categorical scale, and each keeps its answer. The pairing is derived
+   * from the order the FILE first mentions each chain
+   * (`./workbench/charts.ts` · `chainColorOf`), so an entry whose chains are
+   * named anything at all works; a category that is no chain of this entry —
+   * the residue key the bar is bound to by default, or an unsplit series —
+   * comes back as the accent rather than as some chain's own colour.
+   *
+   * `undefined` when the host said nothing, and then every chart draws in the
+   * library's own ink exactly as it did before this parameter existed.
+   */
+  const colorOf = useMemo(() => (ink === undefined ? undefined : chainColorOf(counts, ink)), [counts, ink]);
   /**
    * THE ONE NOTE THAT BELONGS AT A PICTURE — an entry whose residues table
    * holds a single chain (`src/prot/entryNotes.ts` · `entryNotes`, code
@@ -473,6 +513,8 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
     {
       id: STRUCTURE_VIEW,
       weight: 5,
+      // the file's whole picture, counted — the parse's own numbers
+      foot: `${count(counts.residues)} residues · ${count(counts.chains.length)} ${counts.chains.length === 1 ? 'chain' : 'chains'} drawn`,
       caption: (
         <>
           {[
@@ -511,6 +553,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
     {
       id: RAMA_VIEW,
       weight: 4,
+      foot: `${count(dots.length)} of ${count(counts.residues)} residues plotted${noAngle === 0 ? '' : ` · ${count(noAngle)} with no angle`}`,
       caption: (
         <>
           {[
@@ -531,6 +574,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
         <VizScatter
           viewId={RAMA_VIEW}
           data={dots}
+          colorOf={colorOf}
           xField={phiField}
           yField={psiField}
           xLabel={`${phiField} (degrees)`}
@@ -550,6 +594,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
     {
       id: INTERFACE_VIEW,
       weight: 4,
+      foot: noInterface !== null || !interfaceLanded ? null : `${count(bars.length)} bars · ${count(interfaceTouching)} touch another chain`,
       caption: (
         <>
           {[
@@ -602,6 +647,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
           <VizBar
             viewId={INTERFACE_VIEW}
             data={bars}
+            colorOf={colorOf}
             field={barCategory}
             label={`contacts across the interface, per ${barCategory}`}
             ariaLabel={desk.altShort(INTERFACE_VIEW)}
@@ -619,6 +665,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
     {
       id: SURFACE_VIEW,
       weight: 4,
+      foot: !surfaceLanded ? null : `${count(runPoints.length)} residues plotted${run?.surface?.counts === undefined ? '' : ` · ${count(run.surface.counts.buried)} at exactly 0 Å²`}`,
       caption: (
         <>
           {[
@@ -658,6 +705,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
           <VizLine
             viewId={SURFACE_VIEW}
             data={runPoints}
+            colorOf={colorOf}
             dateField={runX}
             valueField={runY}
             xLabel={`${runX} (residue number, every chain)`}
@@ -676,6 +724,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData): readonly
     {
       id: PAIRS_VIEW,
       weight: 3,
+      foot: pairRows.length === 0 ? null : `${count(pairRows.length)} rows${run?.pairs?.counts === undefined ? '' : ` · ${count(run.pairs.counts.crossing)} cross-chain`}`,
       caption: (
         <>
           {[

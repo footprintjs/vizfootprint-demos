@@ -78,9 +78,26 @@ export function landedLine(outcome: ActOutcome, run: ProtRun | null): string {
   return run === null ? 'landed a commit; what it answered is read when the run comes back' : 'landed a commit and wrote no column into the data space';
 }
 
-const ROW: React.CSSProperties = { display: 'block', width: '100%', textAlign: 'left', font: '12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif', padding: '.4rem .55rem', borderRadius: 6, border: '1px solid #e2e7ec', background: '#fff', color: '#20303f' };
+/**
+ * THE ROW'S LOOK, from the workbench's own tokens
+ * (`web/src/workbench/theme.css`) — one owner for every colour on this page, so
+ * an act row inside the stepper's disclosure wears the same glass as the card
+ * above it and turns over with the palette.
+ */
+const ROW: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  textAlign: 'left',
+  fontSize: 12,
+  lineHeight: 1.5,
+  padding: '.4rem .55rem',
+  borderRadius: 'var(--pw-r-button)',
+  border: '1px solid var(--pw-rule-button)',
+  background: 'var(--pw-glass-button)',
+  color: 'var(--pw-ink)',
+};
 const STAGE: React.CSSProperties = { fontWeight: 600 };
-const COMMIT: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', color: '#5a6572' };
+const COMMIT: React.CSSProperties = { fontFamily: 'var(--pw-font-mono)', color: 'var(--pw-mid-2)' };
 
 export interface ActRowProps {
   readonly outcome: ActOutcome;
@@ -105,7 +122,7 @@ export function ActRow({ outcome, run, onSeek, say }: ActRowProps): JSX.Element 
   if (outcome.commit === null) {
     return (
       <li style={{ margin: '.25rem 0' }}>
-        <div style={{ ...ROW, background: '#fdf7f7', borderColor: '#e6c9c9' }}>
+        <div style={{ ...ROW, background: 'var(--pw-accent-open-bg)', borderColor: 'var(--pw-refuse-badge-edge)' }}>
           {body} <span style={COMMIT}>· no commit, so there is nothing to seek to: this act landed none</span>
         </div>
       </li>
@@ -143,7 +160,7 @@ export function RunNarrative({ run }: { readonly run: ProtRun | null }): JSX.Ele
   return (
     <details style={{ marginTop: '.5rem' }}>
       <summary style={{ cursor: 'pointer' }}>What the run looked like from inside — the recorder&rsquo;s own {count(run.narrative.length)} sentences, in order and not re-worded here</summary>
-      <ol style={{ margin: '.3rem 0 0', paddingLeft: '1.2rem', color: '#5a6572' }}>
+      <ol style={{ margin: '.3rem 0 0', paddingLeft: '1.2rem', color: 'var(--pw-mid-2)' }}>
         {run.narrative.map((sentence, index) => (
           <li key={`${String(index)}:${sentence.slice(0, 24)}`}>{sentence}</li>
         ))}

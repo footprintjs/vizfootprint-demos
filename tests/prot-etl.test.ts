@@ -32,7 +32,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { entryCredit, entryId, pdbRecord, protTables, residueKey, skippedOf, skippedTotal, torsion } from '../src/prot/etl.js';
+import { entryCredit, entryId, pdbRecord, pdbResolution, protTables, residueKey, skippedOf, skippedTotal, torsion } from '../src/prot/etl.js';
+import { ARCHIVE_LICENCE } from '../src/prot/archive.js';
 import { ENTRY_PDB, digestOf, entryProvenance, loadStructure, loadStructureText } from '../src/prot/snapshot.js';
 
 const TEXT = loadStructureText();
@@ -74,6 +75,24 @@ describe('the committed entry is the file the fetch recorded', () => {
     expect(pdbRecord(TEXT, 'EXPDTA')).toBe('X-RAY DIFFRACTION');
     // the licence claim this repository publishes is in the record, not in a comment
     expect((record['license'] as Record<string, unknown>)['dedication']).toBe('CC0 1.0 Universal');
+    // …and the ONE constant the pages print it from is that record's own words.
+    // Two spellings of a licence is the drift this pin exists to stop.
+    expect(ARCHIVE_LICENCE).toBe((record['license'] as Record<string, unknown>)['dedication']);
+  });
+
+  it('reads the resolution off REMARK 2, in the file’s own digits — and answers null where the record says it does not apply', () => {
+    // the entry states `REMARK   2 RESOLUTION.    1.70 ANGSTROMS.`
+    expect(pdbResolution(TEXT)).toBe('1.70');
+    expect(entryCredit(TEXT).resolution).toBe('1.70');
+    // the digits are the depositor's: a decimal place is a claim about
+    // precision, and rounding it here would be this code editing somebody
+    // else's measurement
+    expect(TEXT).toContain('RESOLUTION.    1.70 ANGSTROMS.');
+    // a method where it has no meaning states that, and `null` is the honest
+    // reading of the statement rather than a parse failure
+    expect(pdbResolution(TEXT.replace('RESOLUTION.    1.70 ANGSTROMS.', 'RESOLUTION. NOT APPLICABLE.'))).toBeNull();
+    // and a file with no REMARK 2 at all
+    expect(pdbResolution('HEADER    SOMETHING')).toBeNull();
   });
 });
 

@@ -281,16 +281,45 @@ export async function entryRecord(id: string, doors: ArchiveFetch): Promise<From
   };
 }
 
+/**
+ * WHAT THE ARCHIVE RELEASES ITS FILES UNDER — the dedication, in the archive's
+ * own words.
+ *
+ * It is here rather than in a page's markup because a licence is a fact about
+ * the source, and two spellings of one fact is the thing this repository
+ * refuses: the desk's credit paragraph and the workbench header both read this
+ * one constant, and `tests/prot-etl.test.ts` pins it against
+ * `data/prot/PROVENANCE.json` · `license.dedication`, which is the record the
+ * fetch script wrote. A page that typed the word would be a page making a
+ * legal claim of its own.
+ */
+export const ARCHIVE_LICENCE = 'CC0 1.0 Universal';
+
+/**
+ * A SUMMARY SPLIT THE WAY A LIST READS IT — the title on its own, and the rest
+ * of the archive's own line beside it.
+ *
+ * One owner for both shapes: {@link summaryLine} joins these back into the
+ * single sentence the landing has always printed, and the workbench's results
+ * rows put the title on one line and `rest` on the next, exactly as the design
+ * lays them out. Neither re-words the archive.
+ */
+export function summaryParts(summary: EntrySummary): { readonly title: string; readonly rest: readonly string[] } {
+  return {
+    title: summary.title === null ? 'the archive\'s record carries no title for this entry' : summary.title.toLowerCase(),
+    rest: [
+      summary.methods.length === 0 ? 'no method named' : summary.methods.join(' and ').toLowerCase(),
+      summary.chains === null ? 'no chain count' : `${String(summary.chains)} ${summary.chains === 1 ? 'chain' : 'chains'}`,
+      summary.models === null || summary.models <= 1 ? null : `${String(summary.models)} models`,
+      summary.atoms === null ? 'no atom count' : `${summary.atoms.toLocaleString('en-US')} atoms`,
+    ].filter((p): p is string => p !== null),
+  };
+}
+
 /** One line a reader can read a search result by — the title, the method and the chains, each named only where the record carries it. */
 export function summaryLine(summary: EntrySummary): string {
-  const parts = [
-    summary.title === null ? 'the archive\'s record carries no title for this entry' : summary.title.toLowerCase(),
-    summary.methods.length === 0 ? 'no method named' : summary.methods.join(' and ').toLowerCase(),
-    summary.chains === null ? 'no chain count' : `${String(summary.chains)} ${summary.chains === 1 ? 'chain' : 'chains'}`,
-    summary.models === null || summary.models <= 1 ? null : `${String(summary.models)} models`,
-    summary.atoms === null ? 'no atom count' : `${summary.atoms.toLocaleString('en-US')} atoms`,
-  ];
-  return parts.filter((p): p is string => p !== null).join(' · ');
+  const { title, rest } = summaryParts(summary);
+  return [title, ...rest].join(' · ');
 }
 
 // ── the gate: what is refused before a byte is read ─────────────────────────
@@ -448,6 +477,16 @@ export interface ListedEntry {
   readonly entry: string;
   /** The line a reader reads it by — {@link summaryLine}, or nothing when the record could not be read. */
   readonly line: string | null;
+  /**
+   * The record itself, for a lister that lays the same facts out in more than
+   * one line ({@link summaryParts}) — `null` when the record could not be read,
+   * which is the same condition as a `null` {@link ListedEntry.line}.
+   *
+   * It carries no fact {@link ListedEntry.line} does not; it is the same answer
+   * unjoined, so a layout can choose where the rules go without any reader of
+   * this list re-wording the archive.
+   */
+  readonly summary: EntrySummary | null;
   /** Why this desk will not open it: the archive's refusal, or the gate's. `null` when it will. */
   readonly refusal: string | null;
 }
@@ -471,9 +510,9 @@ export async function listEntries(ids: readonly string[], doors: ArchiveFetch): 
   return Promise.all(
     ids.map(async (entry): Promise<ListedEntry> => {
       const record = await entryRecord(entry, doors);
-      if (!record.ok) return { entry, line: null, refusal: record.sentence };
+      if (!record.ok) return { entry, line: null, summary: null, refusal: record.sentence };
       const gate = gateOf(record.value);
-      return { entry, line: summaryLine(record.value), refusal: gate.ok ? null : gate.sentence };
+      return { entry, line: summaryLine(record.value), summary: record.value, refusal: gate.ok ? null : gate.sentence };
     }),
   );
 }

@@ -53,7 +53,10 @@ const PAGES = ['index.html', 'nndss/index.html', 'grid/index.html', 'exo/index.h
 describe('the source keeps Mol* behind one door', () => {
   it('exactly one module names molstar, and it is the adapter', () => {
     const web = join(REPO, 'web', 'src');
-    const named = readdirSync(web)
+    // RECURSIVE, since `web/src/workbench/` exists: a folder this walk did not
+    // enter would be a folder where a static `molstar` import could hide, and
+    // the whole point of this check is that there is nowhere for one to hide.
+    const named = readdirSync(web, { recursive: true, encoding: 'utf8' })
       .filter((f) => f.endsWith('.ts') || f.endsWith('.tsx'))
       .filter((f) => readFileSync(join(web, f), 'utf8').includes("from 'molstar/"));
     expect(named).toEqual(['molstarViewer.ts']);

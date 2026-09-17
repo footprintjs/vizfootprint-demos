@@ -372,7 +372,12 @@ export function molstarRenderer(options: MolstarRendererOptions): Renderer {
       const said = host.ownerDocument.createElement('div');
       said.className = 'prot-molstar-said';
       said.setAttribute('role', 'status');
-      said.style.cssText = 'font:11px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:#5a6572;padding:.2rem 0';
+      // THE INK IS THE THEME'S, not this file's: the line sits inside the dark
+      // well the desk frames this viewer with (`web/src/workbench/ChartCard.tsx`
+      // · `ViewerBox`), and a mid-grey meant for paper is nearly unreadable on
+      // it. `--pw-viewer-ink` is that well's own ink, with a paper fallback for
+      // any host that mounts this renderer without the workbench's stylesheet.
+      said.style.cssText = 'font:11px/1.45 var(--pw-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);color:var(--pw-viewer-ink, #5a6572);padding:.2rem .6rem';
       host.append(stage, said);
 
       let viewer: StructureViewerPort | null = null;

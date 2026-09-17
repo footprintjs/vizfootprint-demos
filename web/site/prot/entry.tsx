@@ -47,15 +47,17 @@ import { loadStructureOverHttp } from '../../../src/prot/http.js';
 import { entryCredit, protTables, skippedTotal, type EntryCredit } from '../../../src/prot/etl.js';
 import { PROT_WORDS, RESIDUES_TABLE } from '../../../src/prot/def.js';
 import { openProtSurfaceAsync, protSurfaceProblems, type ProtSurface } from '../../../src/prot/session.js';
-import { EXAMPLE_ENTRY, browserArchive, openEntryBytes } from '../../../src/prot/archive.js';
+import { ARCHIVE_LICENCE, EXAMPLE_ENTRY, browserArchive, openEntryBytes } from '../../../src/prot/archive.js';
 import { blockingSentence, entryNotes, readEntryBytes, type EntryNote } from '../../../src/prot/entryNotes.js';
 import type { ActOutcome } from '../../../src/prot/orchestrator.js';
 import { EntryNotes, ProtLanding, entryInUrl, urlForEntry } from '../../src/protLanding.js';
 import { useResiduesAtCursor, type ResiduesNow } from '../../src/protRows.js';
-import { ProtDesk } from '../../src/protDesk.js';
-import { ProtStepper } from '../../src/protStepper.js';
-import { stepperStages } from '../../src/protStages.js';
+import { ProtDesk, RunStepper } from '../../src/protDesk.js';
 import type { ProtDeskData } from '../../src/protCells.js';
+// LAYER 1, LOADED ONCE: the tokens every band, card and mark of this page is
+// drawn from (`web/src/workbench/theme.css`). Nothing else on this page
+// declares a colour.
+import '../../src/workbench/theme.css';
 import type { Row } from '../../src/derive.js';
 import { Broken, Reading, WhatIsMissing, sentenceOf, siteBase } from '../boot.js';
 
@@ -148,7 +150,6 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
   };
   return (
     <>
-      <EntryNotes entry={booted.entry} notes={notes} cost={booted.cost} onSearchAgain={onSearchAgain} />
       {/*
         THE COMPOSED DESK, not the packaged one (`web/src/protDesk.tsx` says
         why, and names every piece of the packaged desk this page does without).
@@ -156,6 +157,11 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         prop: the def declares the dashboard's `caption` slot as
         `protCaption(tables)`, so the summary on screen is the definition's own
         words at the cursor and the page cannot disagree with it.
+
+        THE HEADER BAND takes the entry's CREDIT and the parse's COUNTS, because
+        that is what the design puts up there — the id, the deposited title, the
+        method, the resolution and the licence, every one of them read off the
+        file's own records (`src/prot/etl.ts` · `entryCredit`).
       */}
       <ProtDesk
         view={view}
@@ -166,7 +172,34 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         session={surface.session}
         table={RESIDUES_TABLE}
         rowsNote={<RowsNote residues={residues} />}
+        title={PROT_WORDS.title}
+        credit={booted.credit}
+        counts={surface.tables.counts}
+        onSearchAgain={onSearchAgain}
       />
+      {/*
+        THE CREDIT AND THE ENTRY'S OWN LINE, under the desk rather than over it.
+        The design puts a 60px header at the top and the workbench owns it now,
+        so these move DOWN rather than away: the archive asks that the
+        depositors and the primary citation be credited, this desk names every
+        sentence it cannot say about the entry, and both are still on the page
+        in the words they were read in.
+      */}
+      <div style={{ padding: '0 24px 32px', display: 'grid', gap: '.4rem' }}>
+        <EntryNotes entry={booted.entry} notes={notes} cost={booted.cost} onSearchAgain={onSearchAgain} />
+        <Credit credit={booted.credit} characters={surface.structure.characters} skipped={skippedTotal(surface.tables.skipped)} />
+        <WhatIsMissing
+          extra={
+            <>
+              {' '}
+              And one thing that is missing on <i>every</i> build of this desk, server or not: <b>a version for the structure file</b>. The other three desks declare their tables through the library's source
+              port, so a carrier vouches for what it read and every commit carries that version. A structure file is not rows, CSV or JSON — no carrier will take it — so these bytes reach the 3D viewer as an
+              argument, and travelling back to an earlier commit gives you the rows that were true then with whatever file the page is holding now. The desk says it under the viewer too, because that is the
+              picture it affects.
+            </>
+          }
+        />
+      </div>
     </>
   );
 }
@@ -206,14 +239,14 @@ function RowsNote({ residues }: { readonly residues: ResiduesNow }): JSX.Element
 /** The credit the archive asks for, in the entry's own words. */
 function Credit({ credit, characters, skipped }: { readonly credit: EntryCredit; readonly characters: number; readonly skipped: number }): JSX.Element {
   return (
-    <p style={{ font: '12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif', color: '#5a6572', margin: '.4rem 0 0' }}>
+    <p style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--pw-mid-2)', margin: '.4rem 0 0' }}>
       Structure <b>{credit.entry}</b> — {credit.title.toLowerCase()} — from the RCSB Protein Data Bank's copy of the wwPDB archive (
       <code>
         https://files.rcsb.org/download/{credit.entry}.pdb
       </code>
-      , {characters.toLocaleString('en-US')} characters). Determined by {credit.experiment.toLowerCase()} and deposited by {credit.depositors}; the primary citation the entry names is{' '}
-      <i>{credit.citation}</i>. wwPDB releases its data files into the public domain under the CC0 1.0 Universal dedication, which asks for nothing; the archive asks that the depositors and that citation be
-      credited, which is what this line is. Every word of it is read out of the file's own header records — nothing here is retyped. The desk's table keeps {skipped.toLocaleString('en-US')} fewer
+      , {characters.toLocaleString('en-US')} characters). Determined by {credit.experiment.toLowerCase()}
+      {credit.resolution === null ? '' : ` at ${credit.resolution} Å`} and deposited by {credit.depositors}; the primary citation the entry names is <i>{credit.citation}</i>. wwPDB releases its data files into
+      the public domain under the {ARCHIVE_LICENCE} dedication, which asks for nothing; the archive asks that the depositors and that citation be credited, which is what this line is. Every word of it is read out of the file's own header records — nothing here is retyped. The desk's table keeps {skipped.toLocaleString('en-US')} fewer
       coordinate records than the file has, and says which and why under the viewer.
     </p>
   );
@@ -296,37 +329,29 @@ function Page(): JSX.Element {
         what={`entry ${phase.entry}${phase.entry === EXAMPLE_ENTRY ? " from this repository's own committed bytes" : ' from the archive'}, the 3D viewer that draws it, and the two stages that find its contacts and measure its surface`}
         extra={
           // THE SAME STEPPER a reader will use on the desk, already on screen
-          // and filling as each act lands. `onSeek: null` is the truth here: the
-          // cursor is the session view's and there is no session view yet, so the
-          // circles are not buttons and the stepper says so in a sentence rather
-          // than offering a control that would refuse every click.
-          <ProtStepper stages={stepperStages(phase.outcomes, null)} run={null} here={null} onSeek={null} />
+          // and filling as each act lands. Nothing is seekable here and the note
+          // says so: the cursor is the session view's and there is no session
+          // view yet, so no mark is a control rather than offering a click that
+          // would refuse every time.
+          <RunStepper outcomes={phase.outcomes} />
         }
       />
     );
   }
-  const { surface, credit } = phase.booted;
-  return (
-    <>
-      <WhatIsMissing
-        extra={
-          <>
-            {' '}
-            And one thing that is missing on <i>every</i> build of this desk, server or not: <b>a version for the structure file</b>. The other three desks declare their tables through the library's source
-            port, so a carrier vouches for what it read and every commit carries that version. A structure file is not rows, CSV or JSON — no carrier will take it — so these bytes reach the 3D viewer as an
-            argument, and travelling back to an earlier commit gives you the rows that were true then with whatever file the page is holding now. The desk says it under the viewer too, because that is the
-            picture it affects.
-          </>
-        }
-      />
-      <Credit credit={credit} characters={surface.structure.characters} skipped={skippedTotal(surface.tables.skipped)} />
-      <StaticProtDesk booted={phase.booted} onSearchAgain={searchAgain} />
-    </>
-  );
+  return <StaticProtDesk booted={phase.booted} onSearchAgain={searchAgain} />;
 }
 
 const mount = document.getElementById('root');
 if (mount === null) throw new Error('the page has no #root to mount into');
+/**
+ * THE GROUND, from the theme layer and from nowhere else.
+ *
+ * `web/src/workbench/theme.css` declares `body.pw-body` — the design's grid and
+ * its three radial glows, in both palettes — and this is the one line that puts
+ * the class on. The page's own HTML carries layout and no colour at all, so
+ * there is exactly one owner of every colour on this page.
+ */
+document.body.classList.add('pw-body');
 createRoot(mount).render(
   <StrictMode>
     <Page />
