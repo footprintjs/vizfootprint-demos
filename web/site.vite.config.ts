@@ -6,9 +6,15 @@
  * them like any other asset; this config's only jobs are to say where the site
  * will be mounted and to put those files where the pages will look.
  *
- * Four pages, one deployable: the index that offers the three demos, and a desk
- * each. They are one build rather than four because the index links to its
+ * Five pages, one deployable: the index that offers the four demos, and a desk
+ * each. They are one build rather than five because the index links to its
  * siblings by relative path, which is what makes the whole site movable.
+ *
+ * THE FOURTH DESK CARRIES A THIRD-PARTY VIEWER (Mol*), and it is reached by a
+ * DYNAMIC IMPORT inside the renderer's mount (`web/src/molstarRenderer.ts`), so
+ * rollup gives it a chunk of its own and the other three desks load none of it.
+ * That is a property worth keeping: it is asserted in `tests/prot-site.test.ts`
+ * against the built bundle.
  *
  * ── The base ────────────────────────────────────────────────────────────────
  * GitHub Pages serves a project site at `/<repo>/`, a local check serves it at
@@ -25,13 +31,13 @@
  *
  * ── NOT single-file ─────────────────────────────────────────────────────────
  * The story page carries its data inline and is one file on purpose. These
- * three carry 27.8 MB between them; inlining that would be a file nobody can open. The
+ * four carry 27.8 MB between them; inlining that would be a file nobody can open. The
  * data is copied beside the pages instead, which is exactly the case the
  * library's story-page ceiling tells a host to reach for `via: 'http'` for.
  */
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_DATA_FILES } from '../src/data/files.js';
@@ -49,6 +55,19 @@ const STORYDECK = path.resolve(REPO, '..', 'storydeck');
 const BASE = ((raw: string) => (raw.endsWith('/') ? raw : `${raw}/`))(process.env['SITE_BASE'] ?? '/vizfootprint-demo/');
 
 /**
+ * What the dev route says a committed file IS, by its extension.
+ *
+ * A PDB entry is `text/plain`: the format has no media type of its own that
+ * anything here would honour, and the page reads it as text. Anything not
+ * listed is served as bytes rather than guessed at.
+ */
+const DATA_TYPES: Readonly<Record<string, string>> = {
+  '.csv': 'text/csv; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.pdb': 'text/plain; charset=utf-8',
+};
+
+/**
  * THE COMMITTED FILES, INTO THE BUILT SITE.
  *
  * Not Vite's `publicDir`: that copies a whole folder, and `data/grid/raw/` is
@@ -63,7 +82,6 @@ const BASE = ((raw: string) => (raw.endsWith('/') ? raw : `${raw}/`))(process.en
 function committedData(): Plugin {
   return {
     name: 'vizfootprint-demo:data',
-    apply: 'build',
     writeBundle(): void {
       for (const file of SITE_DATA_FILES) {
         const from = path.join(REPO, file);
@@ -72,6 +90,45 @@ function committedData(): Plugin {
         mkdirSync(path.dirname(to), { recursive: true });
         copyFileSync(from, to);
       }
+    },
+    /**
+     * THE SAME REGISTRY, UNDER `site:dev`.
+     *
+     * This plugin used to be `apply: 'build'`, and under the dev server the
+     * data was therefore served by NOBODY: vite's root is `web/site` and every
+     * committed file lives outside it, so a page's fetch fell through to the
+     * SPA fallback and came back as `index.html` with a 200. A CSV carrier
+     * parses that HTML into nonsense rows without a word; the protein desk's
+     * own door caught it, because a PDB entry must begin with a HEADER record
+     * and it says so by name (`src/prot/http.ts`). That refusal is what made
+     * this a two-minute diagnosis from a browser.
+     *
+     * So the arm exists, and it serves EXACTLY {@link SITE_DATA_FILES} — one
+     * owner for the list the build copies, the loaders fetch and this route
+     * answers, which is the only way dev and production can agree about what a
+     * page may read. A path outside the list is not served here at all
+     * (`next()`), and a listed file missing from the checkout is a 404 WITH A
+     * SENTENCE rather than a fallback page: a loader can print the sentence,
+     * and it cannot print HTML it mistook for data.
+     */
+    configureServer(server): void {
+      server.middlewares.use((req, res, next) => {
+        const asked = (req.url ?? '').split('?')[0] ?? '';
+        const file = asked.startsWith(BASE) ? asked.slice(BASE.length) : undefined;
+        if (file === undefined || !SITE_DATA_FILES.includes(file)) {
+          next();
+          return;
+        }
+        const from = path.join(REPO, file);
+        if (!existsSync(from)) {
+          res.statusCode = 404;
+          res.setHeader('content-type', 'text/plain');
+          res.end(`${file} is declared by a page of this site and is not in this checkout — run the fetch script in its data folder`);
+          return;
+        }
+        res.setHeader('content-type', DATA_TYPES[path.extname(file)] ?? 'application/octet-stream');
+        res.end(readFileSync(from));
+      });
     },
   };
 }
@@ -132,6 +189,6 @@ export default defineConfig({
   build: {
     outDir: OUT,
     emptyOutDir: true,
-    rollupOptions: { input: { index: path.join(SITE, 'index.html'), nndss: path.join(SITE, 'nndss', 'index.html'), grid: path.join(SITE, 'grid', 'index.html'), exo: path.join(SITE, 'exo', 'index.html') } },
+    rollupOptions: { input: { index: path.join(SITE, 'index.html'), nndss: path.join(SITE, 'nndss', 'index.html'), grid: path.join(SITE, 'grid', 'index.html'), exo: path.join(SITE, 'exo', 'index.html'), prot: path.join(SITE, 'prot', 'index.html') } },
   },
 });

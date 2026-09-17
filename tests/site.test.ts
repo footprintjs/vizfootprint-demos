@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
-import { GRID_FILES, NNDSS_FILES, SITE_DATA_FILES } from '../src/data/files.js';
+import { GRID_FILES, NNDSS_FILES, PROT_FILES, SITE_DATA_FILES } from '../src/data/files.js';
 import { nndssRows } from '../src/nndss/rows.js';
 import { gridRows } from '../src/grid/rows.js';
 import { buildNndssSurface } from '../src/nndss/surface.js';
@@ -21,8 +21,12 @@ import { loadGraph } from '../src/nndss/snapshot.js';
 const REPO = new URL('../', import.meta.url);
 
 describe('every file a page fetches is a file the build carries', () => {
-  it('lists every table both demos declare', () => {
+  it('lists every table both demos declare, and the one ARTIFACT that is not a table', () => {
     for (const file of [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES)]) expect(SITE_DATA_FILES).toContain(file);
+    // the protein desk's structure file is not a declared source — no carrier
+    // takes its format — but the page still fetches it, so the build must still
+    // carry it (`src/prot/http.ts` says what that costs)
+    for (const file of Object.values(PROT_FILES)) expect(SITE_DATA_FILES).toContain(file);
   });
 
   it('names files that are actually in this checkout', () => {

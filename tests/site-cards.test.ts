@@ -16,7 +16,8 @@
  *    filter over it narrows to surfaces and refuses in a sentence.
  *
  * `tests/cards.test.ts` pins the CDC demo's own two cards; this suite pins what
- * the SITE does with them beside the grid's and the exoplanet desk's.
+ * the SITE does with them beside the grid's, the exoplanet desk's and the
+ * protein desk's.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { chipsOf, choicesOf, narrowRefusal, narrowTo } from 'vizfootprint-studio/cards';
@@ -25,6 +26,7 @@ import { SITE_DATA_FILES } from '../src/data/files.js';
 import { exoSurfaces } from '../src/exo/cards.js';
 import { gridSurfaces } from '../src/grid/cards.js';
 import { NNDSS_GESTURES, nndssSurfaces } from '../src/nndss/cards.js';
+import { protSurfaces } from '../src/prot/cards.js';
 import { SITE_HREFS, loadSiteCardsInput, siteCards, siteSurfaces } from '../src/site/cards.js';
 import { SITE_CARDS_FILE, readSiteCards, type SiteCards } from '../src/site/cardsFile.js';
 
@@ -39,13 +41,14 @@ let cdcDesk: DemoSurface;
 let cdcStory: DemoSurface;
 let gridDesk: DemoSurface;
 let exoDesk: DemoSurface;
+let protDesk: DemoSurface;
 
 beforeAll(() => {
   const input = loadSiteCardsInputOnce();
   cards = siteCards(input, () => BUILT_AT);
   shipped = readSiteCards(JSON.parse(JSON.stringify(cards)));
-  handedOver = [...nndssSurfaces(input.nndss), ...gridSurfaces(input.grid), ...exoSurfaces(input.exo)];
-  [cdcDesk, cdcStory, gridDesk, exoDesk] = cards.surfaces as readonly [DemoSurface, DemoSurface, DemoSurface, DemoSurface];
+  handedOver = [...nndssSurfaces(input.nndss), ...gridSurfaces(input.grid), ...exoSurfaces(input.exo), ...protSurfaces(input.prot)];
+  [cdcDesk, cdcStory, gridDesk, exoDesk, protDesk] = cards.surfaces as readonly [DemoSurface, DemoSurface, DemoSurface, DemoSurface, DemoSurface];
 }, 120_000);
 
 const idsOf = (surface: DemoSurface): readonly string[] => chipsOf(surface).map((chip) => chip.id);
@@ -56,18 +59,30 @@ const onlyOn = (a: DemoSurface, b: DemoSurface): readonly string[] => {
 };
 
 describe('the surfaces the site publishes', () => {
-  it('is four cards — two CDC surfaces, one grid desk and one exoplanet desk — never one card per demo', () => {
-    expect(cards.surfaces.map((s) => `${s.demo} / ${s.surface}`)).toEqual(['CDC NNDSS weekly / desk', 'CDC NNDSS weekly / story page', 'US grid, hour by hour / desk', 'Exoplanets, published twice / desk']);
+  it('is five cards — two CDC surfaces, one grid desk, one exoplanet desk and one protein desk — never one card per demo', () => {
+    expect(cards.surfaces.map((s) => `${s.demo} / ${s.surface}`)).toEqual([
+      'CDC NNDSS weekly / desk',
+      'CDC NNDSS weekly / story page',
+      'US grid, hour by hour / desk',
+      'Exoplanets, published twice / desk',
+      'A protein complex, in two pictures / desk',
+    ]);
     expect(cdcDesk.demo).toBe(cdcStory.demo);
     expect(cdcDesk.declares.revision).not.toBe(cdcStory.declares.revision);
     expect(gridDesk.declares.revision).not.toBe(cdcDesk.declares.revision);
     expect(exoDesk.declares.revision).not.toBe(gridDesk.declares.revision);
+    expect(protDesk.declares.revision).not.toBe(exoDesk.declares.revision);
+    // the protein desk carries NO walk and NO hand table, and the card says so by
+    // absence rather than by an empty list (`src/prot/cards.ts` names both)
+    expect(protDesk.walked).toBeUndefined();
+    expect(protDesk.byHand).toBeUndefined();
   });
 
-  it('links the three desks where this site puts them, and the story page nowhere — it is not published here', () => {
+  it('links the four desks where this site puts them, and the story page nowhere — it is not published here', () => {
     expect(cdcDesk.href).toBe('./nndss/');
     expect(gridDesk.href).toBe('./grid/');
     expect(exoDesk.href).toBe('./exo/');
+    expect(protDesk.href).toBe('./prot/');
     expect(cdcStory.href).toBeUndefined();
     // the link table is the ONLY thing the site adds, and it names surfaces by the pair a card is named by
     expect(SITE_HREFS[cdcDesk.demo]?.[cdcDesk.surface]).toBe(cdcDesk.href);
@@ -243,14 +258,14 @@ describe('the filter over the shipped cards', () => {
     expect(narrowTo(shipped.surfaces, 'declares:selection:neighbourhood')).toHaveLength(2);
     expect(narrowTo(shipped.surfaces, 'walked:verb:describe').map((s) => s.surface)).toEqual(['story page']);
     expect(narrowTo(shipped.surfaces, 'by hand:unwired:annotate').map((s) => `${s.demo} / ${s.surface}`)).toEqual(['CDC NNDSS weekly / desk']);
-    expect(narrowTo(shipped.surfaces, null)).toHaveLength(4);
+    expect(narrowTo(shipped.surfaces, null)).toHaveLength(5);
   });
 
   it('offers only choices that land somewhere, and refuses the rest in a sentence', () => {
     const choices = choicesOf(shipped.surfaces);
     expect(choices.length).toBeGreaterThan(0);
     for (const choice of choices) expect(narrowTo(shipped.surfaces, choice.id).length).toBe(choice.surfaces);
-    expect(narrowRefusal(shipped.surfaces, 'declares:chart:sunburst')).toBe(`no surface here carries "declares:chart:sunburst" — ${String(choices.length)} features are on offer across 4 surfaces`);
+    expect(narrowRefusal(shipped.surfaces, 'declares:chart:sunburst')).toBe(`no surface here carries "declares:chart:sunburst" — ${String(choices.length)} features are on offer across 5 surfaces`);
     expect(narrowRefusal(shipped.surfaces, 'declares:chart:network')).toBeNull();
   });
 });

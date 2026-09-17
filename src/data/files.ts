@@ -46,6 +46,20 @@ export const EXO_FILES = {
 } as const;
 
 /**
+ * The protein demo's one file — and the one entry in this module that is not a
+ * TABLE.
+ *
+ * `1ay7.pdb` is a bulk ARTIFACT: the 3D view draws the file itself, and the
+ * residues table is what `src/prot/etl.ts` reads out of it. The library's
+ * source port carries `rows | csv | json` and this is none of them, so nothing
+ * declares it — the page fetches it plainly (`src/prot/http.ts` says what that
+ * costs) and the static build copies it like any other asset.
+ */
+export const PROT_FILES = {
+  structure: 'data/prot/1ay7.pdb',
+} as const;
+
+/**
  * What a static build must carry, beyond the tables themselves.
  *
  * The provenance records ride along because a dashboard that says where its
@@ -54,7 +68,7 @@ export const EXO_FILES = {
  * to travel with the file it covers — publishing the boundaries without it
  * would break the one condition that made publishing them lawful.
  */
-export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json', 'data/exo/PROVENANCE.json', 'data/exo/FETCH.json'] as const;
+export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json', 'data/exo/PROVENANCE.json', 'data/exo/FETCH.json', 'data/prot/PROVENANCE.json'] as const;
 
 /** Everything the built site needs under `data/` — the tables and the papers that must travel with them. */
-export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...Object.values(EXO_FILES), ...SITE_PROVENANCE_FILES];
+export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...Object.values(EXO_FILES), ...Object.values(PROT_FILES), ...SITE_PROVENANCE_FILES];

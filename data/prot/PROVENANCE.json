@@ -1,0 +1,26 @@
+{
+  "source": "RCSB Protein Data Bank — the wwPDB archive entry, in the legacy PDB format",
+  "entry": "1AY7",
+  "at": "https://files.rcsb.org/download/1AY7.pdb",
+  "page": "https://www.rcsb.org/structure/1AY7",
+  "header": "COMPLEX (ENZYME/INHIBITOR) 14-NOV-97 1AY7",
+  "title": "RIBONUCLEASE SA COMPLEX WITH BARSTAR",
+  "molecules": "MOL_ID: 1; MOLECULE: GUANYL-SPECIFIC RIBONUCLEASE SA; CHAIN: A; EC: 3.1.27.3; ENGINEERED: YES; MOL_ID: 2; MOLECULE: BARSTAR; CHAIN: B; ENGINEERED: YES; OTHER_DETAILS: BARNASE INHIBITOR",
+  "experiment": "X-RAY DIFFRACTION",
+  "depositors": "J.SEVCIK,L.URBANIKOVA,Z.DAUTER,K.S.WILSON",
+  "primaryCitation": "AUTH J.SEVCIK,L.URBANIKOVA,Z.DAUTER,K.S.WILSON TITL RECOGNITION OF RNASE SA BY THE INHIBITOR BARSTAR: STRUCTURE TITL 2 OF THE COMPLEX AT 1.7 A RESOLUTION. REF ACTA CRYSTALLOGR.,SECT.D V. 54 954 1998 REFN ISSN 0907-4449 PMID 9757110 DOI 10.1107/S0907444998004429",
+  "license": {
+    "statement": "wwPDB data files carry no copyright restriction: the worldwide Protein Data Bank releases its archive into the public domain under the CC0 1.0 Universal dedication, for commercial and non-commercial use alike.",
+    "dedication": "CC0 1.0 Universal",
+    "policyPage": "https://www.wwpdb.org/about/usage-policies",
+    "attribution": "CC0 asks for nothing, and the archive asks for one thing anyway: that the depositors of a structure and its primary citation be credited. Both ride above, verbatim from the file, and the desk prints them under the viewer."
+  },
+  "bytes": 169371,
+  "sha256": "fe65209ef5e6393069aa003e8d1c045fbb0daed7bf53b4f8f8cddbaee0efbc0b",
+  "retrievedAt": "2026-09-17T16:00:26.389Z",
+  "slice": {
+    "rule": "the whole entry, byte for byte as files.rcsb.org answered it — one 169 KB file is not a slice of anything",
+    "loses": "nothing of this entry. What the DESK reads is narrower than the file: the ETL keeps the backbone N, CA and C atoms the dihedrals need and treats no water as protein. It COUNTS every record it skipped and why (src/prot/etl.ts · skippedOf), so the cut is reported in numbers the parse produced rather than in numbers somebody typed here."
+  },
+  "note": "Regenerating re-downloads the entry. The archive revises entries (this one last in 1999), so a re-run that changes the bytes changes the sha256 above — which is the point of recording it."
+}

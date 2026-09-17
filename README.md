@@ -11,7 +11,7 @@ on CDC's own bytes.
 
 ## Live: <https://footprintjs.github.io/vizfootprint-demos/>
 
-A static build of all three demos, published from this repo by
+A static build of all four demos, published from this repo by
 `.github/workflows/pages.yml` on every push to `main` — no server behind it,
 which is exactly the point; see [Publish it](#publish-it--a-static-site-no-server-at-all)
 for what that costs and what it doesn't.
@@ -32,8 +32,17 @@ for what that costs and what it doesn't.
   cannot place counted rather than dropped; and the histogram over that minted
   table **can be clicked** — before the act that mints it has landed, the same
   click is refused in a sentence naming the act, which the page shows.
+- **[Protein](https://footprintjs.github.io/vizfootprint-demos/prot/)** — one
+  residue, two pictures: a protein–protein complex drawn in three dimensions by
+  **Mol\***, somebody else's molecular viewer, joined to this interaction
+  grammar through the library's renderer contract and nothing else — and drawn
+  again as the two backbone angles of every residue. A click in either picture
+  is the same row in the other and in the sheet. It is the first THIRD-PARTY
+  chart in this repository, and the first desk whose picture is drawn from a
+  file rather than from rows: what that costs — bytes that carry no version,
+  on no commit — is said under the viewer rather than hidden.
 
-All three run the real dashboard, the real ETL, the real definition — the one
+All four run the real dashboard, the real ETL, the real definition — the one
 thing the published pages cannot do unattended is hold a server-side model
 key, so the **analyst** panel asks each visitor for their own (kept in that
 browser only, sent only to Anthropic, and entirely optional — without one the
@@ -63,7 +72,9 @@ by a federal agency. See [`src/nndss/absence.ts`](src/nndss/absence.ts).
 | `src/source/` | wire | the http carrier — the one the library has but does not export; its README says why |
 | `server/` | wire | `/api/*` — vizfootprint-ui's polled state contract, plus the summary, chat and geo doors, and the Sheet's two: `GET /api/window` (one window of rows) and `POST /api/find` (where the next match is — the body is the library's `FindQuery`); the grid desk answers the same two under `/api/grid/`. Each parses strictly and answers the session verbatim: a query the door cannot read is a 400 with a sentence, never a default |
 | `web/` | 3, 4, 6 | the front door, the cockpit, the Grammar panel, the jump box, the Analyst panel |
-| `web/site/` | 3, 4, 6 | the STATIC site: an index and the three desks, each reading its tables over http with no server behind it |
+| `data/prot/` | 1 · data | one wwPDB entry (CC0), the fetch that downloaded it and the provenance record it wrote — the one committed file that is an ARTIFACT rather than a table |
+| `src/prot/` | 1–4 | the PDB atom records → one residue table with every skipped record counted, the declared dashboard (one table, three views, a chart kind the library has never heard of), the surface |
+| `web/site/` | 3, 4, 6 | the STATIC site: an index and the four desks, each reading its tables over http with no server behind it |
 | `web/story/` | 6 | the SINGLE-FILE story page: its entry, its desk, and the captured desk it carries |
 | `scripts/` | — | `story-capture.ts` — the CDC desk's story, off a running server; `exo-capture.ts` — the exoplanet walk, taken IN PROCESS because that demo has no server |
 | `tests/` | — | vitest |
@@ -258,9 +269,12 @@ reads it from GitHub's own `configure-pages` action and passes it as
 `SITE_BASE`, so the deployed site is always mounted at wherever this
 repository actually lives.
 
-`dist/site/` is four pages and 31 MB — 2.8 MB of code and 27.8 MB of tables:
-an index that offers the three demos, a desk each, and `data/` copied in beside
-them. There is no server behind it and nothing in it points at one.
+`dist/site/` is five pages and 34 MB — 6 MB of code and 28 MB of tables plus
+one 169 KB structure file: an index that offers the four demos, a desk each,
+and `data/` copied in beside them. 2.9 MB of that code is the 3D molecular viewer,
+and it is a chunk of its own that only the protein page loads — asserted
+against the built bundle in `tests/prot-site.test.ts`, because a viewer the
+other three desks paid for would be a cost nobody asked them for. There is no server behind it and nothing in it points at one.
 
 **How a desk gets its rows without a server.** The library's source layer is a
 declaration, not a fetch call: a table says a **format**, a **via** and an

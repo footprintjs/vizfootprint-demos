@@ -35,6 +35,9 @@ import { gridSurfaces, type GridCardsInput } from '../grid/cards.js';
 import { loadGrid } from '../grid/snapshot.js';
 import { nndssSurfaces, type CapturedWalk, type NndssCardsInput } from '../nndss/cards.js';
 import { loadGraph, loadSnapshot } from '../nndss/snapshot.js';
+import { protSurfaces, type ProtCardsInput } from '../prot/cards.js';
+import { protTables } from '../prot/etl.js';
+import { loadStructureText } from '../prot/snapshot.js';
 import { SITE_CARDS_FILE, readSiteCards, type SiteCards } from './cardsFile.js';
 
 /** The story page's captured walk — the file `story:capture` writes and the story page bundles. */
@@ -61,12 +64,14 @@ export const SITE_HREFS: Readonly<Record<string, Readonly<Record<string, string>
   'CDC NNDSS weekly': { desk: './nndss/' },
   'US grid, hour by hour': { desk: './grid/' },
   'Exoplanets, published twice': { desk: './exo/' },
+  'A protein complex, in two pictures': { desk: './prot/' },
 };
 
 export interface SiteCardsInput {
   readonly nndss: NndssCardsInput;
   readonly grid: GridCardsInput;
   readonly exo: ExoCardsInput;
+  readonly prot: ProtCardsInput;
 }
 
 /** The captured walk, read off disk. */
@@ -95,23 +100,29 @@ export function loadSiteCardsInput(): SiteCardsInput {
     nndss: { tables: loadSnapshot(), graph: loadGraph(), captured: capturedWalk() },
     grid: { tables: loadGrid() },
     exo: { tables: loadExo(), ...((walk) => (walk === undefined ? {} : { captured: walk }))(exoWalk()) },
+    // the protein desk reads ONE file, and not through the library's source port:
+    // a structure file is not rows, CSV or JSON (`src/prot/http.ts` says what
+    // that costs), so this is the one card input that is a bare read
+    prot: { tables: protTables(loadStructureText()) },
   };
 }
 
 /**
  * The surfaces of this site, in the order the gallery draws them: the CDC
- * desk, the CDC story page, the grid desk, the exoplanet desk.
+ * desk, the CDC story page, the grid desk, the exoplanet desk, the protein
+ * desk.
  *
  * ```ts
- * const [cdcDesk, cdcStory, gridDesk, exoDesk] = siteSurfaces(loadSiteCardsInput());
- * cdcDesk.href;    // './nndss/'
- * cdcStory.href;   // undefined — not published on this site
- * cdcStory.walked; // the 32-commit trace
- * exoDesk.walked;  // the walk `exo:capture` recorded, when a checkout has one
+ * const [cdcDesk, cdcStory, gridDesk, exoDesk, protDesk] = siteSurfaces(loadSiteCardsInput());
+ * cdcDesk.href;     // './nndss/'
+ * cdcStory.href;    // undefined — not published on this site
+ * cdcStory.walked;  // the 32-commit trace
+ * exoDesk.walked;   // the walk `exo:capture` recorded, when a checkout has one
+ * protDesk.walked;  // undefined — nobody has captured a walk through a WebGL canvas
  * ```
  */
 export function siteSurfaces(input: SiteCardsInput): readonly DemoSurface[] {
-  return [...nndssSurfaces(input.nndss), ...gridSurfaces(input.grid), ...exoSurfaces(input.exo)].map(publishedAt);
+  return [...nndssSurfaces(input.nndss), ...gridSurfaces(input.grid), ...exoSurfaces(input.exo), ...protSurfaces(input.prot)].map(publishedAt);
 }
 
 /** The surface with this site's link on it — or exactly as the demo handed it over, when this site does not publish it. */
