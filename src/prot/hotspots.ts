@@ -127,6 +127,47 @@ export interface LedgerFact {
 /** The parse's own attribution — step 1 lands the table before the record starts, so it names no act. */
 export const FROM_THE_PARSE = 'the parse';
 
+/** The LAST commit the run landed — the end of what stages 1 to 4 put on the record. `null` when it landed none. */
+export function landedThrough(run: ProtRun | null): string | null {
+  const commits = (run?.outcomes ?? []).flatMap((outcome) => (outcome.commit === null ? [] : [outcome.commit]));
+  return commits.length === 0 ? null : commits[commits.length - 1]!;
+}
+
+/**
+ * WHICH CURSOR STAGE 5 IS ABOUT — and the answer is **the end of the run, by
+ * construction.** This function is the guard that makes it so.
+ *
+ * ── THE ARGUMENT, because it cuts against this desk's own law ──────────────
+ * Every picture here is drawn AT THE CURSOR, and that is the law the whole
+ * packet before this one was careful about: a card that answered from
+ * somewhere else would be a second idea of one fact. Stage 5 is the one thing
+ * on the desk that cannot obey it, and the reason is what the stage IS: *a
+ * reading of what stages 1 to 4 landed.* A subset of those stages is not that.
+ * Ranking hot spots from the rows at stage 2 would be ranking them from
+ * evidence with no contacts and no surface in it — an answer to a question
+ * nobody asked, dressed as an answer to this one.
+ *
+ * So the ask is made ONCE, from the rows read at the last commit the stages
+ * landed, and this function REFUSES any other read rather than folding a
+ * ledger from it. The card then says which cursor its answer is about
+ * (`web/src/workbench/panel.ts` · `recommendationOf` · `where`), which is how
+ * the two laws are both kept: the answer is not pretending to be drawn where
+ * the reader is standing, it is declaring where it was asked from.
+ *
+ * `null` when the rows really are the end of the run — an absence is absent.
+ */
+export function notTheEndOfTheRun(run: ProtRun | null, at: string | null): string | null {
+  const head = landedThrough(run);
+  if (head === null) {
+    return 'stage 5 reads what stages 1 to 4 landed, and this run landed no commit at all — so there is no end of the run to read from and nothing was asked of a model.';
+  }
+  if (at === head) return null;
+  return (
+    `stage 5 reads what stages 1 to 4 landed, and the rows it was handed were read at ${at === null ? 'the root of this log' : `commit ${at}`} while those stages landed through commit ${head} — so it was not asked. ` +
+    'This stage is about the END of the run by construction: a ranking folded from part of the evidence would answer a question nobody asked, wearing the answer to this one.'
+  );
+}
+
 /** What the ledger holds and what it deliberately leaves out — the sentence the card and the door both carry. */
 export interface HotspotLedger {
   readonly facts: readonly LedgerFact[];
@@ -136,6 +177,20 @@ export interface HotspotLedger {
   readonly basis: string;
   /** Which acts' columns the facts were read off, in landing order. */
   readonly from: readonly string[];
+  /** How many residues the cover selected — the number the verdict below is read from. */
+  readonly covered: number;
+  /** Whether that selection is a cover at all. Two of its three values are refusals ({@link coverVerdict}). */
+  readonly cover: CoverVerdict;
+  /**
+   * THE COMMIT THE ROWS WERE READ AT, carried so the answer can say which
+   * cursor it is about — and so a reader who has since stepped behind it is
+   * told rather than shown a ranking these rows do not hold.
+   *
+   * `null` on a read taken at the root of a log. It is the read's OWN stamp
+   * (`./session.ts` · `ResiduesAtCursor.cursor`) and never what a caller
+   * believes the cursor to be.
+   */
+  readonly at: string | null;
 }
 
 const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
@@ -146,18 +201,68 @@ const round = (value: number, places: number): string => value.toFixed(places);
  * WHICH RESIDUES THE LEDGER COVERS, and this is the one choice in the file
  * worth defending: **the ones an act's own absence vocabulary singles out.**
  *
- * `interface_contacts` is landed *absent, never zero, for a residue that
- * touches no other chain* (`./analyses.ts` · `PROT_STAGES`), so a residue with
- * a value in it is a residue at the interface — which is what this desk is
- * about — and a residue without one is not. That is the ACT's statement, not a
- * threshold: nothing here compares a number to a cut-off anybody chose, and on
- * the committed entry it leaves 18 of 185 rows rather than a round number
- * somebody liked.
+ * ── THE COLUMN, AND THE ONE THAT LOOKS LIKE IT AND IS NOT ──────────────────
+ * `interface_separation` is landed **ABSENT — never 0 — for a residue with no
+ * contact across the chains**, and the act says so by name (`./analyses.ts` ·
+ * `INTERFACE_SEPARATION_COLUMN`: *"does not touch another chain" is not a
+ * distance*). So a residue carrying one is a residue at the interface, which is
+ * what this desk is about, and a residue without one is not. That is the ACT's
+ * own statement, not a threshold: nothing here compares a number to a cut-off
+ * anybody chose, and on the committed entry it leaves 18 of 185 rows rather
+ * than a round number somebody liked.
  *
- * A run where that column never landed covers nothing, and the ledger says so
- * rather than falling back to the whole table.
+ * **IT WAS `interface_contacts` FOR ONE RELEASE AND THAT WAS THE BUG**, and it
+ * is written here because the mistake is a good one to be able to recognise
+ * again. That column is landed `?? 0` (`./interactions.ts` ·
+ * `residueContactColumns`) — a real ZERO for a residue that touches no other
+ * chain, 167 of the 185 on the committed entry — so it **has no absence at
+ * all**, and a rule reading it as *"present means at the interface"* selected
+ * every row. Measured on the real entry: **185 of 185 residues, 717 facts**,
+ * a model asked to rank hot spots out of evidence carrying no interface, and a
+ * prose answer back. The prose was the symptom; the column was the fault.
+ *
+ * The two rules AGREE — `interface_separation` non-null is exactly
+ * `interface_contacts > 0`, 18 either way — and `tests/prot-hotspots.test.ts`
+ * pins that against the committed entry, so a drift between the two columns
+ * fails a test rather than quietly moving the cover. The ABSENCE is what is
+ * read, because the absence is what the act declares; `> 0` would be this file
+ * deciding that a zero means something.
  */
-const atTheInterface = (row: Row): boolean => num(row[INTERFACE_CONTACTS_COLUMN]) !== null;
+const atTheInterface = (row: Row): boolean => num(row[INTERFACE_SEPARATION_COLUMN]) !== null;
+
+/**
+ * WHAT THE COVER RULE DECIDED — and two of the three answers are refusals.
+ *
+ *   `covers`       a proper minority of the table: a cover, and the ask is made;
+ *   `nothing`      no row carried the column, so there is nothing to rank;
+ *   `not-a-cover`  half the table or more, which is the shape a rule that did
+ *                  not discriminate produces. See {@link coverVerdict}.
+ */
+export type CoverVerdict = 'covers' | 'nothing' | 'not-a-cover';
+
+/**
+ * IS THIS A COVER AT ALL? The guard the 717-fact ask did not have.
+ *
+ * The boundary is **a proper minority of the table**, which is not a number
+ * anybody picked — it is the definition of a minority, and it is the one thing
+ * that can be said about an interface without measuring this entry: *an
+ * interface is a small part of a complex.* So a selection of half the rows or
+ * more does not say every residue is at the interface; it says the column the
+ * cover is read off did not tell the two apart, which is a fault in this code
+ * or in what landed, never a finding about the protein.
+ *
+ * It is a REFUSAL and never a trim. Cutting the pile down to a size a model
+ * could hold would be this file choosing which residues the model may
+ * consider — the very threshold the cover rule exists not to pick — and **an
+ * ask nobody can answer is worse than one that was never made**, because it
+ * spends a real model call to arrive at a sentence.
+ *
+ * On the committed entry: 18 of 185, about a tenth, with room to spare.
+ */
+export function coverVerdict(covered: number, rows: number): CoverVerdict {
+  if (covered === 0) return 'nothing';
+  return covered * 2 >= rows ? 'not-a-cover' : 'covers';
+}
 
 /**
  * THE LEDGER, FOLDED OFF THE RUN — one fact per residue per act whose column
@@ -168,7 +273,7 @@ const atTheInterface = (row: Row): boolean => num(row[INTERFACE_CONTACTS_COLUMN]
  * is ABSENT from the ledger, the model cannot cite what it was never served,
  * and {@link HotspotLedger.from} names exactly which acts are behind the pile.
  */
-export function hotspotLedger(run: ProtRun | null, rows: readonly Row[]): HotspotLedger {
+export function hotspotLedger(run: ProtRun | null, rows: readonly Row[], at: string | null = null): HotspotLedger {
   const outcomes: readonly ActOutcome[] = run?.outcomes ?? [];
   const landed = new Set(outcomes.flatMap((o) => (o.commit === null ? [] : o.materialized)));
   const residues = rows.map((row) => String(row[ACT_KEY_COLUMN]));
@@ -191,15 +296,39 @@ export function hotspotLedger(run: ProtRun | null, rows: readonly Row[]): Hotspo
     file(key, surfaceFact(key, row), SURFACE_ACT);
     file(key, conservationFact(key, row), CONSERVATION_ACT);
   }
+  const cover = coverVerdict(covered.length, residues.length);
   return {
-    facts,
+    facts: cover === 'covers' ? facts : [],
     residues,
-    basis:
-      covered.length === 0
-        ? `no residue at this cursor carries an "${INTERFACE_CONTACTS_COLUMN}" value, so the ledger covers none: that column is landed absent — never zero — for a residue that touches no other chain, and with none landed there is no interface for this stage to be about`
-        : `the ledger covers the ${String(covered.length)} residues of ${String(residues.length)} that carry an "${INTERFACE_CONTACTS_COLUMN}" value at this cursor. That is the interaction act's own absence vocabulary and not a threshold anybody picked: the column is landed absent, never zero, for a residue that touches no other chain, so a value in it means the residue is at the interface — which is what this desk is about`,
-    from,
+    basis: basisSaid(cover, covered.length, residues.length),
+    from: cover === 'covers' ? from : [],
+    covered: covered.length,
+    cover,
+    at,
   };
+}
+
+/**
+ * WHICH RESIDUES THIS LEDGER COVERS AND WHY, in one sentence — and the two
+ * refusing verdicts say what went wrong rather than reporting a count.
+ *
+ * The sentence is served to the model in the evidence tool's own description
+ * and printed on the card, so there is one wording for one fact.
+ *
+ * EXPORTED because the DOOR judges the cover again off the pile that arrives
+ * (`server/prot-doors.ts` · `ledgerOf`), and when its verdict is a refusal the
+ * page's own sentence is about a cover that is not one. **A sentence about the
+ * cover belongs to whoever judged the cover** — so the door writes this one
+ * rather than quoting a claim it has just contradicted.
+ */
+export function basisSaid(cover: CoverVerdict, covered: number, rows: number): string {
+  if (cover === 'nothing') {
+    return `no residue at this cursor carries an "${INTERFACE_SEPARATION_COLUMN}" value, so the ledger covers none: that column is landed absent — never zero — for a residue with no contact across the chains, and with none landed there is no interface for this stage to be about`;
+  }
+  if (cover === 'not-a-cover') {
+    return `the cover rule selected ${String(covered)} of this run's ${String(rows)} residues, and that is not a cover: an interface is a small part of a complex, so a selection of half the table or more says the column it is read off did not tell the two apart rather than that every residue is at the interface`;
+  }
+  return `the ledger covers the ${String(covered)} residues of ${String(rows)} that carry an "${INTERFACE_SEPARATION_COLUMN}" value at this cursor. That is the interaction act's own absence vocabulary and not a threshold anybody picked: the column is landed absent — never zero — for a residue with no contact across the chains, so a value in it means the residue touches the other one, which is what this desk is about`;
 }
 
 /** What the interaction stage landed on this row, in words. `null` when it landed nothing here. */
@@ -320,7 +449,7 @@ export interface HotspotVerdict {
 }
 
 /** Why a run of this stage produced no ranking. Each one is a different sentence, and none of them is a silent empty list. */
-export type HotspotFailure = 'no-key' | 'no-evidence' | 'unreachable' | 'timeout' | 'refused' | 'threw' | 'malformed' | 'cites-nothing' | 'nothing-left';
+export type HotspotFailure = 'no-key' | 'not-the-end' | 'no-evidence' | 'no-cover' | 'unreachable' | 'timeout' | 'refused' | 'threw' | 'malformed' | 'cites-nothing' | 'nothing-left';
 
 export interface HotspotAnswered {
   readonly ok: true;
@@ -368,6 +497,46 @@ export const REFUSE_PAST_CEILING = (residue: string, want: number): string =>
 
 /** A ranking with no reason. */
 export const REFUSE_NO_REASON = (residue: string): string => `the model ranked "${residue}" and gave no reason for it — a ranking whose reason is missing is refused, because the reason is half of what this stage answers`;
+
+/**
+ * THE REFUSALS THAT COME BEFORE THE MODEL — one owner, two callers, because
+ * the cheapest refusal is the one made before a call is spent.
+ *
+ * `askHotspots` asks it, since that is where a call would be spent; the SERVED
+ * PAGE asks it too, so a pile it already knows is doomed is never put on the
+ * wire at all (`web/src/protServed.tsx`). One function rather than two
+ * spellings of one sentence in two places.
+ *
+ * `not-a-cover` is the one this stage was missing, and the measurement is why
+ * the guard exists: a cover rule reading a column with no absence selected
+ * every row, and the ask that followed was **717 facts over 185 residues** on
+ * the committed entry — unanswerable, answered in prose, and it cost a real
+ * model call to find that out. It is refused with the counts and **never
+ * trimmed**: cutting the pile down to a size a model could hold would be this
+ * file choosing which residues the model may consider, which is the very
+ * threshold the cover rule exists not to pick.
+ *
+ * `null` when the ledger really is a cover — an absence is absent.
+ */
+export function coverRefusal(ledger: HotspotLedger): HotspotFailed | null {
+  if (ledger.cover === 'not-a-cover') {
+    return {
+      ok: false,
+      kind: 'no-cover',
+      sentence: `stage 5 did not ask a model, because what it would have asked about is not a cover: ${ledger.basis}. Nothing was asked and nothing was landed — an ask nobody can answer is worse than one that was never made, and this one would have spent a model call to arrive at the same sentence.`,
+      verdicts: [],
+    };
+  }
+  if (ledger.cover === 'nothing' || ledger.facts.length === 0) {
+    return {
+      ok: false,
+      kind: 'no-evidence',
+      sentence: `stage 5 ran and had nothing to ask about: ${ledger.basis}. Nothing was landed, and nothing was asked of a model — a ranking over no evidence would be a ranking of nothing.`,
+      verdicts: [],
+    };
+  }
+  return null;
+}
 
 /** The sentence for a process that has a server behind it and nothing to ask. */
 export const NO_KEY_SENTENCE =
@@ -528,14 +697,9 @@ export interface HotspotAsk {
 export async function askHotspots(ask: HotspotAsk): Promise<HotspotOutcome> {
   const want = ask.want ?? HOTSPOT_WANT;
   const { ledger } = ask;
-  if (ledger.facts.length === 0) {
-    return {
-      ok: false,
-      kind: 'no-evidence',
-      sentence: `stage 5 ran and had nothing to ask about: ${ledger.basis}. Nothing was landed, and nothing was asked of a model — a ranking over no evidence would be a ranking of nothing.`,
-      verdicts: [],
-    };
-  }
+  // THE DOORS THAT COME BEFORE THE MODEL — see {@link coverRefusal}
+  const doomed = coverRefusal(ledger);
+  if (doomed !== null) return doomed;
   const byId = new Map(ledger.facts.map((fact) => [fact.id, fact]));
   const inTable = new Set(ledger.residues);
   const evidence = defineTool({
@@ -557,10 +721,18 @@ export async function askHotspots(ask: HotspotAsk): Promise<HotspotOutcome> {
     // the answer is never filed, and the judge would be the only source on the
     // record. Two sources is the point.
     //
-    // `retries` is deliberately not passed: a re-ask spends a turn correcting
-    // an answer, and a malformed answer is a FACT about this run that stage 5
-    // reports in its own words rather than papering over.
-    .outputSchema(HOTSPOT_ANSWER_SCHEMA)
+    // ONE CORRECTIVE RE-ASK, AND IT WAS NONE FOR ONE RELEASE. The note here
+    // used to say a malformed answer is a fact this stage reports rather than
+    // papers over — which is still true, and is why the sentence below counts
+    // the attempts. What changed is a measurement: with the cover rule broken
+    // the model was served 717 facts and answered PROSE **every time**, so one
+    // unreadable reply ended the stage on every run a reader made. A re-ask is
+    // not a re-roll: the shape is DECLARED, so the library quotes its own
+    // validator's failure back to the model and asks it to fix that. One is
+    // enough to survive a slip; more would be paying for a model that cannot
+    // read the contract, which is a fact worth reporting rather than buying
+    // past.
+    .outputSchema(HOTSPOT_ANSWER_SCHEMA, { retries: 1 })
     // THE LEDGER, ARMED — `quote-facts` is what turns *restate the evidence*
     // into *quote its ids*, and `judge` is the second source whose verdicts
     // land beside the model's own standings rather than replacing them.
@@ -591,10 +763,24 @@ export async function askHotspots(ask: HotspotAsk): Promise<HotspotOutcome> {
   const parsed = readJsonObject(reply);
   const ranked = parsed === null ? null : parsed['ranked'];
   if (parsed === null || !Array.isArray(ranked)) {
+    /*
+      HOW MANY TIMES IT WAS ASKED, off the LIBRARY'S own record rather than a
+      count kept here: `.outputSchema(…, { retries: 1 })` judges the answer in
+      the loop and files what it judged (`agent.outputContractUnmet()` —
+      `attempts`, `retriesSpent`, and the validator's own message). So the
+      sentence says a model was asked once and answered unreadably, or that it
+      was asked again with its own failure quoted back and did it twice — which
+      are two different facts about a run and a reader deserves to know which.
+    */
+    const unmet = agent.outputContractUnmet();
+    const tries =
+      unmet === undefined
+        ? ''
+        : ` The library judged ${String(unmet.attempts)} ${unmet.attempts === 1 ? 'answer' : 'answers'} against the declared shape and paid for ${String(unmet.retriesSpent)} corrective re-${unmet.retriesSpent === 1 ? 'ask' : 'asks'}; its own validator said: ${unmet.error}.`;
     return {
       ok: false,
       kind: 'malformed',
-      sentence: `the model answered and the answer is not the one object stage 5 asked for${parsed === null ? ' — nothing in the reply parses as a JSON object' : ' — it parses, and carries no "ranked" array'}. Nothing was landed: an answer nobody can read is not a ranking.`,
+      sentence: `the model answered and the answer is not the one object stage 5 asked for${parsed === null ? ' — nothing in the reply parses as a JSON object' : ' — it parses, and carries no "ranked" array'}.${tries} Nothing was landed: an answer nobody can read is not a ranking.`,
       verdicts,
     };
   }

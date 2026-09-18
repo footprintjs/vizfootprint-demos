@@ -567,6 +567,18 @@ export interface RecommendationProps {
   readonly disagreements: readonly string[];
   /** The sentence, when the stage ran and there is no ranking. */
   readonly said: string | null;
+  /**
+   * WHICH CURSOR THIS ANSWER IS ABOUT — the one line on this card that is not
+   * about the protein.
+   *
+   * Every other picture on this desk is drawn at the cursor; this answer was
+   * asked once, at the end of the run, because that is what the stage reads.
+   * So the card DECLARES its own basis rather than letting a reader take it for
+   * a picture of wherever they are standing.
+   */
+  readonly where: string | null;
+  /** Set when the reader has stepped BEHIND the commit the ranking landed as — the rows then carry no rank at all. */
+  readonly behind?: string | null;
   readonly focused: boolean;
   /** The control that puts the model's own picks into the desk's live selection. Absent where the page wires none. */
   readonly select?: { readonly label: string; onPress(): void };
@@ -592,7 +604,7 @@ export interface RecommendationProps {
  * counted and hidden is the silent omission this desk is built against, and a
  * disagreement is a fact of the record that nothing here resolves.
  */
-export function Recommendation({ tag, figures, rows, refused, judge, verdicts, disagreements, said, focused, select }: RecommendationProps): JSX.Element {
+export function Recommendation({ tag, figures, rows, refused, judge, verdicts, disagreements, said, where, behind = null, focused, select }: RecommendationProps): JSX.Element {
   const MONO: CSSProperties = { fontFamily: 'var(--pw-font-mono)', fontSize: focused ? 10 : 9, letterSpacing: '0.03em', color: 'var(--pw-soft-2)' };
   if (rows.length === 0) {
     return (
@@ -620,6 +632,16 @@ export function Recommendation({ tag, figures, rows, refused, judge, verdicts, d
         ))}
       </ol>
       <span style={{ ...MONO, color: 'var(--pw-soft)' }}>{figures}</span>
+      {/* WHICH CURSOR THE ANSWER IS ABOUT, and — when they have parted company
+          — that the rows underneath carry no rank. Both plain text in a line a
+          reader is already reading, never a live region: the desk announces
+          nothing (`./README.md`). */}
+      {where === null ? null : <span style={{ ...MONO, color: 'var(--pw-soft)' }}>{where}</span>}
+      {behind === null ? null : (
+        <span role="status" style={{ fontSize: focused ? 11.5 : 10, lineHeight: 1.4, color: 'var(--pw-refuse-ink)' }}>
+          {behind}
+        </span>
+      )}
       {select === undefined ? null : (
         <button
           type="button"

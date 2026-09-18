@@ -28,7 +28,7 @@ import { BLOCKED_TAG, PROT_BLOCKED, planStepOf } from '../src/prot/plan.js';
 import { HOTSPOTS_ACT, HOTSPOTS_STAGE, HOTSPOT_TAG, NO_KEY_SENTENCE, REFUSE_NOT_IN_TABLE, type HotspotOutcome } from '../src/prot/hotspots.js';
 import type { ActOutcome } from '../src/prot/orchestrator.js';
 import { stepperStages } from '../web/src/protStages.js';
-import { BLOCKED_CARDS, firstClause, hotspotCard, railCards, recommendationOf } from '../web/src/workbench/panel.js';
+import { BLOCKED_CARDS, firstClause, hotspotCard, railCards, rankingVsCursor, recommendationOf } from '../web/src/workbench/panel.js';
 import { BlockedGroup, Recommendation } from '../web/src/workbench/ChartCard.js';
 import { stepViews } from '../web/src/workbench/steps.js';
 
@@ -77,6 +77,14 @@ const NO_KEY: HotspotOutcome = { ok: false, kind: 'no-key', sentence: NO_KEY_SEN
 
 const JUDGE_SAID = 'scored by a standing judge running on the SAME family of model that answered — the weaker of the two';
 
+/**
+ * WHAT THE PAGE HANDS THE FOLD — and the two commits are part of it, because
+ * stage 5's answer has to say which cursor it is about: it is asked once, from
+ * the rows at the end of the run (`src/prot/hotspots.ts` · `notTheEndOfTheRun`).
+ */
+const SAID = { outcome: ANSWERED, judge: JUDGE_SAID, at: 's4', landed: 's5' } as const;
+const NO_KEY_SAID = { outcome: NO_KEY, judge: 'no second source read anything', at: 's4', landed: null } as const;
+
 const landed = (): ActOutcome => ({ stage: HOTSPOTS_STAGE, act: HOTSPOTS_ACT, commit: 'c9', refusal: null, materialized: ['hotspot_rank', 'hotspot_cites', 'hotspot_reason'] });
 const refused = (why: string): ActOutcome => ({ stage: HOTSPOTS_STAGE, act: HOTSPOTS_ACT, commit: null, refusal: why, materialized: [] });
 
@@ -123,7 +131,7 @@ describe('the Pages build still declares stage 5 unavailable, for the static-bui
 
 describe('a model’s ranking is shown as a recommendation, with its citations', () => {
   it('replaces stage 5’s blocked card and keeps every other one', () => {
-    const cards = railCards({ outcome: ANSWERED, judge: JUDGE_SAID });
+    const cards = railCards(SAID);
     expect(cards).toHaveLength(BLOCKED_CARDS.length);
     const five = cards.find((c) => c.id === HOTSPOTS_STAGE)!;
     expect(five.tag).toBe(HOTSPOT_TAG);
@@ -134,14 +142,14 @@ describe('a model’s ranking is shown as a recommendation, with its citations',
   });
 
   it('folds one line of figures out of the answer and never composes a number', () => {
-    const view = recommendationOf({ outcome: ANSWERED, judge: JUDGE_SAID });
+    const view = recommendationOf(SAID);
     expect(view.figures).toBe('2 residues ranked · 68 facts served · 1 refused · 1 judge disagreement');
     expect(view.said).toBe(null);
     expect(view.model).toBe('claude-sonnet-5');
   });
 
   it('SAYS IT IS A RECOMMENDATION, shows every cited id, and offers the picks to the crossfilter', async () => {
-    const view = recommendationOf({ outcome: ANSWERED, judge: JUDGE_SAID });
+    const view = recommendationOf(SAID);
     let selected: readonly string[] | null = null;
     const panel = await mount(<Recommendation {...view} focused select={{ label: 'select these 2 residues across the desk', onPress: () => void (selected = view.rows.map((r) => r.residue)) }} />);
     const words = panel.words();
@@ -158,7 +166,7 @@ describe('a model’s ranking is shown as a recommendation, with its citations',
   });
 
   it('shows the refusal VERBATIM AND BY NAME, with the name the model gave', async () => {
-    const view = recommendationOf({ outcome: ANSWERED, judge: JUDGE_SAID });
+    const view = recommendationOf(SAID);
     const panel = await mount(<Recommendation {...view} focused />);
     expect(panel.words()).toContain('the model named "Z:999" and this run\'s residue table has no row for it');
     expect(panel.words()).toContain('refused by name');
@@ -166,7 +174,7 @@ describe('a model’s ranking is shown as a recommendation, with its citations',
   });
 
   it('SHOWS THE JUDGE’S DISAGREEMENT rather than smoothing it over — and keeps the ranking', async () => {
-    const view = recommendationOf({ outcome: ANSWERED, judge: JUDGE_SAID });
+    const view = recommendationOf(SAID);
     const panel = await mount(<Recommendation {...view} focused />);
     const words = panel.words();
     expect(words).toContain('the model declared the "read_evidence" result fact and the judge read it as noise');
@@ -177,7 +185,7 @@ describe('a model’s ranking is shown as a recommendation, with its citations',
   });
 
   it('puts the same disagreement, the refusal and the judge into the card’s own note', () => {
-    const card = hotspotCard({ name: 'Hot Spot Prediction', label: 'Which residues a model would call hot' }, { outcome: ANSWERED, judge: JUDGE_SAID });
+    const card = hotspotCard({ name: 'Hot Spot Prediction', label: 'Which residues a model would call hot' }, SAID);
     expect(card.why).toContain('IT DID NOT AGREE WITH THE MODEL, and both readings are on the record');
     expect(card.why).toContain(REFUSE_NOT_IN_TABLE('Z:999'));
     expect(card.why).toContain('The model asked was claude-sonnet-5.');
@@ -198,14 +206,67 @@ describe('a model’s ranking is shown as a recommendation, with its citations',
   });
 });
 
+// ── the card declares which cursor its answer is about ──────────────────────
+
+/**
+ * STAGE 5 IS THE ONE CARD ON THIS DESK THAT IS NOT DRAWN AT THE CURSOR, and
+ * the resolution is that it SAYS SO rather than pretending otherwise.
+ *
+ * It is asked once, from the rows at the end of the run, because that is what
+ * the stage reads (`src/prot/hotspots.ts` · `notTheEndOfTheRun`). So the card
+ * carries both commits — the one its evidence came from and the one the ranking
+ * landed as — and when a reader steps behind the second one it says the rows
+ * underneath carry no rank at all.
+ */
+describe('the card says which cursor its answer is about', () => {
+  it('names both commits: where the evidence was read and where the ranking landed', async () => {
+    const view = recommendationOf(SAID);
+    expect(view.where).toBe('asked once, from the rows at commit s4 — the end of what stages 1 to 4 landed — and the ranking landed as commit s5');
+    const panel = await mount(<Recommendation {...view} focused />);
+    expect(panel.words()).toContain('asked once, from the rows at commit s4');
+    expect(panel.words()).toContain('the ranking landed as commit s5');
+    await panel.unmount();
+  });
+
+  it('says an absent commit rather than leaving it blank', () => {
+    expect(recommendationOf({ ...SAID, at: null, landed: null }).where).toBe('asked once, from the rows at the root of this log — the end of what stages 1 to 4 landed — and the ranking landed no commit of its own');
+  });
+
+  it('SAYS the rows carry no rank when the reader has stepped behind the ranking', async () => {
+    const path = ['s1', 's2', 's3', 's4', 's5'];
+    // at or after: nothing to say, and an absence is absent
+    expect(rankingVsCursor('s5', path, 's5')).toBe(null);
+    // behind it: the rows really do not carry a rank there
+    const said = rankingVsCursor('s5', path, 's3')!;
+    expect(said).toContain('The cursor is standing behind commit s5, which is where this ranking landed');
+    expect(said).toContain('the rows on this desk carry no rank at all');
+    const panel = await mount(<Recommendation {...recommendationOf(SAID)} focused behind={said} />);
+    expect(panel.words()).toContain('the rows on this desk carry no rank at all');
+    // and the answer is STILL shown, as the answer it was given
+    expect(panel.words()).toContain('A:57');
+    await panel.unmount();
+  });
+
+  it('says nothing about a cursor it cannot place, and nothing about a ranking that landed nothing', () => {
+    // a fork: this page draws no branch map, so it does not guess
+    expect(rankingVsCursor('s5', ['s1', 's5'], 'elsewhere')).toBe(null);
+    expect(rankingVsCursor(null, ['s1'], 's1')).toBe(null);
+    expect(rankingVsCursor('s5', ['s1'], null)).toBe(null);
+  });
+
+  it('a failure has no basis line, because there is no answer for one to be about', () => {
+    expect(recommendationOf(NO_KEY_SAID).where).toBe(null);
+  });
+});
+
 // ── 3. a server, and no key ──────────────────────────────────────────────────
 
 describe('no key ⇒ the desk shows stage 5 unavailable for THAT reason, not the static build’s', () => {
   it('the card carries the door’s sentence where its ranking would be', async () => {
-    const view = recommendationOf({ outcome: NO_KEY, judge: 'no second source read anything' });
+    const view = recommendationOf(NO_KEY_SAID);
     expect(view.rows).toEqual([]);
     expect(view.said).toBe(NO_KEY_SENTENCE);
-    const card = railCards({ outcome: NO_KEY, judge: 'no second source read anything' }).find((c) => c.id === HOTSPOTS_STAGE)!;
+    const card = railCards(NO_KEY_SAID).find((c) => c.id === HOTSPOTS_STAGE)!;
     // THE RAIL'S ONE LINE is the sentence's first clause, cut at a punctuation
     // boundary the way every blocked card's is — and the WHOLE sentence is in
     // the card's own note, so the cut is never the only copy
@@ -237,7 +298,7 @@ describe('no key ⇒ the desk shows stage 5 unavailable for THAT reason, not the
       { ok: false as const, kind: 'malformed' as const, sentence: 'the model answered and the answer is not the one object stage 5 asked for.', verdicts: [] },
       { ok: false as const, kind: 'cites-nothing' as const, sentence: 'the model answered with 3 rankings and not one of them cited a fact id.', verdicts: [] },
     ]) {
-      const view = recommendationOf({ outcome, judge: JUDGE_SAID });
+      const view = recommendationOf({ outcome, judge: JUDGE_SAID, at: 's4', landed: null });
       expect(view.rows).toEqual([]);
       expect(view.said).toBe(outcome.sentence);
       // never an empty list with no words: the sentence IS what the card shows

@@ -270,13 +270,29 @@ export interface RecommendationView {
   readonly disagreements: readonly string[];
   /** The sentence, when there is no ranking to show. `null` when there is one. */
   readonly said: string | null;
+  /**
+   * WHICH CURSOR THIS ANSWER IS ABOUT — one line, always present when there is
+   * a ranking.
+   *
+   * Every other picture on this desk is drawn at the cursor. Stage 5 cannot be:
+   * it reads what stages 1 to 4 LANDED, so it is asked once, from the rows at
+   * the end of the run (`src/prot/hotspots.ts` · `notTheEndOfTheRun` refuses
+   * any other read). That makes this line load-bearing rather than decoration —
+   * the card DECLARES its own basis instead of letting a reader take it for a
+   * picture of wherever they are standing.
+   */
+  readonly where: string | null;
 }
 
-/** What the page hands the fold: the stage's own answer, and what the door said about the judge behind it. */
+/** What the page hands the fold: the stage's own answer, what the door said about the judge behind it, and the two commits the answer sits between. */
 export interface HotspotCardInput {
   readonly outcome: HotspotOutcome;
   /** The door's own sentence about which judge ran (`server/prot-doors.ts` · `ProtStateWire.judge`). */
   readonly judge: string;
+  /** The commit the evidence was read AT — the end of the run, by construction (`src/prot/hotspots.ts` · `notTheEndOfTheRun`). */
+  readonly at: string | null;
+  /** The commit the ranking itself landed as, or `null` where nothing landed. */
+  readonly landed: string | null;
 }
 
 /**
@@ -320,7 +336,7 @@ export function hotspotCard(step: { readonly name: string; readonly label: strin
 }
 
 /** The answer, folded — one function, so the card and the record drawer cannot say it two ways. */
-export function recommendationOf({ outcome, judge }: HotspotCardInput): RecommendationView {
+export function recommendationOf({ outcome, judge, at, landed }: HotspotCardInput): RecommendationView {
   if (!outcome.ok) {
     return {
       tag: HOTSPOT_TAG,
@@ -332,6 +348,7 @@ export function recommendationOf({ outcome, judge }: HotspotCardInput): Recommen
       verdicts: outcome.verdicts,
       disagreements: [],
       said: outcome.sentence,
+      where: null,
     };
   }
   return {
@@ -351,7 +368,37 @@ export function recommendationOf({ outcome, judge }: HotspotCardInput): Recommen
     verdicts: outcome.verdicts,
     disagreements: outcome.disagreements,
     said: null,
+    // BOTH COMMITS, because they are two different facts: the one the evidence
+    // was read at, and the one the ranking itself landed as. Either can be
+    // absent — a run that landed nothing to read from, or an answer nothing
+    // could land — and an absent commit is said rather than left blank.
+    where:
+      `asked once, from the rows at ${at === null ? 'the root of this log' : `commit ${at}`} — the end of what stages 1 to 4 landed — and ` +
+      (landed === null ? 'the ranking landed no commit of its own' : `the ranking landed as commit ${landed}`),
   };
+}
+
+/**
+ * THE READER HAS STEPPED BEHIND THE RANKING — one line, on the card, derived
+ * from the two facts and from no press.
+ *
+ * The columns stage 5 landed are resolved AT THE CURSOR like every other
+ * stage's, so behind that commit the rows carry no rank and a chart bound to
+ * one is refused by name. The card still holds the answer as it was given, and
+ * without this line a reader would be looking at a ranking the rows underneath
+ * it do not have — the same disagreement `focusVsCursor` exists for, one fact
+ * further along.
+ *
+ * `null` when the cursor is at or after the commit, and `null` when the cursor
+ * is not on the active path at all: this page draws no branch map, so it cannot
+ * say where such a cursor sits and does not pretend to.
+ */
+export function rankingVsCursor(landed: string | null, activePathIds: readonly string[], cursor: string | null): string | null {
+  if (landed === null || cursor === null) return null;
+  const standing = activePathIds.indexOf(cursor);
+  const ranked = activePathIds.indexOf(landed);
+  if (standing < 0 || ranked < 0 || standing >= ranked) return null;
+  return `The cursor is standing behind commit ${landed}, which is where this ranking landed — so the rows on this desk carry no rank at all, and what is below is the answer as it was given rather than anything these rows hold.`;
 }
 
 /**

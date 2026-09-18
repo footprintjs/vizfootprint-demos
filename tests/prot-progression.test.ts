@@ -60,24 +60,31 @@ const pickOneContact = (surface: ProtSurface) =>
     cause: { requestedBy: 'user', computedBy: 'user', intent: 'pick the residues with one contact across the interface' },
   });
 
-/** The gesture the run's actor meta advertises: a drag across the axis. */
+/**
+ * The gesture the surface run can make — a POINT, which is what it declares.
+ *
+ * It used to be an INTERVAL here, and that was wrong in a way this suite could
+ * not see: a line over a BAND lands slots (a match) or one slot (a point),
+ * never a range, so the session refused these for the CAPABILITY and the
+ * missing column the gesture exists to name never reached the sentence.
+ */
 const keepTheBuried = (surface: ProtSurface) =>
   surface.session.dispatch({
-    verb: 'filter',
+    verb: 'select',
     viewId: SURFACE_VIEW,
     field: SASA_COLUMN,
-    range: [0, 1],
-    cause: { requestedBy: 'user', computedBy: 'user', intent: 'keep the residues the solvent barely reaches' },
+    value: 0,
+    cause: { requestedBy: 'user', computedBy: 'user', intent: 'pick the residues the solvent cannot reach at all' },
   });
 
-/** The gesture the conservation run's actor meta advertises: a drag across the axis, keeping the best-agreed columns. */
+/** The same, at the conservation run: the columns its family never varies. */
 const keepTheConserved = (surface: ProtSurface) =>
   surface.session.dispatch({
-    verb: 'filter',
+    verb: 'select',
     viewId: CONSERVATION_VIEW,
     field: CONSERVATION_COLUMN,
-    range: [0.9, 1],
-    cause: { requestedBy: 'user', computedBy: 'user', intent: 'keep the residues whose column the family agrees on most' },
+    value: 1,
+    cause: { requestedBy: 'user', computedBy: 'user', intent: 'pick the residues their family never varies' },
   });
 
 /** The sentence a dispatch was refused with, or `null` when it landed. */

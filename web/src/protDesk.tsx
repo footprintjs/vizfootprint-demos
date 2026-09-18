@@ -109,7 +109,7 @@ import {
   type RegionSplit,
   type SplitStop,
 } from './workbench/charts.js';
-import { focusVsCursor, railCards, stageWords, type BlockedCard, type HotspotCardInput } from './workbench/panel.js';
+import { focusVsCursor, railCards, rankingVsCursor, stageWords, type BlockedCard, type HotspotCardInput } from './workbench/panel.js';
 import { STEPPER_LABEL, actsLabelOf, stepViews } from './workbench/steps.js';
 import { useWorkbenchInk } from './workbench/tokens.js';
 
@@ -856,6 +856,14 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         <Recommendation
           {...b.recommendation}
           focused={focused}
+          /*
+            THE READER HAS STEPPED BEHIND THE RANKING — derived here rather than
+            at fold time, because the cursor moves and the answer does not. It
+            is the two facts and no press (`workbench/panel.ts` ·
+            `rankingVsCursor`), so it is right after a seek from the record
+            drawer exactly as it is after a press on the stepper.
+          */
+          behind={rankingVsCursor(hotspots?.landed ?? null, state.activePathIds, state.cursor)}
           {...(onSelectPicks === undefined || b.recommendation.rows.length === 0
             ? {}
             : {
@@ -1336,7 +1344,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
             <BlockedGroup
               label={waiting.some((b) => b.recommendation !== undefined) ? 'the declared steps of the plan with no picture of their own — what a model said, and which kind of blocked the rest are' : 'the declared steps this build will not run, and which kind of blocked each one is'}
               heading={waiting.some((b) => b.recommendation !== undefined) ? 'declared \u00b7 one ran, the rest will not' : undefined}
-              rows={waiting.map((b) => ({ id: b.id, name: b.name, tag: b.tag, short: b.short, promote: { label: promoteCardLabel(b.name), onPress: () => setPromoted({ stage: here?.stage ?? null, id: b.id }) } }))}
+              rows={waiting.map((b) => ({ id: b.id, name: b.name, tag: b.tag, short: b.short, promote: { label: promoteCardLabel(b.name, b.recommendation === undefined), onPress: () => setPromoted({ stage: here?.stage ?? null, id: b.id }) } }))}
             />
           )}
         </div>

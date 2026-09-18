@@ -45,7 +45,7 @@ import { INTERFACE_VIEW, PROT_WORDS, RESIDUES_TABLE, RESIDUE_KEY } from '../../s
 import { landHotspots, openProtSurfaceAsync, protSurfaceProblems, residuesAt, type ProtSurface } from '../../src/prot/session.js';
 import { ARCHIVE_LICENCE, EXAMPLE_ENTRY, browserArchive, openEntryBytes } from '../../src/prot/archive.js';
 import { blockingSentence, entryNotes, readEntryBytes, type EntryNote } from '../../src/prot/entryNotes.js';
-import { HOTSPOTS_ACT, HOTSPOTS_STAGE, hotspotLedger, hotspotSlot, type HotspotFailure, type HotspotLedger, type HotspotOutcome } from '../../src/prot/hotspots.js';
+import { HOTSPOTS_ACT, HOTSPOTS_STAGE, coverRefusal, hotspotLedger, hotspotSlot, landedThrough, notTheEndOfTheRun, type HotspotFailure, type HotspotLedger, type HotspotOutcome } from '../../src/prot/hotspots.js';
 import type { ActOutcome } from '../../src/prot/orchestrator.js';
 import { EntryNotes, ProtLanding, entryInUrl, urlForEntry } from './protLanding.js';
 import { useResiduesAtCursor } from './protRows.js';
@@ -92,7 +92,7 @@ async function askDoorForHotspots(ledger: HotspotLedger): Promise<HotspotOutcome
     // THE LEDGER'S OWN FIELDS AND NOTHING INVENTED FOR THE REQUEST: the facts,
     // the residue keys the door judges a named residue against, the sentence
     // about which residues it covers, and which acts it was read off
-    body: JSON.stringify({ facts: ledger.facts, residues: ledger.residues, basis: ledger.basis, from: ledger.from }),
+    body: JSON.stringify({ facts: ledger.facts, residues: ledger.residues, basis: ledger.basis, from: ledger.from, at: ledger.at }),
   });
   const said = (await res.json()) as Partial<{ readonly ok: boolean; readonly kind: string; readonly sentence: string }> & Record<string, unknown>;
   if (said.ok === true) return said as unknown as HotspotOutcome;
@@ -176,24 +176,55 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
   // published build's. Both halves of the screen are told — the stepper through
   // an outcome, the card through the sentence — so the mark and the words cannot
   // disagree about why.
-  if (door.mode === 'none' || slot === null) {
-    const sentence = door.reason ?? 'the door did not say why stage 5 cannot run here, which is itself worth reporting';
-    const outcome = refusedHere(sentence);
-    onOutcome(outcome);
+  /**
+   * STAGE 5 DID NOT RUN, AND THE PAGE SAYS WHICH KIND OF *did not* — one
+   * closure, three callers below, so the stepper and the card are told by the
+   * same line and cannot disagree about why.
+   */
+  const notAsked = async (outcome: HotspotOutcome & { readonly ok: false }): Promise<Opened> => {
+    const refused = refusedHere(outcome.sentence);
+    onOutcome(refused);
     return {
       ok: true,
       booted: {
         ...common,
         checks: [...(await surface.dashboard.lintData()), ...protSurfaceProblems(surface)],
-        hotspotOutcome: outcome,
-        hotspots: { outcome: { ok: false, kind: 'no-key', sentence, verdicts: [] }, judge: 'no second source read anything: nothing was asked of a model, so nothing was judged' },
+        hotspotOutcome: refused,
+        hotspots: { outcome, judge: door.judge?.said ?? 'no second source read anything: nothing was asked of a model, so nothing was judged', at: null, landed: null },
       },
     };
+  };
+  // NO KEY: the stage did not run, and the reason is the DOOR'S rather than the
+  // published build's.
+  if (door.mode === 'none' || slot === null) {
+    return notAsked({ ok: false, kind: 'no-key', sentence: door.reason ?? 'the door did not say why stage 5 cannot run here, which is itself worth reporting', verdicts: [] });
   }
   // THE LEDGER, OFF THIS RUN'S OWN RECORDERS — the rows at the cursor and the
   // acts' own `materialized`, never a number computed again for the model
   const rows = await residuesAt(surface.session, surface.tables);
-  const ledger = hotspotLedger(surface.run, rows.rows);
+  /**
+   * WHICH CURSOR THIS STAGE IS ABOUT — the end of the run, and the guard says
+   * so rather than leaving it to the fact that a boot happens to read there.
+   *
+   * It is checked on the PAGE because the page is the only place that holds the
+   * run and the read together (`src/prot/hotspots.ts` · `notTheEndOfTheRun`
+   * carries the whole argument). A read from anywhere else is refused and no
+   * model is asked: a ranking folded from part of the evidence would answer a
+   * question nobody asked.
+   */
+  const partial = notTheEndOfTheRun(surface.run, rows.cursor);
+  if (partial !== null) return notAsked({ ok: false, kind: 'not-the-end', sentence: partial, verdicts: [] });
+  const ledger = hotspotLedger(surface.run, rows.rows, rows.cursor);
+  /**
+   * AND A PILE THIS PAGE ALREADY KNOWS IS DOOMED NEVER GOES ON THE WIRE.
+   *
+   * The door judges the cover again off what arrives, and it must — it is what
+   * spends the call. But a page that posted seventy kilobytes of facts to be
+   * told they are not a cover would be spending a round trip to read a sentence
+   * it could already read. One owner (`coverRefusal`), two callers.
+   */
+  const doomed = coverRefusal(ledger);
+  if (doomed !== null) return notAsked(doomed);
   const answer = await askDoorForHotspots(ledger);
   // FROZEN THE MOMENT IT ARRIVES: the act lands before anything on this page
   // compares the ranking to anything else
@@ -206,13 +237,19 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
       // read AFTER the act, so a column it could not land is in this list
       checks: [...(await surface.dashboard.lintData()), ...protSurfaceProblems(surface)],
       hotspotOutcome: outcome,
-      hotspots: { outcome: answer, judge: door.judge?.said ?? 'the door named no judge' },
+      // THE TWO COMMITS the answer sits between: the one its evidence was read
+      // at (the end of the run) and the one the ranking itself landed as. The
+      // card prints both, so it declares which cursor it is about rather than
+      // being taken for a picture of wherever the reader is standing.
+      hotspots: { outcome: answer, judge: door.judge?.said ?? 'the door named no judge', at: ledger.at ?? landedThrough(surface.run), landed: outcome.commit },
     },
   };
 }
 
 function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; onSearchAgain(): void }): JSX.Element {
   const { surface, checks, notes } = booted;
+  /** What the session said if it refused the picks as a selection — shown with the desk's other checks, never swallowed. */
+  const [pickRefusal, setPickRefusal] = useState<string | null>(null);
   const view = useMemo(() => createSessionView(sessionSource(surface.session), { as: 'user', defaultLayout: 'grid' }), [surface.session]);
   const residues = useResiduesAtCursor(view, surface.session, surface.tables, surface.residues);
   /** The outcomes the stepper folds: the run's own, plus stage 5's. */
@@ -230,15 +267,40 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
    */
   const onSelectPicks = useCallback(
     (picks: readonly string[]): void => {
-      void surface.session.dispatch({
-        verb: 'select',
-        viewId: INTERFACE_VIEW,
-        field: RESIDUE_KEY,
-        values: picks,
-        cause: { requestedBy: 'user', computedBy: 'user', intent: `keep the ${String(picks.length)} residues a model ranked as hot spots, so every other picture on this desk narrows to them` },
-      });
+      /*
+        THROUGH THE VIEW, AND NOT THROUGH THE SESSION — a REAL BROWSER is what
+        taught this, and the failure was silent.
+
+        It dispatched straight on the session first. The act landed, the log
+        grew, and **not one picture moved**: 185 dots stayed 185, and no pane
+        said a clause had reached it. Every other gesture on this desk goes
+        through `view.emit` (`./protCells.tsx` · `emit`), which is the ONE
+        cursor the charts are folded at — *two views over one session would be
+        two cursors, and a reader pressing this would move the one the pictures
+        are not reading* (`web/site/prot/entry.tsx` says it about the view it
+        memoises). A dispatch beside that view is exactly that second cursor.
+
+        And it is a MATCH rather than six points: the emission carries the list
+        and its polarity as one `MatchValue`, which is what *a set is a point's
+        plural, never a new capability* means on the wire. `interface` declares
+        `point`, and the library's own law is that a view declaring only point
+        ACCEPTS a match.
+      */
+      void view
+        .emit(
+          INTERFACE_VIEW,
+          { rawValue: { values: [...picks] }, encoding: { kind: 'match', field: RESIDUE_KEY } },
+          `keep the ${String(picks.length)} residues a model ranked as hot spots, so every other picture on this desk narrows to them`,
+        )
+        .catch((error: unknown) => {
+          // A REFUSED GESTURE IS NEVER SWALLOWED. The first version of this
+          // `void`ed the promise, so a session that refused the emission looked
+          // exactly like one that accepted it and changed nothing — which is
+          // the failure this desk is built against.
+          setPickRefusal(error instanceof Error ? error.message : String(error));
+        });
     },
-    [surface.session],
+    [view],
   );
   const data: ProtDeskData = {
     residues: (residues.refused === null ? residues.rows : surface.tables.residues) as readonly Row[],
@@ -255,7 +317,7 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
       data={data}
       run={surface.run}
       outcomes={outcomes}
-      checks={checks}
+      checks={pickRefusal === null ? checks : [...checks, `the model's picks were refused as a selection, in the library's own words: ${pickRefusal}`]}
       session={surface.session}
       table={RESIDUES_TABLE}
       rowsNote={{ quiet: true, line: <ServedRowsNote rows={residues.rows.length} cursor={residues.cursor} refused={residues.refused} /> }}

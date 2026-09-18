@@ -218,11 +218,21 @@ export function structureArtifact(at: string, text: string): StructureArtifact {
  * loading flag — and every visitor arrives AFTER the stages, so a page that did
  * not make the gesture could only quote it.
  *
- * The gesture each chart's actor meta advertises is the gesture made here: a
- * POINT on the bar (one residue), an INTERVAL on the run (a range of residue
- * numbers). Both land NOTHING by construction — a refused dispatch makes no
- * commit — so the log a reader walks is unchanged and the only trace is the gap
- * row, which is exactly the trace a refusal should leave.
+ * THE GESTURE EACH CHART MAKES HERE IS THE GESTURE THAT CHART CAN MAKE — a
+ * POINT at all three, because that is the voice all three declare (`./def.ts` ·
+ * `capabilities`). The two runs used to probe with an INTERVAL, on the recorded
+ * belief that a line's brush is a range of residue numbers. It is not: both
+ * runs are drawn over a BAND, so a drag on them lands the slots it covered (a
+ * MATCH) and a tap lands one slot (a POINT) — and by the library's SET-1 law a
+ * view declaring `point` accepts both. An interval was a voice they never had,
+ * so the session refused these probes FOR THE CAPABILITY — *view "surface" does
+ * not encode a interval selection* — which is a true sentence about the wrong
+ * thing: it hid the missing column these gestures exist to name. Probing with
+ * the declared kind puts the column back in the refusal.
+ *
+ * All three land NOTHING by construction — a refused dispatch makes no commit —
+ * so the log a reader walks is unchanged and the only trace is the gap row,
+ * which is exactly the trace a refusal should leave.
  *
  * A gesture that is ACCEPTED here comes back as `null`, and that is a real
  * failure the caller reports rather than swallows: it would mean the column was
@@ -237,11 +247,11 @@ export async function probeTheUnlandedColumns(session: InteractionSession): Prom
     cause: { requestedBy: 'system', computedBy: 'system', intent: `pick the residues with one contact across the interface, before the stage that counts them has run` },
   });
   const run = await session.dispatch({
-    verb: 'filter',
+    verb: 'select',
     viewId: SURFACE_VIEW,
     field: SASA_COLUMN,
-    range: [0, 1],
-    cause: { requestedBy: 'system', computedBy: 'system', intent: 'keep the residues the solvent barely reaches, before the stage that measures them has run' },
+    value: 0,
+    cause: { requestedBy: 'system', computedBy: 'system', intent: 'pick the residues the solvent cannot reach at all, before the stage that measures them has run' },
   });
   // THE THIRD GESTURE, at the third chart declared over a column no act has
   // landed. It is the same claim as the other two, at a chart whose evidence is
@@ -249,11 +259,11 @@ export async function probeTheUnlandedColumns(session: InteractionSession): Prom
   // the read is what judges a binding, so the picture cannot draw and the
   // LIBRARY is what says why.
   const conserved = await session.dispatch({
-    verb: 'filter',
+    verb: 'select',
     viewId: CONSERVATION_VIEW,
     field: CONSERVATION_COLUMN,
-    range: [0.9, 1],
-    cause: { requestedBy: 'system', computedBy: 'system', intent: 'keep the residues whose column the family agrees on most, before the stage that places them in it has run' },
+    value: 1,
+    cause: { requestedBy: 'system', computedBy: 'system', intent: 'pick the residues their family never varies, before the stage that places them in it has run' },
   });
   return {
     [INTERFACE_VIEW]: bar.ok ? null : bar.rejection.detail,

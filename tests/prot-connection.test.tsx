@@ -37,7 +37,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { buildDashboard } from 'vizfootprint';
-import { createSessionView, sessionSource, type ChartEmission, type RenderSelection, type SelectionClauseView, type SessionView } from 'vizfootprint-ui';
+import { createSessionView, matchEmission, sessionSource, type ChartEmission, type RenderSelection, type SelectionClauseView, type SessionView } from 'vizfootprint-ui';
 import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW, protDef } from '../src/prot/def.js';
 import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
 import { entryCredit, protTables } from '../src/prot/etl.js';
@@ -97,6 +97,18 @@ const BARS = new Set(ROWS.filter((r) => placed(r[INTERFACE_CONTACTS_COLUMN])).ma
 const POINTS = ROWS.filter((r) => placed(r[SASA_COLUMN])).length;
 const RESIDUES = ROWS.length;
 const RESNUMS = ROWS.map((r) => Number(r['resnum'])).filter((n) => Number.isFinite(n));
+
+/**
+ * EVERY residue number on the table, as the run's own gesture spells it.
+ *
+ * NOT an interval: both runs are drawn over a BAND, so a drag on one lands the
+ * SLOTS it covered — a match — and a tap lands one slot. An interval was a
+ * voice these two never had, and declaring it (`../src/prot/def.ts` ·
+ * `capabilities`) is what made a real reader's drag refuse for three packets.
+ * A match over every number is the same claim this suite always made — *keep
+ * every residue number* — in the kind the picture can actually make.
+ */
+const EVERY_RESNUM = [...new Set(RESNUMS)];
 
 /** A residue that HAS both angles, so a pick on it leaves the scatter one dot rather than none. */
 const PICKED = String(ROWS.find((r) => placed(r['phi']) && placed(r['psi']))![RESIDUE_KEY]);
@@ -219,7 +231,7 @@ describe('STATE 2 — a clause that reached a pane and cut NOTHING says so, beca
     await clearAll();
     // the whole range of residue numbers: every row is inside it, so this
     // clause filters nothing anywhere — the state that used to be silent
-    await pick(SURFACE_VIEW, { rawValue: [Math.min(...RESNUMS), Math.max(...RESNUMS)], encoding: { kind: 'interval', field: 'resnum' } }, 'keep every residue number');
+    await pick(SURFACE_VIEW, matchEmission('resnum', EVERY_RESNUM), 'keep every residue number');
   });
 
   it('quotes the library own words — *filtered nothing here* — and keeps the count in front of them', () => {
@@ -282,7 +294,7 @@ describe('EVERY PANE BUT THE SOURCE SPEAKS — and each one about its own marks'
       expect(focusLine(id), id).toContain(`of ${narrowing.total.toLocaleString('en-US')} ${narrowing.unit}`);
     }
     await clearAll();
-    await pick(SURFACE_VIEW, { rawValue: [Math.min(...RESNUMS), Math.max(...RESNUMS)], encoding: { kind: 'interval', field: 'resnum' } }, 'keep every residue number');
+    await pick(SURFACE_VIEW, matchEmission('resnum', EVERY_RESNUM), 'keep every residue number');
     for (const id of panes) say(`  a drag over every residue number → ${id}: ${String(focusLine(id))}`);
     expect(panes.filter((id) => focusLine(id) === null)).toEqual([SURFACE_VIEW]);
     say(`  the marks each pane has at rest: ${String(RESIDUES)} residues · ${String(DOTS)} dots · ${String(BARS)} bars · ${String(POINTS)} points · ${String(PAIR_ROWS.length)} receipt rows`);

@@ -800,9 +800,34 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
     // `interface` emits a POINT and nothing else — `VizBar`'s gesture is a
     // click on one bar, which is one residue. Not an interval: a bar chart has
     // no brush, and the actor meta says "drag" nowhere.
-    // `surface` emits an INTERVAL and nothing else — `VizLine`'s only gesture
-    // is its horizontal brush, which here is a range of residue numbers. It has
-    // no point click, so a `point` would be a voice the picture lacks.
+    // `surface` and `conservation` emit a POINT — and by the library's own
+    // SET-1 law that is also the drag. BOTH RUNS ARE DRAWN OVER A BAND, which is
+    // the fact everything else here follows from: x is `resnum`, and the frame
+    // hands `VizLine` a categorical domain for it, so the chart takes its BAND
+    // arms and its slots are named by the string forms of the numbers — "1",
+    // "2", "3" (measured off the live page: the runs' own tick text and their
+    // marks' titles; the "A:1" spellings on this desk belong to the `interface`
+    // bar, over a different column). On a band a drag lands the slots it
+    // covered (a MATCH) and a tap lands the slot under the pointer (a POINT,
+    // click-again-clears). Neither is an interval, and an interval is what these
+    // two declared for three packets.
+    //
+    // THE COST OF THAT, measured on this page rather than reasoned about: a
+    // reader dragged across the conservation run and nothing happened — 162
+    // marks before, 162 after, 0 outlined — while the record's refused-requests
+    // panel gained one row per drag, reading *guard-failed · select · view
+    // "conservation" does not encode a match selection*. The gesture drew, the
+    // clause was built, and the guard threw it away because this line had
+    // promised a voice it does not have. The library's own pin says it in one
+    // sentence: *a view declaring only point accepts a match; one declaring only
+    // interval refuses it as guard-failed* (`src/session/matchSelect.test.ts`).
+    //
+    // AND THE EARLIER COMMENT HERE RECORDED THE WRONG REASON, three times over:
+    // it said the brush was "a range of residue numbers" (it is a set of slot
+    // NAMES), and it said the picture has "no point click" (the band arm's tap
+    // is exactly that, and was built to make a 4.6px slot reachable). The
+    // correction is written here, where the wrong claim was, because the next
+    // reader trusts this comment more than any commit message.
     // `pairs` CANNOT probe, and for a reason no other view on this desk has:
     // its rows are not in the data space at all (`./analyses.ts`), so there is
     // no clause a gesture on it could even be ABOUT. It is not a consumer
@@ -813,11 +838,11 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
       { viewId: STRUCTURE_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: RAMA_VIEW, canProbe: true, encodings: ['interval'] },
       { viewId: INTERFACE_VIEW, canProbe: true, encodings: ['point'] },
-      { viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] },
-      // `conservation` emits an INTERVAL and nothing else — `VizLine`'s only
-      // gesture is its horizontal brush, which here is a range of residue
-      // numbers. No point click, so a `point` would be a voice it lacks.
-      { viewId: CONSERVATION_VIEW, canProbe: true, encodings: ['interval'] },
+      { viewId: SURFACE_VIEW, canProbe: true, encodings: ['point'] },
+      // one declaration for both runs, for one reason: they are the same chart
+      // over the same band, so a voice that differed between them would be a
+      // claim about `residue_key` that changes with which picture you press.
+      { viewId: CONSERVATION_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: PAIRS_VIEW, canProbe: false },
       { viewId: SHEET_VIEW, canProbe: false },
     ],

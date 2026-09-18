@@ -58,6 +58,8 @@ import {
   HOTSPOT_WANT,
   NO_KEY_SENTENCE,
   askHotspots,
+  basisSaid,
+  coverVerdict,
   providerJudge,
   scriptedHotspotModel,
   scriptedJudge,
@@ -222,7 +224,43 @@ export function ledgerOf(body: Record<string, unknown>): HotspotLedger | { reado
   }
   const basis = typeof body['basis'] === 'string' ? body['basis'] : 'the page sent no sentence about which residues this ledger covers';
   const from = Array.isArray(body['from']) ? (body['from'] as readonly unknown[]).flatMap((act) => (typeof act === 'string' ? [act] : [])) : [...new Set(read.map((f) => f.from))];
-  return { facts: read, residues: residues as readonly string[], basis, from };
+  /**
+   * THE COVER IS JUDGED HERE TOO, off the pile that actually arrived — and this
+   * is a BELT rather than a duplicate.
+   *
+   * The page folds the ledger and decides what it covers (`src/prot/hotspots.ts`
+   * · `coverVerdict`), and for one release a fault there sent **717 facts over
+   * all 185 residues** and this door asked a model to rank hot spots out of
+   * them. The door cannot re-run the rule — it never sees the rows — but it can
+   * ask the same question of what it was handed: *how many residues are these
+   * facts about, against the table they were judged against?* A pile covering
+   * half the table or more is refused before a call is spent, whoever sent it
+   * and whatever they believed about it.
+   *
+   * The DOOR's verdict wins over the page's, because the door is what spends
+   * the call. `at` is carried through so the answer can say which cursor it is
+   * about.
+   */
+  const covered = new Set(read.map((fact) => fact.residue)).size;
+  const cover = coverVerdict(covered, residues.length);
+  return {
+    facts: read,
+    residues: residues as readonly string[],
+    /**
+     * A SENTENCE ABOUT THE COVER BELONGS TO WHOEVER JUDGED THE COVER.
+     *
+     * The page's own basis is kept where this door AGREES it is a cover — the
+     * page has the rows and can name the column it read. Where this door
+     * refuses, the page's sentence is a claim about a cover that is not one, and
+     * quoting it would put the door's verdict under the page's wording. So the
+     * door writes its own, from the one owner of those words.
+     */
+    basis: cover === 'covers' ? basis : basisSaid(cover, covered, residues.length),
+    from,
+    covered,
+    cover,
+    at: typeof body['at'] === 'string' ? body['at'] : null,
+  };
 }
 
 /**

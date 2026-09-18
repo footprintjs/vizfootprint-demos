@@ -63,14 +63,28 @@ const run: ProtRun = {
   conservation: null,
 };
 
-const LEDGER: HotspotLedger = hotspotLedger(run, [
-  { [ACT_KEY_COLUMN]: 'A:57', chain: 'A', resnum: 57, resname: 'GLU', contacts: 14, interface_contacts: 4, interface_separation: 2.81, sasa: 18.4, relative_sasa: 0.12 },
-  { [ACT_KEY_COLUMN]: 'B:35', chain: 'B', resnum: 35, resname: 'ARG', contacts: 9, interface_contacts: 3, interface_separation: 3.02, sasa: 41.2, relative_sasa: 0.3 },
-  { [ACT_KEY_COLUMN]: 'A:12', chain: 'A', resnum: 12, resname: 'ALA', contacts: 2, sasa: 90.1, relative_sasa: 0.8 },
-]);
+/**
+ * Two residues at the interface in a table of six — a proper minority, so a
+ * cover. Only the two carry `interface_separation`, which is the column the
+ * act lands ABSENT and the one the cover is read off; every row carries an
+ * `interface_contacts` COUNT, including the zeros, which is what made the
+ * cover wrong for a release.
+ */
+const LEDGER: HotspotLedger = hotspotLedger(
+  run,
+  [
+    { [ACT_KEY_COLUMN]: 'A:57', chain: 'A', resnum: 57, resname: 'GLU', contacts: 14, interface_contacts: 4, interface_separation: 2.81, sasa: 18.4, relative_sasa: 0.12 },
+    { [ACT_KEY_COLUMN]: 'B:35', chain: 'B', resnum: 35, resname: 'ARG', contacts: 9, interface_contacts: 3, interface_separation: 3.02, sasa: 41.2, relative_sasa: 0.3 },
+    { [ACT_KEY_COLUMN]: 'A:12', chain: 'A', resnum: 12, resname: 'ALA', contacts: 2, interface_contacts: 0, sasa: 90.1, relative_sasa: 0.8 },
+    { [ACT_KEY_COLUMN]: 'A:13', chain: 'A', resnum: 13, resname: 'GLY', contacts: 3, interface_contacts: 0, sasa: 61.2, relative_sasa: 0.6 },
+    { [ACT_KEY_COLUMN]: 'A:14', chain: 'A', resnum: 14, resname: 'SER', contacts: 1, interface_contacts: 0, sasa: 40.0, relative_sasa: 0.4 },
+    { [ACT_KEY_COLUMN]: 'B:70', chain: 'B', resnum: 70, resname: 'LEU', contacts: 0, interface_contacts: 0, sasa: 8.0, relative_sasa: 0.08 },
+  ],
+  's4',
+);
 
 /** What a page puts on the wire — the ledger's own fields and nothing invented for the request. */
-const wire = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ facts: LEDGER.facts, residues: LEDGER.residues, basis: LEDGER.basis, from: LEDGER.from, ...over });
+const wire = (over: Record<string, unknown> = {}): Record<string, unknown> => ({ facts: LEDGER.facts, residues: LEDGER.residues, basis: LEDGER.basis, from: LEDGER.from, at: LEDGER.at, ...over });
 
 // ── one request, answered ────────────────────────────────────────────────────
 
@@ -262,6 +276,44 @@ describe('POST /api/prot/hotspots answers the ranked list with its citations and
     expect(read.facts).toEqual(LEDGER.facts);
     expect(read.residues).toEqual(LEDGER.residues);
     expect(read.basis).toBe(LEDGER.basis);
+    // the cursor the rows were read at rides across, so the answer can say
+    // which one it is about
+    expect(read.at).toBe('s4');
+    expect(read.cover).toBe('covers');
+    expect(read.covered).toBe(2);
+  });
+
+  /**
+   * THE DOOR JUDGES THE COVER IT WAS HANDED, whoever sent it — the belt the
+   * 717-fact ask did not have.
+   *
+   * The page folds the ledger and decides what it covers, and for one release a
+   * fault there put facts for every one of 185 residues on the wire and this
+   * door asked a model to rank hot spots out of them. The door cannot re-run
+   * the rule, but it can ask the same question of the pile: how many residues
+   * are these facts about, against the table they are judged against?
+   */
+  it('REFUSES a pile that is not a cover before a single call is spent', async () => {
+    const desk = createProtDesk(scriptedHotspotDriver());
+    // the exact shape the bug produced: a fact per residue, over the whole table
+    const everything = LEDGER.residues.map((residue, at) => ({ id: `f${String(at + 1)}`, residue, text: `${residue} is a residue`, from: 'the parse' }));
+    const { status, body } = await ask(desk, 'POST', '/api/prot/hotspots', { facts: everything, residues: LEDGER.residues, basis: 'the page believed this was a cover', at: 's4' });
+    expect(status).toBe(200);
+    expect(body['ok']).toBe(false);
+    expect(body['kind']).toBe('no-cover');
+    expect(body['sentence']).toContain("the cover rule selected 6 of this run's 6 residues, and that is not a cover");
+    expect(body['sentence']).toContain('an ask nobody can answer is worse than one that was never made');
+    // AND NOTHING WAS ASKED OF A MODEL. That is the whole point: the refusal is
+    // reached without spending the call the old code spent to reach it.
+    expect(desk.asks).toHaveLength(1);
+    expect(desk.asks[0]).toMatchObject({ ok: false, kind: 'no-cover' });
+  });
+
+  it('the door’s own verdict wins over whatever the page believed about the pile', () => {
+    const read = ledgerOf({ facts: LEDGER.residues.map((residue, at) => ({ id: `f${String(at + 1)}`, residue, text: 'x', from: 'the parse' })), residues: LEDGER.residues, basis: 'the page said this was fine' });
+    expect('error' in read).toBe(false);
+    if ('error' in read) return;
+    expect(read.cover).toBe('not-a-cover');
   });
 
   it('hands every model failure through as its own sentence', async () => {

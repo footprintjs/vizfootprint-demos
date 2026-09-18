@@ -241,7 +241,23 @@ export function zeroGuideOf(frame: Readonly<Record<string, FrameAxis>> | undefin
 export const promoteChartLabel = (label: string): string => `bring ${label} into the focus — the picture, its full note, its own numbers and the stage that landed it`;
 
 /** What the control on the tile of a stage that will not run here is called. There is no picture to promote: what opens is the reason, at the size of the thing it is about. */
-export const promoteCardLabel = (name: string): string => `bring ${name} into the focus — it will not run on this build, and its card says why`;
+/**
+ * WHAT THE CONTROL ON A CARD OF WORDS IS CALLED — and it has to be told which
+ * KIND of card, because one of them is not blocked at all.
+ *
+ * A REAL BROWSER caught this: with stage 5 answering on the served desk, the
+ * card's tag read *a recommendation, not a measurement* and its accessible
+ * name still read *it will not run on this build*. A control whose name
+ * contradicts the card it opens is broken for exactly the reader who cannot
+ * see the tag — and *an accessible name is the card's only name for somebody
+ * using a screen reader*, so it may not be the one fact on the card that is
+ * stale.
+ *
+ * `blocked` is the boolean, never the words: the caller passes what it knows
+ * (`BlockedCard.recommendation === undefined`) and this file says it.
+ */
+export const promoteCardLabel = (name: string, blocked = true): string =>
+  blocked ? `bring ${name} into the focus — it will not run on this build, and its card says why` : `bring ${name} into the focus — what a model recommended, the facts each rank cites, and what was refused`;
 
 // ── THE BOUNDARY THE READER MOVES, and the floors that keep the layout's promise ──
 

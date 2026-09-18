@@ -362,6 +362,7 @@ It lands in the SLOT its blocked card used to occupy (`ChartCard.tsx · Recommen
 
 | the rule | how it is kept | what breaks it |
 |---|---|---|
+| a control's ACCESSIBLE NAME is not the one stale fact on the card | `charts.ts · promoteCardLabel(name, blocked)` takes the boolean and says which; a real browser found the card tagged *a recommendation* under a control named *it will not run on this build* | one literal for every card of words — an accessible name is the card's only name for somebody who cannot see the tag |
 | the card says which register it is in | the tag in its corner is `a recommendation, not a measurement`, and it arrives as a **prop** from the one module that owns those words (`src/prot/hotspots.ts · HOTSPOT_TAG`) | a literal in the component; a tag that says `landed` like a measured stage's |
 | **every row shows the fact ids it cited** | `RecommendationRow.cites` is not optional, and a ranking that cited nothing never reaches a screen — it was refused (`src/prot/hotspots.ts · REFUSE_CITES_NOTHING`) | a row drawn without its ids; a count of citations instead of the ids |
 | a sentence somebody wrote reads as one | the reason is in `--pw-font-serif` (this page's prose face) and the ids in `--pw-font-mono` (its number face), so the two cannot be scanned as one kind of thing | putting the reason in Mono beside the counts |
@@ -384,6 +385,56 @@ ranking was landed
 
 `hotspot_cites` in the data is the `conservation_basis` precedent, and the argument is the same one: *a rank whose fact ids were only ever on a card would be a number a reader could quote with nothing behind it.*
 
+**AND THE GESTURE GOES THROUGH THE VIEW, NEVER BESIDE IT.** This is the law a real browser had to teach, and the failure was silent: the control dispatched straight on the session, the act landed, the log grew, and **not one picture moved** — 185 dots stayed 185, and no pane said a clause had reached it. Every gesture on this desk goes through `view.emit` (`../protCells.tsx · emit`), which is the ONE cursor the charts are folded at; a dispatch beside that view is precisely the second cursor `web/site/prot/entry.tsx` spends a memo to avoid.
+
+It is also a **match** rather than N points — the emission carries the list and its polarity as one `MatchValue`, which is what *a set is a point's plural, never a new capability* means on the wire.
+
+Measured after the fix, in a real browser at 1440×900: the surface run **185 → 6** marks, the conservation run **162 → 6**, the Ramachandran dimming 175 of 181, and every pane carrying its own narrowing sentence. `tests/prot-hotspots.test.ts` pins the half that needs no browser — the emission is accepted at `interface` and another view's window narrows to exactly the residues the model named — and pins that the page emits through the view, on the source, because the alternative fails without a symptom.
+
+**A refused gesture is never swallowed either.** The first version `void`ed the promise, so a session that refused the emission looked identical to one that accepted it and changed nothing. The refusal now joins the desk's own checks, in the library's words.
+
+### THE COVER MUST BE A COVER, and the column it is read off must have an absence
+
+**This shipped wrong once and the failure is worth reading.** The cover rule — *which residues the ledger is about* — read `interface_contacts`, on the stated ground that the column is *absent, never zero, for a residue that touches no other chain.* It is not: `src/prot/interactions.ts · residueContactColumns` lands it `?? 0`, so **167 of the committed entry's 185 residues carry a real zero** and the column has no absence at all. The rule selected every row. Measured on the served page: **717 facts over 185 residues**, a model asked to rank hot spots out of evidence carrying no interface, and a prose answer back on every run.
+
+The column whose absence the act *does* declare is `interface_separation` — *"does not touch another chain" is not a distance* — and the fixed cover is 18 of 185.
+
+| the rule | how it is kept | what breaks it |
+|---|---|---|
+| the cover is read off an absence, never a count | `src/prot/hotspots.ts · atTheInterface` reads `interface_separation`, and `tests/prot-hotspots.test.ts` pins **18 with a distance · 18 with a crossing count above zero · 185 with any count** against the committed entry | a column landed `?? 0`; `> 0`, which would be this code deciding a zero means something |
+| a selection that is not a MINORITY of the table is refused, not asked | `coverVerdict` — the boundary is the definition of a minority, not a number anybody picked: *an interface is a small part of a complex*, so half or more says the column did not tell the two apart | a ceiling somebody chose; trimming the pile, which would be this code picking which residues the model may consider |
+| the refusal is reached **before** a call is spent | `coverRefusal` is asked by `askHotspots` (where the call would go) **and** by the served page (so a doomed pile never reaches the wire) — one owner, two callers | a page that posts 70 kB to be told it is not a cover |
+| and the door judges the pile it was handed, whoever sent it | `server/prot-doors.ts · ledgerOf` re-derives the verdict from the facts that arrived — it cannot re-run the rule, but it can ask *how many residues are these facts about* | trusting the sender's own verdict; the door is what spends the call |
+| a sentence about the cover belongs to whoever judged it | the door keeps the page's `basis` where it AGREES, and writes its own (`basisSaid`) where it refuses | putting the door's verdict under the page's wording |
+
+**An ask nobody can answer is worse than one that was never made** — it spends a real model call to arrive at a sentence. That is the whole argument for a guard rather than a bigger prompt.
+
+### WHICH CURSOR THIS CARD IS ABOUT — the one place this desk's own law cannot hold
+
+> every picture here is drawn AT THE CURSOR
+
+That is the law, and stage 5 is the single card that cannot obey it. The reason is what the stage *is*: **a reading of what stages 1 to 4 landed**, and a subset of those stages is not that. Ranking hot spots from the rows at stage 2 would be ranking them from evidence with no contacts and no surface in it — an answer to a question nobody asked, wearing the answer to this one.
+
+So the decision, and it is a decision rather than an accident of when the boot happens to read:
+
+| the fact | who says it | where |
+|---|---|---|
+| the ask is made once, from the rows at the **end of the run** | `src/prot/hotspots.ts · notTheEndOfTheRun` REFUSES any other read, and no model is asked | called by `web/src/protServed.tsx · boot`, the only place that holds the run and the read together |
+| which cursor the answer came from | the card's own line, always present when there is a ranking (`panel.ts · recommendationOf · where`) | `asked once, from the rows at commit s4 — the end of what stages 1 to 4 landed — and the ranking landed as commit s5` |
+| that the reader has since stepped **behind** the ranking | `panel.ts · rankingVsCursor`, derived from the two facts and no press | `The cursor is standing behind commit s5, which is where this ranking landed — so the rows on this desk carry no rank at all` |
+
+**The card declares its own basis rather than pretending to be drawn where the reader is standing.** That is how both laws are kept at once: it is not a second idea of one fact, it is a card saying which fact it is about. The columns themselves behave like every other stage's — resolved at the cursor, refused by name behind the commit — which is exactly what the third line is about.
+
+### One unreadable answer is not the end of the stage, and the count is on the record
+
+`.outputSchema(parser, { retries: 1 })`. The shape is declared, so the library judges the answer in the loop and quotes its **own validator's failure** back to the model — that is a correction, not a re-roll. It was bought once a measurement showed the prose answer happened on *every* run rather than rarely; one is enough to survive a slip, and more would be paying past a model that cannot read the contract.
+
+The sentence still counts, off `agent.outputContractUnmet()` rather than a tally kept here:
+
+> The library judged 2 answers against the declared shape and paid for 1 corrective re-ask; its own validator said: …
+
+*Asked once and answered unreadably* and *asked twice with its own failure quoted back* are two different facts about a run, and a reader is told which.
+
 ### And the card has three states, because a reader must learn which happened
 
 | state | what the card shows |
@@ -391,6 +442,7 @@ ranking was landed
 | **a ranking** | the rows, their citations, one line of figures, every refusal, every disagreement |
 | **ran and answered nothing** | the stage's own sentence — unreachable, timed out, refused, malformed, cited nothing, every ranking refused — verbatim, in place of the rows (`src/prot/hotspots.ts · HotspotFailure`) |
 | **nothing to ask** | the door's sentence about having **no key**, which is deliberately NOT the published build's reason: a server is standing here and has nothing to ask (`server/prot-doors.ts · chooseHotspotDriver`) |
+| **not asked at all** | `not-the-end` (the rows were not the end of the run), `no-cover` (the selection is not a cover) and `no-evidence` (nothing carries the column) — three sentences for the three ways the stage declines to spend a call, each naming its own counts |
 
 ### The published desk is untouched, and that is asserted rather than intended
 

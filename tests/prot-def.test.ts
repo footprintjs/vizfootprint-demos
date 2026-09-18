@@ -153,8 +153,13 @@ describe('the def the desk ships', () => {
       { viewId: STRUCTURE_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: RAMA_VIEW, canProbe: true, encodings: ['interval'] },
       { viewId: INTERFACE_VIEW, canProbe: true, encodings: ['point'] },
-      { viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] },
-      { viewId: CONSERVATION_VIEW, canProbe: true, encodings: ['interval'] },
+      // THE TWO RUNS ARE OVER A BAND, so their voice is a point (and a match by
+      // the library's SET-1 law) — never an interval. Declaring `interval` here
+      // is what made a real reader's drag land nothing while the record gained
+      // a `guard-failed · select · view "conservation" does not encode a match
+      // selection` row per drag.
+      { viewId: SURFACE_VIEW, canProbe: true, encodings: ['point'] },
+      { viewId: CONSERVATION_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: PAIRS_VIEW, canProbe: false },
       { viewId: SHEET_VIEW, canProbe: false },
     ]);
