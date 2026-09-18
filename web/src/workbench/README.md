@@ -63,7 +63,22 @@ The author's ruling, and the REASON behind it is the one that decides every layo
 
 A tile was words only for one round, on the honest ground that a library chart at 150px has illegible axis labels and 185 marks that merge into texture. **The crossfilter overturned it:** a pane with no marks cannot show a selection, and *185 marks dropping to 12* is perfectly legible at tile size because it is a change in DENSITY, not a value read off an axis.
 
-What survives of that rule is the floor: no axis labels a pane cannot fit, no fake axes, nothing dressed as a reading it is not. And the three steps that **will not run here** stay words — they have nothing to filter (`ChartCard.tsx · ChartTile`, whose `children` are optional for exactly that reason).
+**The honesty floor, applied per pane from the height it really gets** (`protCells.tsx · AXIS_ROOM`, 170px):
+
+| pane | at 1280×800 | what it does |
+|---|---|---|
+| the focus | 906×278 | draws, with its axes — 3.3 : 1, where the design drew it at 3.4 : 1 |
+| cross-chain bars (strip) | 940×104 | draws 185 bars, **no axis chrome** |
+| backbone angles (column) | 282×125 | draws 181 dots over a **56px band**, no axis chrome. At 1440 it is 175px and draws its axes: same rule, two answers |
+| the contact table | 282×125 | its own rows, its own scroll |
+| the 3D view | 282×73 | **says it instead.** Measured at 282×114 its canvas was 282×67 and the well was EMPTY: it is the one pane whose content is a canvas and not marks, it cannot show a crossfilter by density, and a camera cannot be fitted to that aspect. So the pane says the viewer draws in the focus and a press puts it there (906×282 with the camera fitted) |
+| the three blocked steps | one card, 3 rows | nothing to filter |
+
+**`axes?: boolean \| 'y'` is the library's own reduced-rendering hook** — built so a merged frame can draw one guide for a stack, reused here so a small pane keeps its marks and drops its labels. What it cannot move is `PAD`, a module constant (`{ l: 52, r: 18, t: 18, b: 44 }`): 62px of any box is margin whatever is in it, which is why a 67px pane once reported 185 dots and drew them in a 5px band. **Reported, and invisible, reads as broken rather than as small** — that is the failure this floor exists to prevent, and the browser test measures the mark BAND and not only the count.
+
+The cost, named: a tile's axis labels are also the encoding pickers, so re-encoding is a focus-slot gesture. An illegible picker was never a control.
+
+**And one wobble, measured rather than assumed:** the right column's panes land anywhere between about 120px and 175px at 1280, because the blocked card's three clauses wrap differently as the webfont arrives — which straddles the 170px threshold. When a pane shrinks across it the chart is briefly still the one drawn for the taller box (`ChartFrame` re-measures on a ResizeObserver callback), so the browser test WAITS for the invariant to settle and fails loudly if it never does. The steady state is the rule; the frame or two after a font load is the library's documented re-measure.
 
 **A tile's header is the control, not the whole tile.** The picture inside is live: a button may not contain the library's own axis controls, and a press anywhere would swallow the gesture that makes the tile worth drawing.
 
@@ -71,7 +86,7 @@ What survives of that rule is the floor: no axis labels a pane cannot fit, no fa
 
 > for not-available, show the widget and tell inside it a text to tell why it's not there
 
-So the reason is read at the size and in the position of the thing it is about. Stages 5 and 6 declare no views at all, so their card has **no chart and no frame pretending to be one** — an empty axis would be the lie this desk exists to avoid. The card carries the kind of blocked, the reason's own first clause (`panel.ts · firstClause`) and the declared sentence; the whole paragraph is behind the same `Full note` press every other card has.
+So the reason is read at the size and in the position of the thing it is about. **In the right column the three of them share ONE card of three rows** (`ChartCard.tsx · BlockedGroup`): as three separate cards they spent 177px of a 583px column on three sentences — more than the two real charts got between them — and the reclaimed height went to the drawings. Each row keeps its tag, its name and its reason's first clause verbatim, and each row is its own control opening its own card. Stages 5 and 6 declare no views at all, so their card has **no chart and no frame pretending to be one** — an empty axis would be the lie this desk exists to avoid. The card carries the kind of blocked, the reason's own first clause (`panel.ts · firstClause`) and the declared sentence; the whole paragraph is behind the same `Full note` press every other card has.
 
 ## NO PROSE UNDER A DRAWING, in any card, focused or tiled
 

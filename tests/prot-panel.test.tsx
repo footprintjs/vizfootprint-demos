@@ -396,10 +396,12 @@ describe('THE BAND IS GONE FROM THE COMPOSITION, and nothing prose-shaped replac
     // fixed pixel height anywhere in the instrument
     expect(desk).toContain('gridTemplateColumns: \'minmax(0, 1fr) clamp(16rem, 22vw, 22.5rem)\'');
     expect(desk).toContain('gridTemplateRows: \'minmax(0, 1fr) minmax(0, 0.34fr)\'');
-    // the right column's rows are NOT equal: the drawings get `1fr` each and
-    // the text cards take their content's height and no more
-    expect(desk).toContain("tall.map(() => 'minmax(0, 1fr)')");
-    expect(desk).toContain("map(() => 'auto')");
+    // THE RIGHT COLUMN'S ROWS ARE NOT EQUAL: the panes that DRAW get `1fr`
+    // each; the pane that says it instead, and the one card of blocked steps,
+    // take their content's height and no more
+    expect(desk).toContain("drawnTall.map(() => 'minmax(0, 1fr)')");
+    expect(desk).toContain("saidTall.map(() => 'auto')");
+    expect(desk).toContain("waiting.length === 0 ? '' : 'auto'");
     // AND THE ONE THING THAT MAY NOT COME BACK: a paragraph between the
     // stepper and the charts. The slice is exactly that stretch of the
     // composition — from the stepper to the line that opens the L.

@@ -74,7 +74,7 @@ import { useProtProjection } from './protProjection.js';
 import { ActRow, RunNarrative, narrativeTitle } from './protTrace.js';
 import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from './protStages.js';
 import { Count, Disclosure, RecordDrawer, WorkbenchHeader } from './workbench/Chrome.js';
-import { ChartCard, ChartTile, ViewerBox } from './workbench/ChartCard.js';
+import { BlockedGroup, ChartCard, ChartTile, ViewerBox } from './workbench/ChartCard.js';
 import { StageStepper } from './workbench/Stepper.js';
 import { methodLine } from './workbench/bands.js';
 import { byPlanStep, chainChips, ownerLine, promoteCardLabel, promoteChartLabel, shapeOfView, splitByFocus, stageOfChart } from './workbench/charts.js';
@@ -522,7 +522,31 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    * (`src/prot/session.ts` · `probeTheUnlandedColumns`), which is the same
    * sentence the focused card shows where its marks would be.
    */
-  const tile = (c: ProtCell, wide: boolean): JSX.Element => (
+  const tile = (c: ProtCell, wide: boolean): JSX.Element =>
+    /*
+      THE ONE PANE THAT SAYS IT RATHER THAN DRAWING IT — and the measurement is
+      the argument.
+
+      The 3D view in a right-column pane was 282×114 with a canvas of 282×67:
+      an EMPTY BLACK BOX. It is the one pane whose content is a WebGL canvas
+      rather than marks, so it cannot show a crossfilter the way a scatter can
+      (it recolours, and at 67px that is invisible); its shape is wrong there
+      (the design draws the molecule roughly square); and a camera cannot be
+      fitted to a box of that aspect. An empty frame reads as broken, which is
+      the one thing the honesty floor forbids — so the pane says, in its own
+      words, that this picture is drawn in the focus, and a press puts it there.
+      Its COUNT stays on it, because the card it comes from is the only place
+      `185 residues · 2 chains drawn` is stated.
+    */
+    c.id === STRUCTURE_VIEW && !wide ? (
+      <ChartTile
+        key={c.id}
+        id={c.id}
+        label={desk.label(c.id)}
+        said={`${c.foot ?? ''} — the 3D viewer draws in the focus, where a camera can be fitted to the molecule. Press to bring it here.`}
+        promote={{ label: promoteChartLabel(desk.label(c.id)), onPress: () => setPromoted({ stage: here?.stage ?? null, id: c.id }) }}
+      />
+    ) : (
     <ChartTile
       key={c.id}
       id={c.id}
@@ -538,12 +562,24 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         exists at all. The 3D well keeps its own frame here too, without the
         chain chips, which need width this size has not got.
       */}
-      <ChartFrame>{(size) => (c.id === STRUCTURE_VIEW ? <ViewerBox chips={[]}>{c.render(size)}</ViewerBox> : c.render(size))}</ChartFrame>
+      <ChartFrame>{(size) => c.render(size)}</ChartFrame>
     </ChartTile>
-  );
+    );
   /** The rail, split by the shape each picture wants — wide along the bottom, square and tall down the side. */
   const wide = rail.filter((c) => shapeOfView(c.id) === 'wide');
   const tall = rail.filter((c) => shapeOfView(c.id) !== 'wide');
+  /**
+   * AND THE COLUMN'S OWN SPLIT: the panes that DRAW take `1fr` each, the one
+   * that says it instead takes its content's height.
+   *
+   * A word pane in a `1fr` row is the same waste the three blocked cards were
+   * — it held a 127px row for two lines of text while the scatter beside it
+   * wanted every pixel.
+   */
+  const drawnTall = tall.filter((c) => c.id !== STRUCTURE_VIEW);
+  const saidTall = tall.filter((c) => c.id === STRUCTURE_VIEW);
+  /** The steps that will not run here and are not the one in the focus. */
+  const waiting = cards.filter((b) => b.id !== promotedId);
 
   // ── LAYER 2: the components ──────────────────────────────────────────────
   return (
@@ -862,19 +898,24 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
             minWidth: 0,
             display: 'grid',
             gap: 10,
-            gridTemplateRows: `${tall.map(() => 'minmax(0, 1fr)').join(' ')} ${cards.filter((b) => b.id !== promotedId).map(() => 'auto').join(' ')}`.trim(),
+            // the drawings get `1fr` each; the ONE card of blocked steps takes
+            // its content's height and no more (it was three cards at 59px —
+            // 177px of a 583px column for three sentences)
+            gridTemplateRows: `${drawnTall.map(() => 'minmax(0, 1fr)').join(' ')} ${saidTall.map(() => 'auto').join(' ')} ${waiting.length === 0 ? '' : 'auto'}`.trim().replace(/\s+/g, ' '),
             overflow: 'hidden',
           }}
         >
-          {tall.map((c) => tile(c, false))}
-          {cards
-            .filter((b) => b.id !== promotedId)
-            .map((b) => (
-              // NO CHILDREN: a step that will not run here has no marks to
-              // draw and nothing to filter, so its tile is its words — the kind
-              // of blocked, and the reason's own first clause.
-              <ChartTile key={b.id} id={`stage:${b.id}`} label={`${b.name} — ${b.tag}`} said={b.short} promote={{ label: promoteCardLabel(b.name), onPress: () => setPromoted({ stage: here?.stage ?? null, id: b.id }) }} />
-            ))}
+          {drawnTall.map((c) => tile(c, false))}
+          {saidTall.map((c) => tile(c, false))}
+          {/* NO MARKS TO DRAW AND NOTHING TO FILTER: three steps that will not
+              run here, in one card of three rows — each row its own control,
+              opening its own card where the whole reason is. */}
+          {waiting.length === 0 ? null : (
+            <BlockedGroup
+              label="the declared steps this build will not run, and which kind of blocked each one is"
+              rows={waiting.map((b) => ({ id: b.id, name: b.name, tag: b.tag, short: b.short, promote: { label: promoteCardLabel(b.name), onPress: () => setPromoted({ stage: here?.stage ?? null, id: b.id }) } }))}
+            />
+          )}
         </div>
       </div>
 

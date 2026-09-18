@@ -30,6 +30,17 @@
  * band line draws no brush — an interval has no meaning on a band*. So the
  * chart in the focus slot is not the one that can start a selection on this
  * entry, which is exactly why every other pane has to be on screen and live.
+ *
+ * ── AND A DECLARED CAPABILITY THE RENDERER DOES NOT DELIVER (recorded here so
+ * it is not lost; its fix is its own packet on both sides) ─────────────────
+ * `src/prot/def.ts` · `capabilities` declares
+ * `{ viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] }`, and the
+ * renderer draws no brush for that view's band x — so the page DECLARES a
+ * gesture it cannot perform, and the surface caption faithfully repeats the
+ * claim (*drag across the axis to keep a range of residue numbers*). That is
+ * capability law 1 broken at the declaration, not at the caption: a true
+ * caption over a false declaration is still a false declaration. Fixing the
+ * caption alone is expressly not the answer.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright-core';

@@ -360,6 +360,96 @@ export function ChartTile({ id, label, said, promote, wide = false, children }: 
   );
 }
 
+// ── the three steps that will not run, in one compact card ──────────────────
+
+export interface BlockedRow {
+  readonly id: string;
+  /** The short declared name. */
+  readonly name: string;
+  /** `not available here`, `not on this build`, `not built yet`. */
+  readonly tag: string;
+  /** The reason's own first clause, verbatim. */
+  readonly short: string;
+  /** What the control on this row is called, and what a press does — its own card, at full size. */
+  readonly promote: { readonly label: string; onPress(): void };
+}
+
+export interface BlockedGroupProps {
+  /** The section's accessible name. */
+  readonly label: string;
+  readonly rows: readonly BlockedRow[];
+}
+
+/**
+ * THE THREE STEPS THAT WILL NOT RUN HERE, AS ONE CARD OF THREE ROWS.
+ *
+ * ── WHY THEY WERE COLLAPSED, measured ──────────────────────────────────────
+ * They were three separate cards down the right column, 59px each: 177px of a
+ * 583px column at 1280×800 — more than the two real charts got between them,
+ * for three sentences. So they became one card, and the reclaimed height went
+ * to the drawings, which is where a pane that shows a crossfilter needs it.
+ *
+ * **Nothing is lost**: each row keeps its own tag, its own name and its
+ * reason's own first clause, verbatim, and its press still opens its own card
+ * where the whole measured paragraph is one further press away. What went is
+ * the card chrome around each sentence, not the sentence.
+ *
+ * Each ROW is the control, so there are three names and three answers — one
+ * per step — rather than one control that would have to pick a step for the
+ * reader.
+ */
+export function BlockedGroup({ label, rows }: BlockedGroupProps): JSX.Element {
+  return (
+    <section
+      aria-label={label}
+      style={{
+        border: '1px solid var(--pw-edge-card)',
+        borderRadius: 'var(--pw-r-card)',
+        background: 'var(--pw-glass-card)',
+        backdropFilter: 'var(--pw-blur-card)',
+        WebkitBackdropFilter: 'var(--pw-blur-card)',
+        padding: '5px 8px 6px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        flex: '0 0 auto',
+        minWidth: 0,
+      }}
+    >
+      <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-soft)' }}>declared · will not run here</span>
+      {rows.map((row) => (
+        <button
+          key={row.id}
+          type="button"
+          data-chart={`stage:${row.id}`}
+          data-tile="true"
+          onClick={row.promote.onPress}
+          aria-label={row.promote.label}
+          style={{
+            font: 'inherit',
+            fontFamily: 'var(--pw-font-sans)',
+            textAlign: 'left',
+            cursor: 'pointer',
+            background: 'none',
+            border: 0,
+            borderTop: '1px solid var(--pw-rule-faint)',
+            padding: '3px 0 0',
+            display: 'block',
+            width: '100%',
+            minWidth: 0,
+            fontSize: 10,
+            lineHeight: 1.35,
+            color: 'var(--pw-mid-2)',
+          }}
+        >
+          <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-soft-2)', marginRight: 4 }}>{row.tag}</span>
+          <b style={{ fontWeight: 600, color: 'var(--pw-mid)' }}>{row.name}</b> — {row.short}
+        </button>
+      ))}
+    </section>
+  );
+}
+
 // ── the dark box the 3D viewer lives in ──────────────────────────────────────
 
 export interface ViewerBoxProps {

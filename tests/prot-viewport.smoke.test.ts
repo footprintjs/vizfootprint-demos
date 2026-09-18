@@ -214,16 +214,89 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the protein desk f
         const drawing = m.tiles.filter((t) => t.drawn > 0);
         const said = m.tiles.filter((t) => t.drawn === 0);
         say(`  panes: focus ${String(m.focus.width)}×${String(m.focus.drawn)}; ${drawing.map((t) => `${t.id ?? '?'} ${String(t.width)}×${String(t.drawn)} (${String(t.marks)} marks)`).join(', ')}; and ${String(said.length)} cards of words at ${said.map((t) => String(t.height)).join('/')}px`);
-        // the three that will not run here have nothing to filter and stay words
-        expect(said.map((t) => t.id)).toEqual(['stage:conservation', 'stage:hotspots', 'stage:annotation']);
-        // every other pane draws, and the two with SVG marks really have them:
-        // a pane that shows no marks cannot show a crossfilter, and that is
-        // what this whole layout is bought for
-        expect(drawing).toHaveLength(4);
+        /*
+          WHICH PANES SAY IT RATHER THAN DRAWING IT, and each for its own reason:
+            · the three steps that will not run here have nothing to filter;
+            · the 3D VIEW, because its content is a WebGL canvas rather than
+              marks — measured at 282×114 it was an empty black box, it cannot
+              show a crossfilter by density (it recolours, invisibly at that
+              size) and a camera cannot be fitted to a box of that aspect. It
+              says so and a press puts it in the focus, where it is 906×253.
+          Everything else DRAWS, because a pane that shows no marks cannot show
+          a crossfilter and that is what this layout is bought for.
+        */
+        expect(said.map((t) => t.id).sort()).toEqual([STRUCTURE_VIEW, 'stage:annotation', 'stage:conservation', 'stage:hotspots'].sort());
+        expect(drawing).toHaveLength(3);
         expect(m.tiles.find((t) => t.id === RAMA_VIEW)?.marks).toBeGreaterThan(100);
         expect(m.tiles.find((t) => t.id === 'interface')?.marks).toBeGreaterThan(100);
         // no pane is too small to be a picture at the tighter budget
-        for (const tile of drawing) expect(tile.drawn, `the ${tile.id ?? '?'} pane is ${String(tile.drawn)}px tall`).toBeGreaterThan(50);
+        for (const tile of drawing) expect(tile.drawn, `the ${tile.id ?? '?'} pane is ${String(tile.drawn)}px tall`).toBeGreaterThan(95);
+      });
+
+      it('drops the AXIS CHROME where it will not fit, and keeps the marks', async () => {
+        /*
+          `vizfootprint-ui`'s charts take `axes?: boolean | 'y'`, so a host can
+          turn the ticks and the axis labels off — what it cannot move is `PAD`,
+          a module constant, so 62px of any box is margin whatever is in it.
+          `protCells.tsx · AXIS_ROOM` (170px) is the threshold, and it is asked
+          of the height the pane REALLY gets, per pane and per window.
+        */
+        /*
+          WAIT FOR IT TO SETTLE, and the reason is a measurement rather than a
+          convenience.
+
+          The right column's panes land anywhere between about 120px and 175px
+          at this width, because the blocked card's three clauses wrap
+          differently as the webfont arrives — which straddles the threshold.
+          When the pane shrinks across it, the chart is briefly still the one
+          drawn for the taller box: `ChartFrame` re-measures on a ResizeObserver
+          callback, so there is a frame or two in which a 125px pane still holds
+          the 175px rendering. That is the library's documented behaviour (its
+          own header records a regression where a STALE height letterboxed a
+          drawing), and the rule this test is about is the SETTLED state.
+          So it waits for the invariant to hold and fails loudly if it never
+          does — rather than reading the font's timing and calling it the rule.
+        */
+        await page.waitForFunction(
+          (id) => {
+            const el = document.querySelector(`[data-chart="${id}"]`);
+            const drawn = Math.round(el?.querySelector('.vzf-chart-frame')?.getBoundingClientRect().height ?? 0);
+            const texts = el?.querySelectorAll('svg text').length ?? 0;
+            return drawn > 0 && (drawn < 170 ? texts === 0 : texts > 0);
+          },
+          RAMA_VIEW,
+          { timeout: 20_000 },
+        );
+        const now = await page.evaluate((id) => {
+          const el = document.querySelector(`[data-chart="${id}"]`);
+          const frame = el?.querySelector('.vzf-chart-frame');
+          const dots = [...(el?.querySelectorAll('circle.vzf-dot') ?? [])];
+          const tops = dots.map((d) => d.getBoundingClientRect().top);
+          return {
+            drawn: Math.round(frame?.getBoundingClientRect().height ?? 0),
+            texts: el?.querySelectorAll('svg text').length ?? 0,
+            marks: dots.length,
+            band: dots.length < 2 ? 0 : Math.round(Math.max(...tops) - Math.min(...tops)),
+          };
+        }, RAMA_VIEW);
+        const texts = now.texts;
+        const pane = { drawn: now.drawn };
+        /*
+          AND THE MARKS ARE REALLY THERE, not merely counted. Measured before
+          this round: a 67px pane reported 185 dots and drew them in a 5px band
+          under 62px of the library's fixed padding — reported and INVISIBLE,
+          which reads as broken rather than as small.
+        */
+        say(`  the backbone-angle pane is ${String(now.drawn)}px tall, draws ${String(texts)} pieces of axis text, and spreads its ${String(now.marks)} marks over a ${String(now.band)}px band`);
+        // THE MARKS ARE REALLY THERE, not merely counted: measured before this
+        // round, a 67px pane reported 185 dots and drew them in a 5px band
+        // under 62px of the library's fixed padding — reported and invisible.
+        expect(now.marks).toBeGreaterThan(100);
+        expect(now.band).toBeGreaterThan(40);
+        // at 1280 the pane is under the threshold and draws none; at 1440 it is
+        // over it and draws its own axes — the same rule, two answers
+        if (pane.drawn < 170) expect(texts).toBe(0);
+        else expect(texts).toBeGreaterThan(0);
       });
 
       it('KEEPS EVERY COUNT the deleted facts band used to carry, on the cards themselves', async () => {
@@ -299,6 +372,7 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the protein desk f
         expect(after.focus.marks).toBeGreaterThan(100);
         // …and the picture it displaced is a pane that still draws
         expect(after.tiles.find((t) => t.id === SURFACE_VIEW)?.marks).toBeGreaterThan(100);
+
         // the page still does not scroll
         expect(after.page).toBe(after.viewport);
       });

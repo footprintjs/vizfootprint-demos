@@ -375,6 +375,29 @@ export interface ProtCell extends DeskChart {
  * behave like hooks — the rule `vizfootprint-studio/desk` · `DeskCharts`
  * states, and the reason the other three desks' cells are written the same way.
  */
+/**
+ * THE HEIGHT BELOW WHICH A CHART DROPS ITS AXIS CHROME — and the measurement
+ * behind the number.
+ *
+ * `vizfootprint-ui`'s charts take `axes?: boolean | 'y'` (built so a merged
+ * frame can draw one guide for a stack), so a host CAN turn the ticks and the
+ * interactive axis labels off. What it cannot move is `PAD`, a module constant
+ * — `{ l: 52, r: 18, t: 18, b: 44 }` on the scatter and the line — so 62px of
+ * any box's height is margin whatever is drawn in it.
+ *
+ * Measured at 1280×800 before this: a right-column pane gave its chart a 67px
+ * SVG, which is 5px of plot under 62px of padding — 185 dots reported and NONE
+ * VISIBLE, with the axis title and the ticks taking the rest. That does not
+ * read as small; it reads as broken, which is the one impression this page
+ * cannot afford. So below this height the MARKS stay and the labels go: the
+ * marks are what show a selection, the labels are not, and an illegible label
+ * is not a label.
+ *
+ * The cost, named: a tile's axis labels are also the ENCODING PICKERS, so
+ * re-encoding is a focus-slot gesture. An illegible picker was never a control.
+ */
+const AXIS_ROOM = 170;
+
 export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: WorkbenchInk): readonly ProtCell[] {
   const { residues, counts, skipped, structure, run, refusals, notes } = data;
   /**
@@ -589,6 +612,8 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
           columns={columns}
           fits={desk.fitsOf(RAMA_VIEW)}
           encoding={shown[RAMA_VIEW] ?? {}}
+          // THE HONESTY FLOOR: marks at every size, chrome only where it fits
+          axes={height >= AXIS_ROOM}
           width={width}
           height={height}
           onEmit={emit(RAMA_VIEW, 'filter')}
@@ -660,6 +685,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
             columns={columns}
             fits={desk.fitsOf(INTERFACE_VIEW)}
             encoding={shown[INTERFACE_VIEW] ?? {}}
+            axes={height >= AXIS_ROOM}
             width={width}
             height={height}
             onEmit={emit(INTERFACE_VIEW, 'select')}
@@ -719,6 +745,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
             columns={columns}
             fits={desk.fitsOf(SURFACE_VIEW)}
             encoding={shown[SURFACE_VIEW] ?? {}}
+            axes={height >= AXIS_ROOM}
             width={width}
             height={height}
             onEmit={emit(SURFACE_VIEW, 'filter')}

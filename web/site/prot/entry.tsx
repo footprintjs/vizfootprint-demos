@@ -307,9 +307,17 @@ function rowsNote(residues: ResiduesNow): { readonly line: JSX.Element; readonly
     // QUIET: a plain statement of where the cursor is standing, which is what
     // the follow-up round moved into the panel's fold
     quiet: true,
+    /*
+      SHORTER BY SIX WORDS, AND BY NO FACT: the row count and the commit are
+      both still here, and it is still the read's OWN answer
+      (`ResiduesNow.cursor`) rather than what this page believes the cursor to
+      be. It sits in the header band beside the method line, and the old
+      wording wrapped that band to two rows at 1280 — 94px against 60 — which
+      is 34px the pictures wanted more than the sentence did.
+    */
     line: (
       <p role="status" style={{ ...NOTE, color: 'var(--pw-mid-2)' }}>
-        every picture below is drawn from the {residues.rows.length.toLocaleString('en-US')} residue rows as they stand at{' '}
+        {residues.rows.length.toLocaleString('en-US')} rows, as they stand at{' '}
         {residues.cursor === null ? 'the root of this log — no act has landed yet' : `commit ${residues.cursor}`}
       </p>
     ),
