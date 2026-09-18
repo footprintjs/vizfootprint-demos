@@ -9,8 +9,14 @@
  * see any more did not take its sentences with it.
  *
  *   the eyebrow        → the focused card's note lead, and its foot
- *   the quiet line     → the focused card, beside the library's own
- *                        `How to read:`, with `stage 3` in Mono in front of it
+ *   the quiet line     → the focused card's `Full note`, beside the library's
+ *                        own `How to read:`, with `stage 3` in Mono in front of
+ *                        it. It was on the card's FACE for three rounds and
+ *                        came off with that `How to read:` line: a card's face
+ *                        is a title, a picture and one line of figures, because
+ *                        *a scientist reading a Ramachandran plot does not care
+ *                        about stage 1 or commits*. Neither sentence was
+ *                        deleted, which is what this file is for.
  *   the recorder's
  *   sentences          → the same card's `Full note`
  *   the four facts     → the same card's own numbers, in Mono under the picture
@@ -139,7 +145,10 @@ const cardFor = (words: ReturnType<typeof stageWords>, caption = 'the picture’
     legend={[]}
     stage={{ mark: words.mark, line: words.line, facts: words.facts, refusal: words.refusal }}
     footLeft="185 residues plotted"
-    footRight={`Stage ${String(surface.number)} · ${surface.label}`}
+    // NULL, the way the desk wires it now: the stage attribution came off every
+    // footer when the stepper's bar began following the FOCUS — one owner per
+    // question (`web/src/workbench/charts.ts`, the note where `ownerLine` was)
+    footRight={null}
     note={
       <>
         <p>{words.eyebrow}</p>
@@ -160,18 +169,27 @@ const cardFor = (words: ReturnType<typeof stageWords>, caption = 'the picture’
 );
 
 describe('the focused card carries what the band used to say about the stage', () => {
-  it('shows ONE quiet line — what the stage put on the desk — with the stage’s number in Mono in front of it', async () => {
+  it('keeps the stage’s quiet line and the derived how-to-read line OFF the face, and both behind the one press', async () => {
     const words = wordsFor(surface);
     expect(words.line).toBe(surface.subtitle);
     expect(words.mark).toBe(`stage ${String(surface.number)}`);
     const panel = await mount(cardFor(words));
-    const said = panel.words();
-    expect(said).toContain(surface.subtitle);
-    // the Mono prefix is what stops a picture a reader PROMOTED from being read
-    // as this stage's own
-    expect(said).toContain(`stage ${String(surface.number)}`);
-    // …and the library's own derived line is still there beside it
-    expect(said).toContain('How to read:');
+    /*
+      A CARD'S FACE IS A TITLE, A PICTURE AND ONE LINE OF FIGURES. Engine
+      vocabulary is not a reading of a picture — *a scientist reading a
+      Ramachandran plot does not care about stage 1 or commits* — and the
+      derived `How to read:` line describes an ENCODING the axis labels already
+      show. So neither is above the picture.
+    */
+    expect(panel.words()).not.toContain(surface.subtitle);
+    expect(panel.words()).not.toContain('How to read:');
+    // …AND NEITHER IS DELETED: one press brings both back, with the Mono
+    // prefix that stops a promoted picture being read as this stage's own
+    await panel.press(NOTE_ARIA);
+    const opened = panel.words();
+    expect(opened).toContain(surface.subtitle);
+    expect(opened).toContain(`stage ${String(surface.number)}`);
+    expect(opened).toContain('How to read:');
     await panel.unmount();
   });
 
@@ -326,7 +344,7 @@ describe('A STAGE THAT WILL NOT RUN HERE GETS A CARD, and the reason is inside i
         howToRead={null}
         legend={[]}
         footLeft={card.tag}
-        footRight={`Stage 5 · ${card.label}`}
+        footRight={null}
         note={
           <>
             <p>{card.label}</p>

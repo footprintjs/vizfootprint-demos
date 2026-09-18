@@ -368,10 +368,18 @@ export const PROT_ENCODING_RULES: EncodingRules = {
  * psi on y, both measures in degrees, both sometimes absent. No frame is
  * declared, and that is a decision with a cost the report names: a torsion axis
  * spans (−180, 180] BY DEFINITION, and the frame's vocabulary is words only —
- * `domain: 'union'` folded from the rows — so there is no way to declare the
- * axis a reader of a Ramachandran plot expects. The picture draws the extent of
- * the residues in it, and the caption says so rather than a cell typing a
- * window.
+ * `domain: 'union'` folded from the rows — so there is STILL no way to DECLARE
+ * the axis a reader of a Ramachandran plot expects. What changed is who draws
+ * it: the page now hands the chart that extent as a PROP
+ * (`web/src/protCells.tsx` · `TORSION_RANGE`), because a residue at 107° that
+ * looks pressed against the edge of the plot reads as the edge of torsion space
+ * when it is nowhere near it. **A prop is on no commit**, so the shortfall is
+ * announced in the page's own omissions (`web/src/protDesk.tsx` · `NotHere`)
+ * the way the structure file's missing version is. When the library can declare
+ * a numeric domain, the declaration replaces the prop and the line goes.
+ *
+ * What this view DOES declare is its crosshair — see `frame` on the entry
+ * below.
  *
  * `structure` declares the ONE channel it has. See {@link PROT_ENCODING_RULES}
  * for what the plane does with a kind it has never heard of.
@@ -417,7 +425,22 @@ export const PROT_ENCODING_RULES: EncodingRules = {
  * they show rows, not a mark.
  */
 export const PROT_ENCODINGS: readonly ViewEncodingDecl[] = [
-  { viewId: RAMA_VIEW, chartKind: 'scatter', channels: ['x', 'y'], initial: { x: 'phi', y: 'psi' } },
+  /*
+    THE RAMACHANDRAN ASKS FOR ITS CROSSHAIR — law 12, `ChannelResolution.zeroGuide`.
+
+    A backbone φ against ψ is the figure the library built the key for: its
+    whole meaning is which QUADRANT a residue falls in, and with no lines
+    through the origin a reader has to find zero by reading tick labels off two
+    edges. So both axes declare it, and the picture answers to a declaration the
+    record carries rather than to a prop nobody can see.
+
+    `frame` AND NOT `mode`: this view is LAYERLESS, so the axis arm of the shape
+    applies (`vizfootprint/def` · `AXIS_SHAPE` —
+    `{ transform?, domain?, basis?, guide?, zero?, zeroGuide? }`) and the door
+    refuses `mode` there by name, because `shared` against `independent` is
+    meaningless with one layer.
+  */
+  { viewId: RAMA_VIEW, chartKind: 'scatter', channels: ['x', 'y'], initial: { x: 'phi', y: 'psi' }, frame: { x: { zeroGuide: true }, y: { zeroGuide: true } } },
   { viewId: STRUCTURE_VIEW, chartKind: 'structure', channels: ['color'], initial: { color: 'chain' } },
   { viewId: INTERFACE_VIEW, chartKind: 'bar', channels: ['category', 'y'], initial: { category: RESIDUE_KEY, y: INTERFACE_CONTACTS_COLUMN } },
   { viewId: SURFACE_VIEW, chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } },

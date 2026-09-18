@@ -87,7 +87,7 @@ import type { EntryNote } from '../../src/prot/entryNotes.js';
 import type { ProtRun } from '../../src/prot/orchestrator.js';
 import type { StructureArtifact, UnlandedRefusals } from '../../src/prot/session.js';
 import { emitIntent, type Row } from './derive.js';
-import { chainColorOf } from './workbench/charts.js';
+import { chainColorOf, zeroGuideOf } from './workbench/charts.js';
 import type { WorkbenchInk } from './workbench/tokens.js';
 
 export { STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
@@ -366,6 +366,17 @@ export function surfaceRun(residues: readonly Row[], xField: string, yField: str
  */
 export interface ProtCell extends DeskChart {
   readonly foot: string | null;
+  /**
+   * HOW MANY MARKS THIS PICTURE DRAWS AT THIS CURSOR, when its marks stand in a
+   * BAND — so the page can fold whether one of them can be pressed by hand
+   * (`./workbench/charts.ts` · `reachClause`).
+   *
+   * `undefined` for a picture the question does not apply to: a run whose
+   * gesture is a brush across the axis rather than a press on a mark, a table of
+   * rows, a WebGL canvas. It is the cell's own count of what it handed the
+   * chart, never a count the page takes again.
+   */
+  readonly marks?: number;
 }
 
 /**
@@ -402,6 +413,26 @@ export interface ProtCell extends DeskChart {
  * in). The honesty floor and the floor of the gesture are the same floor.
  */
 export const AXIS_ROOM = 170;
+
+/**
+ * THE WHOLE RANGE A BACKBONE TORSION CAN TAKE, in degrees.
+ *
+ * φ and ψ span (−180, 180] by definition — it is a fact about the MEASUREMENT
+ * and not about these rows — and a Ramachandran plot is read as a square of
+ * that space. Folded from the rows instead, this entry's φ runs −159 to 107,
+ * and a residue at 107° is drawn hard against the right edge of the plot as
+ * though it were at the edge of torsion space. So the page hands the chart the
+ * real extent (`vizfootprint-ui` · `ChartDomain.x` / `.y`, which
+ * `primitives/scales.ts` · `domainOr` prefers over the data's own).
+ *
+ * **IT IS A PROP AND THEREFORE ON NO COMMIT.** The library's frame vocabulary
+ * is words only (`domain: 'union'`), so there is no way to DECLARE a numeric
+ * domain yet and nothing in the record says why the axes are wider than the
+ * marks. That shortfall is announced rather than hidden
+ * (`./protDesk.tsx` · `NotHere`), exactly as the structure file's missing
+ * version is; when the library can declare it, the declaration replaces this.
+ */
+export const TORSION_RANGE: readonly [number, number] = [-180, 180];
 
 export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: WorkbenchInk): readonly ProtCell[] {
   const { residues, counts, skipped, structure, run, refusals, notes } = data;
@@ -445,6 +476,8 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
 
   const sel = [state.selections, state.links, state.cleared] as const;
 
+  /** THE CROSSHAIR THIS VIEW DECLARES — `./workbench/charts.ts` · `zeroGuideOf` carries why it is read off the def and not off the fold. */
+  const ramaZeroGuide = useMemo(() => zeroGuideOf(RAMA_VIEW), []);
   const dots = useMemo(() => ramaDots(residues, phiField, psiField), [residues, phiField, psiField]);
   const bars = useMemo(() => interfaceBars(residues, barCategory, barValue), [residues, barCategory, barValue]);
   /** How many residues touch ANOTHER chain at all — counted from the bars on screen, so the caption cannot outrun the picture. */
@@ -595,7 +628,8 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
             noAngle === 0
               ? null
               : `the other ${count(noAngle)} have no dot at all: ${count(counts.phiAbsent)} have no ${phiField} (the first residue of a chain has no previous carbon to measure from) and ${count(counts.psiAbsent)} no ${psiField} (the last has no next nitrogen) — an absent angle is not an angle of zero, so there is no dot in the middle`,
-            'both axes are the extent of the residues in this entry, not the whole −180 to 180 a torsion can take: a frame’s domain is folded from the rows, and there is no way to declare the wider one',
+            `both axes are drawn over the whole ${String(TORSION_RANGE[0])} to ${String(TORSION_RANGE[1])} degrees a backbone torsion can take, and not over the extent of these residues — so a residue at the far right is read against torsion space rather than against the edge of the plot. That range is a fact about the MEASUREMENT, and this page hands it to the chart as a prop: the frame’s own vocabulary is words, so there is still no way to declare it and nothing in the record says why the axes are wider than the marks`,
+            'the two lines crossing the plot are the zero guide the view DECLARES — φ = 0 and ψ = 0 — so which quadrant a residue falls in is read off the crosshair instead of off tick labels on two edges',
             'drag across the horizontal axis to keep a range of angles — the 3D view greys every residue the range drops',
           ]
             .filter((s): s is string => s !== null)
@@ -617,6 +651,15 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
           columns={columns}
           fits={desk.fitsOf(RAMA_VIEW)}
           encoding={shown[RAMA_VIEW] ?? {}}
+          /*
+            THE REAL SQUARE, AND THE DECLARED CROSSHAIR — the two halves of what
+            makes this a Ramachandran plot rather than a cloud of dots in a box.
+            The extent is a fact about the measurement ({@link TORSION_RANGE},
+            which carries why it is a prop); the guide is read back off the
+            session's own copy of the declaration (`./workbench/charts.ts` ·
+            `zeroGuideOf`), never typed here.
+          */
+          domain={{ x: TORSION_RANGE, y: TORSION_RANGE, ...(ramaZeroGuide === undefined ? {} : { zeroGuide: ramaZeroGuide }) }}
           // THE HONESTY FLOOR: marks at every size, chrome only where it fits
           axes={height >= AXIS_ROOM}
           width={width}
@@ -630,6 +673,11 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
       id: INTERFACE_VIEW,
       weight: 4,
       foot: noInterface !== null || !interfaceLanded ? null : `${count(bars.length)} bars · ${count(interfaceTouching)} touch another chain`,
+      // HOW MANY MARKS STAND IN THE BAND — what the page folds the reach of a
+      // press from ({@link ProtCell.marks}). It is this cell's own count of
+      // what it handed `VizBar`, so a crossfilter that narrows the rows narrows
+      // this too and the clause corrects itself.
+      ...(noInterface !== null || !interfaceLanded ? {} : { marks: bars.length }),
       caption: (
         <>
           {[
@@ -662,7 +710,22 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
             run?.pairs?.dropped === undefined
               ? null
               : `and every contact the table does NOT carry is counted with its reason — ${run.pairs.dropped.map((d) => `${count(d.contacts)} ${d.reason}`).join(', ')}`,
-            !interfaceLanded || noInterface !== null ? null : 'click a bar to select that residue: the 3D view lights it, the scatter keeps its dot and the sheet narrows to it',
+            !interfaceLanded || noInterface !== null ? null : 'a bar IS the control: press one and that residue is selected — the 3D view lights it, the scatter keeps its dot and the sheet narrows to it. Every bar also carries its own name, so Tab moves between them and Enter presses the one you are on',
+            /*
+              AND PRESSING ONE BY HAND IS HARD, said here rather than left for a
+              reader to discover by missing. Measured, not assumed: Playwright
+              refused to click a bar on this tile, reporting the target as not
+              stable, and the two reasons are in this clause. The library offers
+              a host nothing to fix it with — no hit area wider than a mark, no
+              minimum mark width, no nearest-mark pick — and this page will not
+              widen a bar past its own value to make one, because a bar whose
+              width lies about its category is worse than a bar that is hard to
+              hit. Reported as a finding; the tile carries the short form
+              (`./workbench/charts.ts` · `reachClause`).
+            */
+            !interfaceLanded || noInterface !== null
+              ? null
+              : `two things make that press hard, and both are measured: ${count(bars.length)} bars share the plot's width, so one bar is that width divided by ${count(bars.length)} — three or four pixels on a desk-sized window, under the 24px WCAG 2.2 asks of a pointer target — and the ${count(bars.length - interfaceTouching)} residues that touch no other chain have a real count of ZERO, which draws a bar of no height and so no area to press at all. What does work: the keyboard above; narrowing the rows from another chart, after which fewer bars share the same width and the bands widen; and re-encoding this chart's category to ${'chain'} from its axis label in the focus, which is two bands instead of ${count(bars.length)}`,
           ]
             .filter((s): s is string => s !== null)
             .join(' · ')}

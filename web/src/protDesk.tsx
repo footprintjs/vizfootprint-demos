@@ -90,10 +90,10 @@ import {
   columnTracks,
   dividerFloors,
   dividerValues,
-  ownerLine,
   parseSplit,
   promoteCardLabel,
   promoteChartLabel,
+  reachClause,
   rowTracks,
   serialiseSplit,
   shapeOfView,
@@ -108,7 +108,7 @@ import {
   type RegionSplit,
   type SplitStop,
 } from './workbench/charts.js';
-import { BLOCKED_CARDS, stageWords, type BlockedCard } from './workbench/panel.js';
+import { BLOCKED_CARDS, focusVsCursor, stageWords, type BlockedCard } from './workbench/panel.js';
 import { STEPPER_LABEL, actsLabelOf, stepViews } from './workbench/steps.js';
 import { useWorkbenchInk } from './workbench/tokens.js';
 
@@ -179,7 +179,8 @@ export interface ProtDeskProps {
 const ABOUT_TITLE = 'About this dashboard and this desk — the definition’s own summary at this cursor, and the claim this desk makes about itself';
 
 /** What that fold is called — the one place the count of omissions is spelled. */
-const NOT_HERE_TITLE = 'What the other three desks show and this page does not — seven things it does without, each one named rather than quietly missing, one affordance it no longer announces, one thing it adds, one thing it remembers that is not on the record, and one request it makes';
+const NOT_HERE_TITLE =
+  'What the other three desks show and this page does not — seven things it does without, each one named rather than quietly missing, one affordance it no longer announces, one attribution its pictures no longer each carry, one thing it adds, one thing it remembers that is not on the record, one number it draws that is on no commit, and one request it makes';
 
 /**
  * WHAT THE OTHER THREE DESKS SHOW AND THIS PAGE DOES NOT — named, because an
@@ -230,6 +231,18 @@ function NotHere(): JSX.Element {
         <b>And one thing this page remembers that is not on the record:</b> where you put the two dividers between the focus and its satellite panes. That is a LAYOUT PREFERENCE and not an analytical act — it lands no commit, appears
         nowhere on the log below and nothing in the session&rsquo;s own account of itself mentions it — so it is kept in this browser&rsquo;s own storage, for you only, and it travels with no saved picture and no link. Clearing this
         site&rsquo;s data puts both boundaries back where the page had them, and so does pressing <code>Enter</code> on a divider.
+      </li>
+      <li>
+        <b>And one attribution the pictures no longer each carry:</b> which stage produced them. Every card used to carry <i>Stage 3 · Structure Analysis</i> at the right of its footer, and that came off when the stepper&rsquo;s bar began
+        following the FOCUS: the question <i>which stage produced the picture I am looking at</i> now has one owner, and printing it eight times over was eight copies of one fact. <b>The consequence, said plainly:</b> at a glance
+        you can see which stage the FOCUSED picture belongs to — the bar and the current step under the marks — and not which stage a small pane belongs to. Pressing that pane says: it goes into the focus and the bar moves to its
+        step. The attribution itself is not gone, it is in each card&rsquo;s own <i>Full note</i>, at the lead.
+      </li>
+      <li>
+        <b>And one number this page draws that is on no commit:</b> the backbone-angle plot&rsquo;s axes run the whole &minus;180 to 180 degrees a torsion angle can take, rather than the extent of these residues. That range is a fact
+        about the MEASUREMENT and a reader of a Ramachandran plot needs it — a residue at 107&deg; drawn hard against the right edge reads as the edge of torsion space when it is nowhere near it. But the library&rsquo;s frame
+        vocabulary is words (<code>domain: &lsquo;union&rsquo;</code>, folded from the rows), so there is no way to DECLARE a numeric domain: this page hands it to the chart as a prop, which means nothing on the log below says why
+        those axes are wider than the marks. The crosshair through zero beside it IS declared, and the record carries it. When the library can declare the range too, the declaration replaces the prop and this line goes.
       </li>
       <li>
         <b>And one request this page makes that the other three do not:</b> it asks <code>fonts.googleapis.com</code> for IBM Plex Sans, Serif and Mono. That is a THIRD-PARTY REQUEST from a page that otherwise makes none — every byte of data
@@ -416,7 +429,17 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    * `framePad` is `vizfootprint-ui`'s own union of the margins of the kinds
    * this desk draws, so the floor moves if the library's padding ever does.
    */
-  const floors = useMemo(() => dividerFloors({ pad: framePad(['line', 'bar', 'point']), axisRoom: AXIS_ROOM }), []);
+  /**
+   * THE LIBRARY'S OWN MARGIN INSIDE A CHART BOX, once — `vizfootprint-ui`'s
+   * union of the kinds this desk draws.
+   *
+   * TWO folds read it and neither may have its own copy: the divider floors
+   * below, and whether a mark in a tile is wide enough to be pressed
+   * (`./workbench/charts.ts` · `reachClause`). Both are about how much of a
+   * pane is plot, and that is the library's number.
+   */
+  const chartPad = useMemo(() => framePad(['line', 'bar', 'point']), []);
+  const floors = useMemo(() => dividerFloors({ pad: chartPad, axisRoom: AXIS_ROOM }), [chartPad]);
   /** THE SHARES THE LAYOUT GETS — the reader's, held at a floor when it asks for more than the window can give. */
   const railHeld = clampShare(split.rail, laid.w, floors.rail);
   const stripHeld = clampShare(split.strip, laid.h, floors.strip);
@@ -527,6 +550,30 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    */
   const hero: ProtCell | null = promotedCard !== null ? null : (promotedCell ?? produced[0] ?? pictures[0] ?? null);
   const rail = pictures.filter((c) => c !== hero);
+  /**
+   * WHICH STAGE OWNS THE PICTURE IN THE FOCUS — asked of the picture and not of
+   * the cursor, because the card is the picture's: a stage's line on a chart
+   * that stage did not produce is the misattribution this desk keeps refusing.
+   */
+  const heroStage = hero === null ? null : ownerOf(hero.id);
+  /**
+   * THE STAGE THE READER IS LOOKING AT — and it is what the stepper's bar and
+   * `aria-current` follow (`./workbench/steps.ts` · `stepViews`).
+   *
+   * One question, one answer, derived from what is actually IN the focus slot:
+   * a blocked step's own card when one is promoted there, else the stage that
+   * owns the picture that is. So it is right however the desk arrived — a
+   * stepper press, a promoted rail tile, a seek, a reload — rather than being a
+   * memory of which control was last pressed.
+   *
+   * IT IS NOT THE CURSOR'S STAGE ({@link here}). Three of the six columns move
+   * the focus and not the cursor, so the two really do part company, and when
+   * they do the focused card says so (`./workbench/panel.ts` · `focusVsCursor`)
+   * while the chrome's commit line goes on stating where the cursor stands.
+   */
+  const focusedStage: StepperStage | null = promotedCard === null ? heroStage : (stages.find((s) => s.stage === promotedCard.id) ?? null);
+  /** The line for the focused card when the two disagree — `null` when they agree, and then no row is drawn. */
+  const elsewhere = focusVsCursor(focusedStage, here);
   /** Which views hold a LIVE clause — what the ✕ on a card is about. `cleared` is `null`, whatever the kind. */
   const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== null).map((s) => s.viewId)), [state.selections]);
   const summary = state.dashboard?.prose.find((p) => p.slot === 'caption');
@@ -575,7 +622,10 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
     setPromoted(null);
     void seek(stage.commit).then(setSaid, (e: unknown) => setSaid(`that seek threw: ${e instanceof Error ? e.message : String(e)}`));
   };
-  const steps = stepViews(stages, here, true);
+  // THE BAR AND `aria-current` MARK THE FOCUSED STAGE, never the cursor's — see
+  // {@link focusedStage}. The cursor keeps its own voice in the chrome's commit
+  // line, and `elsewhere` is where the page says the two disagree.
+  const steps = stepViews(stages, focusedStage, true);
   const said_focus = {
     cursor: state.cursor,
     onPath: state.cursor !== null && state.activePathIds.includes(state.cursor),
@@ -592,9 +642,9 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    *
    * Asked of the picture rather than of the cursor, because the card is the
    * picture's: a stage's line on a chart that stage did not produce would be
-   * the misattribution this desk keeps refusing.
+   * the misattribution this desk keeps refusing. ({@link heroStage} is folded
+   * beside the focus itself, since the stepper's bar reads it too.)
    */
-  const heroStage = hero === null ? null : ownerOf(hero.id);
   const cardWords = heroStage === null || heroStage.stage === here?.stage ? words : stageWords({ here: heroStage, run, counts, ...said_focus });
 
   /**
@@ -628,12 +678,29 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         // below, which is this desk's own frame. (A finding, reported.)
         legend={[]}
         stage={withStage ? { mark: cardWords.mark, line: cardWords.line, facts: cardWords.facts, refusal: cardWords.refusal } : null}
+        // THE FOCUS AND THE CURSOR, WHEN THEY DISAGREE — on the FOCUSED card
+        // only, because that is where the reader is looking and the fact is
+        // about what they are looking at. `null` on a rail tile and whenever
+        // the two agree (`./workbench/panel.ts` · `focusVsCursor`).
+        cursorElsewhere={focused ? elsewhere : null}
         footLeft={c.foot}
-        // WHO PUT THESE COLUMNS ON THE DESK — the stage whose acts landed them,
-        // or the STEP THAT READ THE FILE (`ownerLine` says the rest). The
-        // fallback is left for a picture that binds nothing and is nobody's
-        // receipt, which no view on this desk is today.
-        footRight={ownerLine(ownerOf(c.id), 'a picture no step on this desk produced')}
+        /*
+          NO STAGE ATTRIBUTION IN A FOOTER ANY MORE — ONE OWNER PER QUESTION.
+          The question is *which stage produced the picture I am looking at*,
+          and the stepper answers it now that the bar and `aria-current` follow
+          the FOCUS: press any tile and the bar moves to its stage. The fact was
+          being printed on eight cards at once; it is one press away instead.
+
+          IT IS NOT THE LAST COPY OF ANYTHING, which is the check this desk owes
+          before a clause is cut: the stage is on the stepper and in the card's
+          own note (`workbench/panel.ts` · `StageWords.eyebrow`), and step 1's
+          `no act, no commit` is in that note's account and in the accessible
+          name of its own stepper control (`workbench/steps.ts` ·
+          `focusLabelOf`). What DOES change is what the page says at a glance
+          about a tile whose stage is not the focused one — named in
+          {@link NotHere}.
+        */
+        footRight={null}
         // THE LONG NOTE, BEHIND THE DISCLOSURE AND NEVER DELETED: this is the
         // caption the desk always had, with every silence it counts — and, on
         // the focused card, the stage's own sentences in front of it.
@@ -696,7 +763,10 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       howToRead={null}
       legend={[]}
       footLeft={b.tag}
-      footRight={ownerLine(stages.find((s) => s.stage === b.id) ?? null, b.name)}
+      // the stepper carries which step this card belongs to (see `card` above);
+      // the footer keeps the KIND of blocked, which the stepper's word under
+      // the mark also carries and which is this card's own subject
+      footRight={null}
       note={
         <>
           <p style={{ margin: '0 0 6px' }}>
@@ -708,6 +778,11 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       noteLabel="Full note"
       noteAria={`the whole reason ${b.name} will not run on this build`}
       clear={null}
+      // A BLOCKED STEP LANDED NO COMMIT, so its press ALWAYS parts the focus
+      // from the cursor — this card is the one a reader is most often looking
+      // at when the two disagree, and the line is folded from the two facts
+      // rather than from the press that got here.
+      cursorElsewhere={focused ? elsewhere : null}
       height="fill"
     >
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, flex: '1 1 0', minHeight: 0, padding: '6px 0' }}>
@@ -759,6 +834,16 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       id={c.id}
       label={desk.label(c.id)}
       said={c.foot ?? data.refusals[c.clauseId ?? c.id] ?? null}
+      /*
+        AND WHETHER ITS MARKS CAN BE PRESSED BY HAND — folded against the
+        INSTRUMENT'S own width, which is an upper bound on any pane inside it,
+        so a clause here means no pane on this page could give these marks a
+        pointer-sized target (`./workbench/charts.ts` · `reachClause` carries
+        the measurement and the finding). `null` for a picture whose gesture is
+        not a press on a mark, and `null` again the moment a crossfilter narrows
+        the marks enough — the clause is derived and corrects itself.
+      */
+      reach={c.marks === undefined ? null : reachClause(laid.w, c.marks, chartPad)}
       wide={wide}
       promote={{ label: promoteChartLabel(desk.label(c.id)), onPress: () => setPromoted({ stage: here?.stage ?? null, id: c.id }) }}
     >

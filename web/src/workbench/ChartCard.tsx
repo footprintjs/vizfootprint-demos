@@ -2,12 +2,33 @@
  * THE CARD A PICTURE SITS IN — LAYER 2. The frame is this desk's; the picture
  * inside it is always the library's.
  *
- * ── THE ONE VISIBLE LINE, AND THE NOTE BEHIND THE DISCLOSURE ───────────────
- * A card shows its title and ONE quiet line — the `How to read:` sentence,
- * which on this desk is the LIBRARY'S OWN derived prose slot
- * (`src/prot/def.ts` declares `howToRead: { author: { kind: 'derived' } }` and
- * the library writes it at every read). Everything else the picture needs said
- * moves behind `Full note`.
+ * ── A CARD'S FACE IS THREE THINGS: A TITLE, A PICTURE, ONE LINE OF FIGURES ──
+ * Nothing else, on any card — the focus slot and every tile, the table and the
+ * viewer pane. Two sentences used to stand above the picture and both are now
+ * behind `Full note`, whole:
+ *
+ *   `How to read: a scatter with phi on x, psi on y`
+ *                     the LIBRARY'S own derived prose slot (`src/prot/def.ts`
+ *                     declares `howToRead: { author: { kind: 'derived' } }`).
+ *                     What it derives is a description of the ENCODING, which a
+ *                     reader can already read off the two axis labels — so it
+ *                     told them nothing they could not see. (A finding about
+ *                     derived prose, reported: an encoding description is not a
+ *                     reading instruction, and the slot asked for the second.)
+ *   `STAGE 1  landed by the parse, before this record starts`
+ *                     engine vocabulary. *A scientist reading a Ramachandran
+ *                     plot does not care about stage 1 or commits* — the
+ *                     author's point, and the whole argument for the move.
+ *
+ * **Neither is deleted, and neither is optional.** This component renders both
+ * at the head of its own note, so a card cannot lose them by a caller
+ * forgetting — and a card whose picture has no long caption still gets a
+ * `Full note` control ({@link hasNote}) for exactly that reason.
+ *
+ * What is left BELOW the picture is the record, and it stays: the stage's own
+ * numbers, its refusal, the one line that says the focus and the cursor
+ * disagree, and the Mono footer of counts. It is the prose ABOVE the picture
+ * that went, never the figures below it.
  *
  * **Nothing is dropped.** The long note is the caption this desk always had,
  * and it is long because it is true: that 17 zeros mean the probe could not
@@ -77,11 +98,25 @@ export interface ChartCardProps {
   readonly label: string;
   /** The focused card is the hero: bigger radius, heavier glass, the deep shadow. */
   readonly focused: boolean;
-  /** The ONE visible line — the library's own derived how-to-read sentence. `null` for a view that declares no encoding surface to derive one from. */
+  /**
+   * The library's own derived how-to-read sentence — behind `Full note` since
+   * the faces were cleared, never on the face. `null` for a view that declares
+   * no encoding surface to derive one from.
+   */
   readonly howToRead: string | null;
   /** The chips beside the header. Empty for a chart that draws its own legend — see the packet's findings. */
   readonly legend: readonly LegendChip[];
-  /** The footer, in Mono: what was plotted on the left, which stage owns it on the right. */
+  /**
+   * The footer, in Mono: one line of figures, and a second clause at the right
+   * edge for a host that has one.
+   *
+   * THIS DESK PASSES `footRight: null` EVERYWHERE. It used to carry the owning
+   * stage, and that came off when the stepper's bar began following the focus —
+   * one owner per question (`./charts.ts`, the note where `ownerLine` was). The
+   * slot stays because this component is written to move into
+   * `vizfootprint-ui` and serve every desk, not because this page wants it
+   * back: a card's footer here is its counts and nothing else.
+   */
   readonly footLeft: string | null;
   readonly footRight: string | null;
   /** The long note, behind the disclosure. `null` only for a picture with nothing more to say. */
@@ -93,6 +128,17 @@ export interface ChartCardProps {
   readonly clear: { readonly label: string; onPress(): void } | null;
   /** What the stage that landed this picture did — {@link CardStage}. `null` on every card that is not the focus. */
   readonly stage?: CardStage | null;
+  /**
+   * THE ONE LINE THAT SAYS THE FOCUS AND THE CURSOR DISAGREE, drawn below the
+   * picture beside the figures and the refusal — the register a state
+   * announcement belongs in on this desk.
+   *
+   * Folded by the business layer from the two facts themselves
+   * (`./panel.ts` · `focusVsCursor`), never from which control was pressed, so
+   * it is right however the desk got into that state. `null` when they agree,
+   * and then no row is drawn at all.
+   */
+  readonly cursorElsewhere?: string | null;
   /**
    * The height this card gives its picture.
    *
@@ -110,9 +156,17 @@ export interface ChartCardProps {
 }
 
 /** The card. See the file header for the one visible line and the law about the note. */
-export function ChartCard({ id, label, focused, howToRead, legend, footLeft, footRight, note, noteLabel, noteAria, clear, stage = null, height, children }: ChartCardProps): JSX.Element {
+export function ChartCard({ id, label, focused, howToRead, legend, footLeft, footRight, note, noteLabel, noteAria, clear, stage = null, cursorElsewhere = null, height, children }: ChartCardProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const fills = height === 'fill';
+  /*
+    IS THERE ANYTHING TO DISCLOSE? The two sentences that came off the face are
+    disclosed even on a card whose picture has no long caption of its own, so a
+    card with `note === null` still gets its `Full note` control. Without this
+    the move off the face would have been a DELETION for such a card, which is
+    the one thing the law forbids.
+  */
+  const hasNote = note !== null || howToRead !== null || stage !== null;
   return (
     <article
       data-chart={id}
@@ -138,19 +192,17 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: focused ? 7 : 8 }}>
         <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+          {/*
+            A CARD'S FACE IS A TITLE, A PICTURE AND ONE LINE OF FIGURES —
+            nothing else, and the author's reason is the one this desk runs on.
+            Two sentences used to sit here and both are now behind `Full note`
+            (see the file header): the library's derived `How to read:` line,
+            which describes the ENCODING a reader can already read off the axis
+            labels, and the stage's own quiet line, which is engine vocabulary —
+            *a scientist reading a Ramachandran plot does not care about stage 1
+            or commits.* Neither is deleted; the note below renders both.
+          */}
           <h2 style={{ margin: 0, fontSize: focused ? 16 : 13.5, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--pw-ink)' }}>{label}</h2>
-          {/* THE ONE VISIBLE LINE. Absent rather than invented when the library
-              derived none — a view that declares no encoding surface has no
-              bindings to derive a how-to-read line from, and says nothing. */}
-          {howToRead === null ? null : <p style={{ margin: '4px 0 0', fontSize: focused ? 13 : 12, color: 'var(--pw-mid-2)' }}>How to read: {howToRead}</p>}
-          {/* THE STAGE'S ONE QUIET LINE, beside the library's own derived one —
-              the band's first field, in the place the band was about */}
-          {stage === null ? null : (
-            <p style={{ margin: '3px 0 0', fontSize: focused ? 13 : 12, color: 'var(--pw-mid-2)' }}>
-              <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-accent-bright)', marginRight: 5 }}>{stage.mark}</span>
-              {stage.line}
-            </p>
-          )}
         </div>
         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           {legend.map((chip) => (
@@ -164,7 +216,7 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
               ✕ clear
             </GlassButton>
           )}
-          {note === null ? null : (
+          {!hasNote ? null : (
             <GlassButton small open={open} expanded={open} label={noteAria} onPress={() => setOpen(!open)}>
               <Chevron open={open} />
               {noteLabel}
@@ -204,6 +256,22 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
             </p>
           )}
         </>
+      )}
+
+      {/*
+        AND WHEN THE FOCUS AND THE CURSOR PART COMPANY, THE PAGE SAYS SO — a
+        state announcement, not prose about the protein, so it sits BELOW the
+        picture with the figures and the refusal rather than above it with the
+        title. Its words are folded from the two facts disagreeing
+        (`./panel.ts` · `focusVsCursor`) and never from which control was
+        pressed, so a resize, a reload, a promoted tile and a seek from the
+        record drawer all reach it. `null` when they agree, and then there is no
+        row at all: an absence is absent.
+      */}
+      {cursorElsewhere === null ? null : (
+        <p role="status" style={{ margin: '7px 0 0', fontSize: focused ? 12 : 11, lineHeight: 1.45, color: 'var(--pw-mid-2)' }}>
+          {cursorElsewhere}
+        </p>
       )}
 
       {/*
@@ -249,8 +317,24 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
         would be a note this desk deleted with `overflow: hidden`, which is the
         one thing the law forbids.
       */}
-      {note === null || !open ? null : (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--pw-rule)', fontSize: 12, lineHeight: 1.6, color: 'var(--pw-mid-2)', ...(fills ? { flex: '0 1 auto', minHeight: 0, overflowY: 'auto' as const } : {}) }}>{note}</div>
+      {!hasNote || !open ? null : (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--pw-rule)', fontSize: 12, lineHeight: 1.6, color: 'var(--pw-mid-2)', ...(fills ? { flex: '0 1 auto', minHeight: 0, overflowY: 'auto' as const } : {}) }}>
+          {/*
+            THE TWO SENTENCES THAT CAME OFF THE FACE, FIRST — in the order they
+            stood in, so nothing about them changed except where they are read.
+            They are rendered HERE rather than by the composition so that EVERY
+            card keeps them without a caller having to remember: the focus slot,
+            every tile that uses this card, the table and the viewer pane.
+          */}
+          {howToRead === null ? null : <p style={{ margin: '0 0 6px' }}>How to read: {howToRead}</p>}
+          {stage === null ? null : (
+            <p style={{ margin: '0 0 6px' }}>
+              <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-accent-bright)', marginRight: 5 }}>{stage.mark}</span>
+              {stage.line}
+            </p>
+          )}
+          {note}
+        </div>
       )}
     </article>
   );
@@ -267,6 +351,20 @@ export interface ChartTileProps {
   readonly said: string | null;
   /** The control that brings it into the focus — what it is called, and what a press does. */
   readonly promote: { readonly label: string; onPress(): void };
+  /**
+   * WHAT TO SAY WHEN THE MARKS IN HERE CANNOT BE PRESSED BY HAND — folded by
+   * the business layer (`./charts.ts` · `reachClause`), `null` when they can.
+   *
+   * It is drawn ON THE FIGURES' OWN LINE, after them, and that is deliberate
+   * rather than tidy: this tile ships about two pixels above the floor at which
+   * its bars stop being a band (`./charts.ts` · `markFloor`), so a line of its
+   * own would have taken the picture under it. A span on a baseline the tile
+   * already spends costs the drawing nothing.
+   *
+   * It is a FACT about the gesture, never an instruction about the data, and
+   * the long form is in the card's own note where every long note here lives.
+   */
+  readonly reach?: string | null;
   /** `true` lays the tile out for the bottom strip; a block for the right column otherwise. */
   readonly wide?: boolean;
   /** The picture. `null` for a step that has none — the three that will not run here — and then {@link ChartTileProps.said} is the whole body. */
@@ -303,7 +401,7 @@ export interface ChartTileProps {
  * worth drawing. The header row is the promote control, with the accessible
  * name; the picture below it belongs to the reader.
  */
-export function ChartTile({ id, label, said, promote, wide = false, children }: ChartTileProps): JSX.Element {
+export function ChartTile({ id, label, said, promote, reach = null, wide = false, children }: ChartTileProps): JSX.Element {
   return (
     <article
       data-chart={id}
@@ -352,8 +450,25 @@ export function ChartTile({ id, label, said, promote, wide = false, children }: 
       </button>
       {/* THE COUNT, in Mono — the only surviving copy of these numbers now that
           the counted-facts band is gone, and never a sentence. */}
-      {said === null ? null : (
-        <span style={{ fontFamily: children === undefined ? 'var(--pw-font-sans)' : 'var(--pw-font-mono)', fontSize: children === undefined ? 10.5 : 9.5, lineHeight: 1.35, color: 'var(--pw-mid-2)', flex: '0 0 auto', minWidth: 0, ...(children === undefined ? {} : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>{said}</span>
+      {said === null && reach === null ? null : (
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontFamily: children === undefined ? 'var(--pw-font-sans)' : 'var(--pw-font-mono)', fontSize: children === undefined ? 10.5 : 9.5, lineHeight: 1.35, color: 'var(--pw-mid-2)', flex: '0 0 auto', minWidth: 0 }}>
+          {said === null ? null : <span style={children === undefined ? { minWidth: 0 } : { minWidth: 0, flex: '0 0 auto', whiteSpace: 'nowrap' }}>{said}</span>}
+          {/*
+            THE GESTURE FACT, ON THE FIGURES' OWN LINE so the picture keeps
+            every pixel it has — this tile ships about two pixels above the
+            floor at which its bars stop being a band (`./charts.ts` ·
+            `markFloor`), and a line of its own would have taken it under.
+
+            THE FIGURES FIRST AND THE CLAUSE SECOND, with the ellipsis on the
+            clause: the counts are the only surviving copy of themselves on this
+            desk, and the clause is recoverable from the note. Same law as the
+            card's footer — if it does not fit, the words shorten and never the
+            numbers.
+          */}
+          {reach === null ? null : (
+            <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9, color: 'var(--pw-soft-2)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{reach}</span>
+          )}
+        </span>
       )}
       {children === undefined ? null : <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 0', minHeight: 0, minWidth: 0, marginTop: 3 }}>{children}</div>}
     </article>

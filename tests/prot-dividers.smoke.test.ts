@@ -175,12 +175,35 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
     page.on('pageerror', (e) => pageErrors.push(String(e)));
     await page.goto(`${site.protUrl}?entry=${EXAMPLE_ENTRY}`);
     await page.waitForSelector('[data-chart][data-focused="true"] circle.vzf-line-dot', { timeout: 120_000 });
+    await settle();
   }, 300_000);
 
   afterAll(async () => {
     await browser?.close();
     await site?.close();
   });
+
+  /**
+   * WAIT FOR THE PANES TO STOP MOVING before measuring one to the pixel.
+   *
+   * `ChartFrame` re-measures on a ResizeObserver callback and the webfont
+   * arrives after first paint, so the first arrangement is not the last — and
+   * this file measures the page at rest EXACTLY. Measured: the settled focus
+   * frame is 322.375px tall (a 441.125px card, 118.75px of chrome), and a
+   * reading taken a frame or two early reports 321. It is the same wobble
+   * `web/src/workbench/README.md` names in the right column, and the same
+   * answer: wait for the invariant, and fail loudly if it never arrives.
+   */
+  const settle = async (): Promise<void> => {
+    let last = -1;
+    for (let tries = 0; tries < 40; tries += 1) {
+      const now = await page.evaluate(() => Math.round(document.querySelector('[data-chart][data-focused="true"] .vzf-chart-frame')?.getBoundingClientRect().height ?? 0));
+      if (now > 0 && now === last) return;
+      last = now;
+      await page.waitForTimeout(150);
+    }
+    throw new Error(`the focus pane never settled to a height — the last two readings were ${String(last)}px apart from each other`);
+  };
 
   /** Drag one divider to a coordinate on its own axis — in steps, because a single jump is not a drag and would not exercise the pointer capture. */
   const drag = async (orientation: 'vertical' | 'horizontal', to: number): Promise<void> => {
@@ -218,6 +241,7 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
     await page.reload();
     await page.waitForSelector('[data-chart][data-focused="true"] circle.vzf-line-dot', { timeout: 120_000 });
     await page.waitForTimeout(400);
+    await settle();
   };
 
   it('puts TWO REAL SEPARATORS on the page, each with its own axis and values', async () => {
@@ -245,9 +269,16 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
     const m = await measure(page);
     say(`at rest: the page is ${String(m.page)}px in a ${String(m.viewport)}px window; the focus is ${String(m.focus.drawnW)}×${String(m.focus.drawn)} with ${String(m.focus.marks)} marks; ${drawing(m).map((p) => `${p.id} ${String(p.w)}×${String(p.drawn)} (${String(p.marks)} marks over ${String(p.band)}px)`).join(', ')}`);
     expect(m.page).toBe(m.viewport);
-    // the numbers `tests/prot-viewport.smoke.test.ts` measures, unchanged
+    /*
+      THE NUMBERS `tests/prot-viewport.smoke.test.ts` MEASURES — and the height
+      moved once, on purpose. Clearing the card's FACE (the derived
+      `How to read:` line and the stage's own quiet line, both now behind
+      `Full note`) handed 44px straight to the picture: 906×278 became 906×322,
+      and `CARD_CHROME` went from 163 to 119 with it — which is why the focus
+      row's floor followed, from 333 to 289, without anybody choosing a number.
+    */
     expect(m.focus.drawnW).toBe(906);
-    expect(m.focus.drawn).toBe(278);
+    expect(m.focus.drawn).toBe(322);
     expect(m.panes.find((p) => p.id === RAMA_VIEW)?.w).toBe(282);
   });
 
@@ -396,10 +427,10 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
     await page.waitForFunction((selector) => document.querySelectorAll(selector).length > 100, `[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 15_000 });
     /*
       AND THE ONE THING THE FLOORS DO NOT COVER, measured rather than assumed:
-      the FOCUS card's own chrome — its title, the library's derived how-to-read
-      line, the `Full note` control and the Mono footer — takes MORE of its
-      height when the card is narrow, because those lines wrap. `CARD_CHROME`
-      (163px) is measured at the width the page ships, so with BOTH boundaries
+      the FOCUS card's own chrome — its title, the `Full note` control and the
+      Mono footer — takes MORE of its height when the card is narrow, because
+      those lines wrap. `CARD_CHROME` (119px, since the face was cleared) is
+      measured at the width the page ships, so with BOTH boundaries
       at their stops the focus's own picture is smaller than the mark floor
       would ask of a satellite. Named here with its number rather than hidden:
       the law this packet is about is the SATELLITES' (asserted above, and they

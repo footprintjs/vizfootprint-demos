@@ -112,6 +112,14 @@ export const STEPPER_LABEL = 'the stages this desk declares, in the order they l
 /**
  * THE COLUMNS.
  *
+ * `focused` is THE STAGE WHOSE THING IS IN THE FOCUS SLOT — the blocked step
+ * whose card is there, or the stage that owns the picture that is
+ * (`web/src/protDesk.tsx` · `focusedStage`). It is what the bar and
+ * `aria-current` mark, for all six kinds, because the stepper is navigation and
+ * a control that does not visibly respond to a press is broken. It used to be
+ * the CURSOR'S stage, which is why pressing a stage the cursor cannot move to
+ * left the bar on another column.
+ *
  * `seekable` is `false` while the run is still dispatching: the cursor these
  * stages move arrives with the desk, so until then no mark is a control at all
  * — not even the stages that will not run, whose press needs a focus to promote
@@ -119,7 +127,7 @@ export const STEPPER_LABEL = 'the stages this desk declares, in the order they l
  * that would answer a refusal.
 
  */
-export function stepViews(stages: readonly StepperStage[], here: StepperStage | null, seekable: boolean): readonly StepView[] {
+export function stepViews(stages: readonly StepperStage[], focused: StepperStage | null, seekable: boolean): readonly StepView[] {
   let lastRun = -1;
   stages.forEach((stage, index) => {
     if (hasRun(stage)) lastRun = index;
@@ -145,7 +153,13 @@ export function stepViews(stages: readonly StepperStage[], here: StepperStage | 
     // three not-happening steps share — which kind of blocked this one is
     tag: stage.blockedBy === null ? TAG[stage.state] : BLOCKED_TAG[stage.blockedBy],
     look: LOOK[stage.state],
-    here: here?.stage === stage.stage,
+    // THE BAR AND `aria-current` FOLLOW THE FOCUS, never the cursor: the column
+    // whose picture or card is in the focus slot is the column a reader is
+    // looking at, and the stepper is this page's navigation. Where the CURSOR
+    // stands is a different fact with its own voice (the chrome's commit line),
+    // and when the two disagree the focused card says so
+    // (`./panel.ts` · `focusVsCursor`).
+    focused: focused?.stage === stage.stage,
     // ONE CONTROL PER COLUMN, TWO THINGS IT CAN ANSWER. A commit to seek to, or
     // — for a stage that will not run here — a card to bring into the focus.
     // Neither before the desk has a cursor at all: `seekable` gates both,

@@ -94,33 +94,27 @@ export function stageOfChart(stages: readonly StepperStage[], viewId: string, sh
   return stages.find((stage) => chartsOfStage(stage, shown, actColumns).includes(viewId)) ?? null;
 }
 
-/**
- * `Stage 3 · How much of each residue the solvent can reach` — who put this
- * picture's columns on the desk.
+/*
+ * ── AND THE OWNER LINE, WHICH WAS HERE AND IS GONE ─────────────────────────
+ * `ownerLine` folded `Stage 3 · Structure Analysis` for the right-hand side of
+ * every card's Mono footer, plus `· no act, no commit` for the step that landed
+ * at the root. It has no caller any more, and the reason is the law this page
+ * runs on: ONE OWNER PER QUESTION.
  *
- * FOR THE STEP THAT LANDED AT THE ROOT it adds three words, because the foot
- * used to say *"from the file's own columns — no act landed these"* and that
- * was a half-truth: it reads as an absence, as though nobody were responsible
- * for those columns, when in fact the parse is — and the parse is step 1. So
- * the line credits the step and states the one fact a reader needs when the
- * number they pressed does not move the cursor. Derived from
- * `StepperStage.landsAtRoot`, never typed per view.
+ * The question is *which stage produced the picture I am looking at*, and since
+ * the stepper's bar and `aria-current` follow the FOCUS
+ * (`./steps.ts` · `stepViews`), the stepper answers it — for every chart,
+ * because pressing any tile promotes it and moves the bar. The fact stopped
+ * being printed eight times and became one press away.
  *
- * `fromTheFile` is left for a picture that binds nothing and is nobody's
- * receipt — no view on this desk is that today.
+ * Nothing it said is lost: the stage is on the stepper and at the lead of the
+ * card's own note (`./panel.ts` · `StageWords.eyebrow`), and the root step's
+ * `no act, no commit` is in that note's account, in its quiet line and in the
+ * accessible name of its own stepper control (`./steps.ts` · `focusLabelOf`).
+ * What a reader loses at a GLANCE — a tile labelling its own stage while
+ * another stage is focused — is named in `web/src/protDesk.tsx` · `NotHere`,
+ * where every announced omission on this page is.
  */
-export function ownerLine(stage: StepperStage | null, fromTheFile: string): string {
-  if (stage === null) return fromTheFile;
-  // THE SHORT DECLARED NAME, not the sentence: a footer is a Mono line of
-  // counts and an owner, and the sentence wrapped it to two lines — which is
-  // the register this desk has spent four rounds clearing from under a drawing.
-  // The declared sentence is in the card's own note, at its lead.
-  const who = `Stage ${stage.number.toLocaleString('en-US')} · ${stage.name}`;
-  // …and the one fact a reader needs when the number they pressed does not move
-  // the cursor, in three words rather than a clause. The whole account is
-  // behind `Full note` (`web/src/workbench/panel.ts` · `StageWords.account`).
-  return stage.landsAtRoot ? `${who} · no act, no commit` : who;
-}
 
 // ── the rail, and the order the plan puts it in ──────────────────────────────
 
@@ -186,6 +180,39 @@ const SHAPE_OF_KIND: Readonly<Record<string, TileShape>> = { line: 'wide', bar: 
 export function shapeOfView(viewId: string): TileShape {
   const declared = PROT_ENCODINGS.find((encoding) => encoding.viewId === viewId);
   return declared === undefined ? 'tall' : (SHAPE_OF_KIND[declared.chartKind] ?? 'square');
+}
+
+/**
+ * WHICH AXES OF A VIEW ASKED FOR A LINE THROUGH ZERO — the declaration, read
+ * from the one place that owns it, in the shape `vizfootprint-ui` ·
+ * `ChartDomain.zeroGuide` takes.
+ *
+ * ── WHY IT IS READ OFF THE DEF AND NOT OFF THE FOLD, which was the intent ──
+ * The ask is declared once (`src/prot/def.ts` · `PROT_ENCODINGS`, the rama
+ * entry's `frame`), and the SESSION does serve it — measured, on its own
+ * `overview()`: `{"x":{"zeroGuide":true},"y":{"zeroGuide":true}}`. What loses it
+ * is the reader-side mapper: `vizfootprint-ui` · `sessionView.ts` · `mapFrame`
+ * keeps a channel only when it carries `mode: 'shared' | 'independent'` and
+ * drops every other one — and a LAYERLESS view may not carry `mode` at all,
+ * because the def door refuses it there by name (`vizfootprint/def` ·
+ * `AXIS_SHAPE`). So `SessionViewState.views[].frame` arrives as `{}` for this
+ * view and a declaration that IS on the wire cannot reach the picture.
+ *
+ * **Reported as a FINDING; the mapper is the library's to fix.** Meanwhile this
+ * page does what it already does for the declared `chartKind` the wire serves
+ * only for a layer ({@link shapeOfView}, and this file's header says so): it
+ * reads the DECLARATION from the def it owns. One owner either way, and no prop
+ * typed at a call site — the day `mapFrame` keeps an axis entry, this function
+ * is the one place that changes.
+ *
+ * `undefined` when no channel asked, which is byte-identical to the picture
+ * before the key existed.
+ */
+export function zeroGuideOf(viewId: string): { readonly x?: boolean; readonly y?: boolean } | undefined {
+  const frame = PROT_ENCODINGS.find((encoding) => encoding.viewId === viewId)?.frame;
+  const asked = (channel: 'x' | 'y'): boolean => frame?.[channel]?.zeroGuide === true;
+  if (!asked('x') && !asked('y')) return undefined;
+  return { ...(asked('x') ? { x: true } : {}), ...(asked('y') ? { y: true } : {}) };
 }
 
 /**
@@ -289,15 +316,24 @@ export const STRIP_FR = 0.34;
 export const TILE_CHROME = 46;
 
 /**
- * THE FOCUSED CARD'S OWN CHROME above its picture — its title row, the
- * library's derived `howToRead` line, the `Full note` control and the Mono
- * footer (`./ChartCard.tsx` · `ChartCard`).
+ * THE FOCUSED CARD'S OWN CHROME above and below its picture — its title row,
+ * the `Full note` control and the Mono footer (`./ChartCard.tsx` · `ChartCard`).
  *
  * Measured the same way and also identical at both budgets: a 441px card
- * holding a 906×278 picture at 1280×800, a 516px card holding 1031×353 at
- * 1440×900. 163px, twice.
+ * holding a 906×322 picture at 1280×800, a 516px card holding 1031×397 at
+ * 1440×900. **119px, twice.**
+ *
+ * IT WAS 163 AND THE 44px IS THE FACE BEING CLEARED, which is worth recording
+ * because it moved a floor. A card's face is a title, a picture and one line of
+ * figures: the library's derived `How to read:` line and the stage's own quiet
+ * line both went behind `Full note` (`./ChartCard.tsx`'s header carries the
+ * author's argument), and the picture got every pixel they were spending — the
+ * focus grew from 906×278 to 906×322 at 1280×800. So the focus ROW's floor
+ * dropped with it, from 333 to 289 ({@link dividerFloors}), which is the
+ * discipline working rather than a coincidence: the floor is folded from this
+ * number, so the drag's stop followed the card without anybody re-choosing it.
  */
-export const CARD_CHROME = 163;
+export const CARD_CHROME = 119;
 
 /** The library's own fixed margin inside a chart box, in the shape `vizfootprint-ui` · `framePad` returns. */
 export interface PaneMargin {
@@ -341,6 +377,85 @@ export function markFloor(pad: PaneMargin): { readonly height: number; readonly 
   return { height: Math.round((pad.t + pad.b) * 1.5), width: Math.round((pad.l + pad.r) * 1.5) };
 }
 
+// ── and whether a mark can be PRESSED, which is a different floor ───────────
+
+/**
+ * THE SMALLEST TARGET A POINTER MAY BE ASKED TO HIT, in CSS px.
+ *
+ * WCAG 2.2, success criterion 2.5.8 *Target Size (Minimum)*: 24 by 24. It is
+ * not a number anybody here picked — the same discipline as every floor above,
+ * and the reason this one is a standard rather than a measurement is that the
+ * question is about a HAND and not about this page.
+ */
+export const POINTER_TARGET = 24;
+
+/**
+ * HOW MUCH WIDTH ONE MARK GETS, at a given pane width.
+ *
+ * A categorical chart lays its marks over the plot in equal bands
+ * (`vizfootprint-ui` · `bandWidth`), so the pitch is the plot divided by the
+ * count — and the plot is the pane minus the library's own horizontal margin,
+ * which is `framePad`'s answer and never a number typed here. `0` for a pane
+ * with no room or a picture with no marks, which reads as *not reachable* and
+ * is the honest answer for both.
+ */
+export function markPitch(paneWidth: number, marks: number, pad: PaneMargin): number {
+  const plot = paneWidth - pad.l - pad.r;
+  return marks <= 0 || plot <= 0 ? 0 : plot / marks;
+}
+
+/**
+ * CAN A READER PRESS ONE OF THESE MARKS BY HAND? — and if not, the tile says so
+ * in its own voice.
+ *
+ * ── THE MEASUREMENT THAT MADE THIS EXIST ───────────────────────────────────
+ * The cross-chain bar tile draws 185 bars. At the strip's own width that is
+ * **3.5px of mark** (measured: a 922px pane, `framePad(['bar'])` taking 70 of
+ * it, 4.6px a band, a bar 0.76 of its band) — and Playwright refused to click
+ * one, reporting the target as not stable. Worse, and the sharper half: 167 of
+ * those 185 residues touch no other chain, so their count is a REAL ZERO and an
+ * SVG rect of zero height has no area at all. A reader pressing one of those
+ * hits nothing and is told nothing.
+ *
+ * ── WHAT THE LIBRARY OFFERS A HOST HERE: NOTHING ───────────────────────────
+ * Looked for, by name, in `vizfootprint-ui`: a hit area wider than the mark, a
+ * minimum mark width, a nearest-mark pick. `VizBar`'s clickable element IS the
+ * bar (`x = band*0.12`, `width = band*0.76`, `height =` the value), its
+ * `bandAt` pointer-to-band map is private to the drag-run and a run may only
+ * BEGIN on a bar, and no prop on any chart widens a target. So this page cannot
+ * fix it — and it may not widen a mark itself: **a bar whose width lies about
+ * its category is worse than a bar that is hard to hit**, and a zero drawn with
+ * area would be a count of nothing claiming something. It is a FINDING, and
+ * this clause is what the page owes the reader meanwhile.
+ *
+ * ── WHY IT IS FOLDED AGAINST THE WHOLE REGION ──────────────────────────────
+ * `regionWidth` is the instrument's own width, which is an UPPER BOUND on any
+ * pane inside it — so a `null` answer means *some pane could give these marks a
+ * target* and a sentence means *none on this page can*. That is why the clause
+ * does not promise the focus: at 185 marks the focus slot is 4.5px a band too,
+ * and *press it to pick there* would be false. It names the two things that are
+ * true instead — the keyboard affordance the library already gives every bar
+ * (`role="button"`, `tabIndex`, its own accessible name) and the fact that
+ * narrowing the rows from another chart widens these bands.
+ *
+ * DERIVED, so it corrects itself: a crossfilter that cuts 185 marks to 12 makes
+ * the pitch 71px and this returns `null` with nothing to clean up.
+ */
+export function reachClause(regionWidth: number, marks: number, pad: PaneMargin): string | null {
+  const pitch = markPitch(regionWidth, marks, pad);
+  if (pitch === 0 || pitch >= POINTER_TARGET) return null;
+  /*
+    THE COUNT AND NOT THE PITCH, and the difference matters. `regionWidth` is an
+    upper bound, so the pitch folded here is the BEST this page could ever give
+    these marks — quoting it would understate what is on screen (measured:
+    6px against the whole region, 3.5px in the strip, 1.6px when both wide
+    charts share the strip). The mark COUNT is exact, it is the same number the
+    tile's own figures state, and a reader can check it. The arithmetic and both
+    reasons are in the picture's own note, whole.
+  */
+  return `${marks.toLocaleString('en-US')} marks in this width — too thin to press; Tab picks one`;
+}
+
 /** What the floors are folded OUT of — every one of them a number the library or this page already carries. */
 export interface FloorBasis {
   /** The library's own margin, as `vizfootprint-ui` · `framePad` reports it for the kinds this desk draws. */
@@ -374,7 +489,7 @@ export interface DividerFloors {
  * | the satellite COLUMN's width | 256 | the page's own `clamp(16rem, …)` — *the width at which a scatter still reads as a shape* — never below {@link markFloor}'s width arm (105) |
  * | the focus COLUMN's width | 360 | the same clamp's CEILING, `22.5rem`: the widest a satellite tile can ever be, and **a focus the size of a tile is not a focus** |
  * | the satellite STRIP's height | 148 | {@link markFloor} (102) plus the tile's own chrome (46) — the height at which its bars stop being a band |
- * | the focus ROW's height | 333 | `AXIS_ROOM` (170) plus the card's own chrome (163): the focus is the one pane that KEEPS its axis labels, and the labels are also the encoding pickers (`../protCells.tsx`), so a focus that dropped them would take this page's only re-encode control off the screen |
+ * | the focus ROW's height | 289 | `AXIS_ROOM` (170) plus the card's own chrome (119): the focus is the one pane that KEEPS its axis labels, and the labels are also the encoding pickers (`../protCells.tsx`), so a focus that dropped them would take this page's only re-encode control off the screen |
  *
  * Not one of them is a number chosen for this packet, which is the point: the
  * drag stops where a pane would stop being able to do the job the layout is

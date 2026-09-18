@@ -40,7 +40,8 @@ import { actColumnsOf, stepperStages } from '../web/src/protStages.js';
 import { ChartCard, ChartTile, ViewerBox } from '../web/src/workbench/ChartCard.js';
 import { WorkbenchHeader } from '../web/src/workbench/Chrome.js';
 import { methodLine } from '../web/src/workbench/bands.js';
-import { byPlanStep, chainChips, chainColorOf, chainInk, ownerLine, promoteChartLabel, shapeOfView, splitByFocus, stageOfChart } from '../web/src/workbench/charts.js';
+import { byPlanStep, chainChips, chainColorOf, chainInk, promoteChartLabel, shapeOfView, splitByFocus, stageOfChart } from '../web/src/workbench/charts.js';
+import { stageWords } from '../web/src/workbench/panel.js';
 import { CHAIN_INK, VIEWER_BG } from '../web/src/workbench/tokens.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -172,7 +173,10 @@ const card = (cell: ProtCell, howToRead: string | null = 'higher is more exposed
     howToRead={howToRead}
     legend={[]}
     footLeft={cell.foot}
-    footRight={ownerLine(stageOfChart(stepperStages(OUTCOMES, RUN), cell.id, { [INTERFACE_VIEW]: { y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { y: SASA_COLUMN } }, actColumnsOf(stepperStages(OUTCOMES, RUN))), 'a picture no step on this desk produced')}
+    // NULL EVERYWHERE, the way the desk wires it now: the stage attribution
+    // came off every footer when the stepper's bar began following the focus
+    // (`web/src/workbench/charts.ts`, the note where `ownerLine` was)
+    footRight={null}
     note={cell.caption ?? null}
     noteLabel="Full note"
     noteAria={`the full note for ${cell.id}`}
@@ -183,15 +187,41 @@ const card = (cell: ProtCell, howToRead: string | null = 'higher is more exposed
   </ChartCard>
 );
 
-describe('a card shows one line, and the long note is one press away', () => {
-  it('shows the title and exactly ONE quiet line before anything is pressed', async () => {
+describe('a card shows a title, a picture and one line of figures — and the words are one press away', () => {
+  it('puts NO PROSE ABOVE THE PICTURE: not the derived how-to-read line, not the stage\u2019s own', async () => {
     const panel = await mount(card(cellOf(SURFACE_VIEW)));
     const said = panel.words();
     expect(said).toContain(SURFACE_VIEW);
-    expect(said).toContain('How to read: higher is more exposed to solvent');
-    // exactly one `How to read` line, and the card's own paragraph count is one
-    expect((said.match(/How to read:/g) ?? [])).toHaveLength(1);
-    expect(panel.host.querySelectorAll('article > div > div > p')).toHaveLength(1);
+    /*
+      THE AUTHOR'S RULING: *a scientist reading a Ramachandran plot does not
+      care about stage 1 or commits*, and the derived `How to read:` line
+      describes an ENCODING a reader can read off the axis labels. So the face
+      is a title, a picture and the Mono footer — and the header block holds no
+      paragraph at all.
+    */
+    expect(said).not.toContain('How to read:');
+    expect(panel.host.querySelectorAll('article > div > div > p')).toHaveLength(0);
+    await panel.unmount();
+  });
+
+  it('holds BOTH of those sentences behind Full note, whole — nothing was deleted', async () => {
+    const panel = await mount(card(cellOf(SURFACE_VIEW)));
+    await panel.press(`the full note for ${SURFACE_VIEW}`);
+    const opened = panel.words();
+    expect(opened).toContain('How to read: higher is more exposed to solvent');
+    expect((opened.match(/How to read:/g) ?? [])).toHaveLength(1);
+    await panel.unmount();
+  });
+
+  it('gives a card whose picture has NO long caption a Full note all the same, so the move off the face is never a deletion', async () => {
+    const panel = await mount(
+      <ChartCard id={SURFACE_VIEW} label="the run" focused howToRead="higher is more exposed to solvent" legend={[]} footLeft={null} footRight={null} note={null} noteLabel="Full note" noteAria="the note" clear={null} height={200}>
+        <div />
+      </ChartCard>,
+    );
+    expect(panel.words()).not.toContain('How to read:');
+    await panel.press('the note');
+    expect(panel.words()).toContain('How to read: higher is more exposed to solvent');
     await panel.unmount();
   });
 
@@ -224,8 +254,10 @@ describe('a card shows one line, and the long note is one press away', () => {
     await panel.unmount();
   });
 
-  it('draws no how-to-read line at all for a view the library derived none for', async () => {
+  it('says nothing about how to read a view the library derived no line for — not on the face and not in the note', async () => {
     const panel = await mount(card(cellOf(PAIRS_VIEW), null));
+    expect(panel.words()).not.toContain('How to read');
+    await panel.press(`the full note for ${PAIRS_VIEW}`);
     expect(panel.words()).not.toContain('How to read');
     await panel.unmount();
   });
@@ -264,40 +296,49 @@ describe('the three sentences that had to stay reachable, and where they are now
   });
 });
 
-describe('the footer names what was plotted and which stage owns it', () => {
+describe('the footer is the counts, and the stage is the STEPPER\u2019s answer now', () => {
   it('counts from the rows on screen, on the cell that drew them', () => {
     expect(cellOf(SURFACE_VIEW).foot).toContain(`${ROWS.length.toLocaleString('en-US')} residues plotted`);
     expect(cellOf(SURFACE_VIEW).foot).toContain(`${String(RUN.surface!.counts.buried)} at exactly 0 Å²`);
     expect(cellOf(PAIRS_VIEW).foot).toContain(`${String(RUN.pairs!.counts.crossing)} cross-chain`);
   });
 
-  it('credits the stage whose acts landed the column the view binds — and THE PARSE where no act did', () => {
+  it('still knows which stage owns each picture — the fold stayed, only the printing went', () => {
     const stages = stepperStages(OUTCOMES, RUN);
-    const at = (stage: string) => stages.find((s) => s.stage === stage)!;
     const shown = { [INTERFACE_VIEW]: { y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { y: SASA_COLUMN }, [STRUCTURE_VIEW]: { color: 'chain' } };
     const columns = actColumnsOf(stages);
     expect(stageOfChart(stages, SURFACE_VIEW, shown, columns)?.stage).toBe('surface');
     expect(stageOfChart(stages, INTERFACE_VIEW, shown, columns)?.stage).toBe('interactions');
     /*
-      THE 3D VIEW IS STEP 1'S, and this is the half-truth the packet fixed: the
-      foot used to say *"from the file's own columns — no act landed these"*,
-      which reads as an absence, as though nobody were responsible for those
-      columns. The parse is — and the parse is step 1 of the published plan.
+      THE 3D VIEW IS STEP 1'S, and this is the half-truth an earlier packet
+      fixed: the foot used to say *"from the file's own columns — no act landed
+      these"*, which reads as an absence, as though nobody were responsible for
+      those columns. The parse is — and the parse is step 1 of the published
+      plan.
     */
     expect(stageOfChart(stages, STRUCTURE_VIEW, shown, columns)?.stage).toBe('search');
-    // THE SHORT DECLARED NAME, not the sentence: a footer is a Mono line of
-    // counts and an owner, and the sentence wrapped it to two lines
-    expect(ownerLine(stageOfChart(stages, SURFACE_VIEW, shown, columns), 'from the file')).toBe(`Stage ${String(at('surface').number)} · ${at('surface').name}`);
-    expect(at('surface').name).toBe('Structure Analysis');
-    // …and its line says why it carries no act and no commit, which is the fact
-    // a reader needs when the number they pressed does not move the cursor
-    const parse = ownerLine(stageOfChart(stages, STRUCTURE_VIEW, shown, columns), 'from the file');
-    expect(parse).toBe(`Stage ${String(at('search').number)} · ${at('search').name} · no act, no commit`);
-    expect(parse).not.toContain('no act landed these');
-    // …and the explanation is NOT in the footer: it is behind `Full note`
-    expect(parse.split(/\s+/).length).toBeLessThan(11);
-    // the fallback is left for a picture that binds nothing and is nobody's receipt
-    expect(ownerLine(null, 'from the file')).toBe('from the file');
+  });
+
+  it('NO LONGER PRINTS IT ON THE CARD — `ownerLine` is gone, and this is where the fact is instead', async () => {
+    /*
+      ONE OWNER PER QUESTION. The question is *which stage produced the picture
+      I am looking at*, and the stepper answers it now that its bar and
+      `aria-current` follow the FOCUS (`web/src/workbench/steps.ts` ·
+      `stepViews`): press any tile and the bar moves to its stage. The fact was
+      being printed on eight cards at once.
+
+      THE CHECK THAT HAD TO COME FIRST: it is not the last copy of anything.
+      The stage is on the stepper, and at the lead of the card's own note.
+    */
+    const stages = stepperStages(OUTCOMES, RUN);
+    const surface = stages.find((s) => s.stage === 'surface')!;
+    expect(stageWords({ here: surface, run: RUN, counts: TABLES.counts, cursor: null, onPath: false, focused: [], inFocus: null, promoted: null }).eyebrow).toBe(
+      `Stage ${String(surface.number)} · ${surface.label}`,
+    );
+    // and the card's own face says nothing about a stage at all
+    const panel = await mount(card(cellOf(SURFACE_VIEW)));
+    expect(panel.words()).not.toContain(`Stage ${String(surface.number)}`);
+    await panel.unmount();
   });
 
   it('draws no footer count for a picture with nothing to count yet', () => {

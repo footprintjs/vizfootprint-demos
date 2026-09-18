@@ -313,16 +313,33 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the protein desk f
         say(`  the counts are on the cards: ${['185 residues', '2 chains drawn', 'residues plotted', 'cross-chain'].filter((c) => words.includes(c)).join(' · ')}`);
       });
 
-      it('puts NO PROSE under a drawing — the footer is Mono counts and an owner, on one line', async () => {
+      it('puts NO PROSE under a drawing — the footer is Mono counts, on one line', async () => {
         const feet = await page.locator('[data-chart] > div:last-child').allInnerTexts();
         for (const foot of feet) {
           // a sentence under a drawing is what four rounds of this packet
-          // cleared; a count and an owner are not sentences
+          // cleared; a count is not a sentence
           expect(foot, `a footer reads as prose: ${foot}`).not.toContain('so no act and no commit');
           expect(foot).not.toContain('no counts to read');
         }
-        // and the owner is the SHORT declared name
-        expect((await page.locator('body').innerText()).replace(/\s+/g, ' ')).toContain('Stage 3 · Structure Analysis');
+        /*
+          AND THE OWNING STAGE IS NO LONGER IN IT — a CONTRACT CHANGE, made on
+          the author's instruction and only after the stepper's bar began
+          following the FOCUS. One owner per question: *which stage produced the
+          picture I am looking at* is the stepper's answer, and pressing any
+          tile moves the bar to its stage. It was being printed on eight cards
+          at once.
+
+          The check that had to come first is the one this file exists for: it
+          is not the last copy of anything. The stage is on the stepper and at
+          the lead of each card's own note, and what a reader loses AT A GLANCE
+          is named in `web/src/protDesk.tsx` · `NotHere`.
+        */
+        const words = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
+        expect(words).not.toContain('Stage 3 · Structure Analysis');
+        // the STEPPER carries it instead, with the short declared name under
+        // the mark it marks
+        expect(await page.locator('nav ol li[aria-current="step"]').count()).toBe(1);
+        expect(await page.locator('nav ol li[aria-current="step"]').innerText()).toContain('Structure Analysis');
       });
 
       it('names the record at the bottom edge, and holds every word of it until it is pressed', async () => {

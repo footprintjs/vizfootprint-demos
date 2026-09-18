@@ -211,8 +211,19 @@ describe('the two cells the desk draws', () => {
     expect(caption).toContain('the other 4 have no dot at all: 2 have no phi');
     expect(caption).toContain('2 no psi');
     expect(caption).toContain('an absent angle is not an angle of zero, so there is no dot in the middle');
-    // the honest limit of the frame: the axes are the data's extent, not the torsion space
-    expect(caption).toContain('not the whole −180 to 180 a torsion can take');
+    /*
+      THE AXES ARE THE WHOLE OF TORSION SPACE NOW, not the extent of these
+      residues — because a residue at 107° drawn hard against the right edge
+      reads as the edge of torsion space when it is nowhere near it
+      (`web/src/protCells.tsx` · `TORSION_RANGE`). The caption follows the
+      picture, and it keeps the shortfall it always named: the range is a PROP,
+      the frame's own vocabulary is words, so nothing in the record says why the
+      axes are wider than the marks.
+    */
+    expect(caption).toContain('both axes are drawn over the whole -180 to 180 degrees a backbone torsion can take');
+    expect(caption).toContain('nothing in the record says why the axes are wider than the marks');
+    // …and the crosshair beside it, which the view DOES declare
+    expect(caption).toContain('the zero guide the view DECLARES');
   });
 
   it('reads its axes off the fold at the view’s address, never a literal', () => {

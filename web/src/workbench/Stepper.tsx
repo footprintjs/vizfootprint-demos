@@ -34,11 +34,23 @@
  *                   behind the panel's fold — the sentence, never the paint.
  *
  * ── WHAT IS LOAD-BEARING HERE ──────────────────────────────────────────────
- *   1. `aria-current="step"` on the column the cursor stands in, and the blue
- *      bar across its foot for the eye: *this is the stage you are looking at*.
- *      Whether the CURSOR moved is a different fact and a different line says
- *      it (the rows note in the chrome) — the bar must never be read as a seek
- *      that did not happen.
+ *   1. **THE BAR MEANS FOCUS, AND SO DOES `aria-current="step"`.** Both ride
+ *      {@link StepView.focused} — the stage whose thing is in the focus slot —
+ *      for every one of the six marks: landed, the step that landed at the
+ *      root, and all three kinds of blocked. This stepper is the page's
+ *      navigation, and *a control that does not visibly respond to being
+ *      pressed is broken however correct its internals* — which is what the
+ *      field used to carry (the CURSOR'S stage), so pressing a stage the
+ *      cursor cannot move to left the bar behind on another column.
+ *
+ *      WHERE THE CURSOR IS is a DIFFERENT FACT and keeps its own voice: the
+ *      commit line in the chrome (`web/src/protDesk.tsx` · the header's `at`
+ *      slot) states it and stays correct through every press. And when the two
+ *      part company the page SAYS SO, on the focused card
+ *      (`./panel.ts` · `focusVsCursor`) — derived from the two facts, never
+ *      from which button was pressed, so it is right after a resize, a reload
+ *      or a seek from the record drawer. The bar must never be read as a seek
+ *      that did not happen; that line is what stops it.
  *   2. ONE CONTROL PER COLUMN — the mark and the name inside a single
  *      `<button>` with a single accessible name (see {@link Column}) — and a
  *      NON-INTERACTIVE element for a column with nothing to answer, because a
@@ -74,8 +86,16 @@ export interface StepView {
   /** The word under the name, in Mono uppercase — `refused`, `not available here`. `null` for the states the mark already tells. */
   readonly tag: string | null;
   readonly look: StageLook;
-  /** The column the cursor is standing in. */
-  readonly here: boolean;
+  /**
+   * THE COLUMN THE READER IS LOOKING AT — the stage whose picture or card is in
+   * the focus slot, which is what the 3px bar and `aria-current="step"` both
+   * follow (see the file header).
+   *
+   * NOT the stage the cursor is standing in. A blocked stage and the step that
+   * landed at the root move the focus and not the cursor, so a field that
+   * carried the cursor's stage left the bar on a column nobody pressed.
+   */
+  readonly focused: boolean;
   /**
    * The accessible name of THIS COLUMN'S CONTROL, or `null` when the column
    * has nothing to offer.
@@ -157,7 +177,7 @@ function Mark({ step }: { readonly step: StepView }): JSX.Element {
         ...(look.backgroundImage === undefined ? {} : { backgroundImage: look.backgroundImage }),
         color: look.color,
         border: look.border,
-        boxShadow: step.here ? 'var(--pw-mark-shadow-here)' : look.shadow,
+        boxShadow: step.focused ? 'var(--pw-mark-shadow-here)' : look.shadow,
         backdropFilter: step.look === 'declared-not-here' ? 'var(--pw-blur-hatch)' : 'var(--pw-blur-mark)',
         WebkitBackdropFilter: step.look === 'declared-not-here' ? 'var(--pw-blur-hatch)' : 'var(--pw-blur-mark)',
       }}
@@ -229,7 +249,7 @@ function Column({ step, onPress }: { readonly step: StepView; onPress(): void })
       {/* `fontFamily: inherit` and NOT the `font` shorthand: a shorthand resets
           every longhand after it, so the weight this state is drawn at would
           depend on the order the declarations happen to serialise in. */}
-      <span style={{ display: 'block', marginTop: 6, fontFamily: 'inherit', fontSize: 12.5, fontWeight: step.here ? 600 : 400, lineHeight: 1.25, color: ink }}>{step.name}</span>
+      <span style={{ display: 'block', marginTop: 6, fontFamily: 'inherit', fontSize: 12.5, fontWeight: step.focused ? 600 : 400, lineHeight: 1.25, color: ink }}>{step.name}</span>
       {step.tag === null ? null : (
         <span
           style={{
@@ -260,7 +280,7 @@ function Column({ step, onPress }: { readonly step: StepView; onPress(): void })
       type="button"
       onClick={onPress}
       aria-label={step.pressLabel}
-      {...(step.here ? { 'aria-current': 'step' as const } : {})}
+      {...(step.focused ? { 'aria-current': 'step' as const } : {})}
       style={{ ...shape, font: 'inherit', fontFamily: 'var(--pw-font-sans)', background: 'none', border: 0, padding: 0, margin: 0, cursor: 'pointer' }}
     >
       {inside}
@@ -285,14 +305,14 @@ export function StageStepper({ steps, label, refusedSeek, onSeek }: StageStepper
         {steps.map((step) => (
           <li
             key={step.key}
-            {...(step.here ? { 'aria-current': 'step' as const } : {})}
+            {...(step.focused ? { 'aria-current': 'step' as const } : {})}
             style={{ position: 'relative', paddingBottom: 6, minWidth: 0 }}
           >
             {step.linkBefore === null ? null : <span aria-hidden style={{ position: 'absolute', left: 0, right: '50%', top: 13, height: 1.5, marginRight: 20, ...LINK[step.linkBefore] }} />}
             {step.linkAfter === null ? null : <span aria-hidden style={{ position: 'absolute', left: '50%', right: 0, top: 13, height: 1.5, marginLeft: 20, ...LINK[step.linkAfter] }} />}
             <Column step={step} onPress={() => onSeek(step.key)} />
             {/* WHERE THE CURSOR IS, for the eye as well as for a screen reader */}
-            {step.here ? <span aria-hidden style={{ position: 'absolute', left: 22, right: 22, bottom: 0, height: 3, background: 'var(--pw-accent)' }} /> : null}
+            {step.focused ? <span aria-hidden style={{ position: 'absolute', left: 22, right: 22, bottom: 0, height: 3, background: 'var(--pw-accent)' }} /> : null}
           </li>
         ))}
       </ol>

@@ -67,7 +67,7 @@ A tile was words only for one round, on the honest ground that a library chart a
 
 | pane | at 1280×800 | what it does |
 |---|---|---|
-| the focus | 906×278 | draws, with its axes — 3.3 : 1, where the design drew it at 3.4 : 1 |
+| the focus | 906×322 | draws, with its axes — 2.8 : 1, where the design drew it at 3.4 : 1. It was 906×278 until the card's face was cleared, which handed 44px straight to the picture |
 | cross-chain bars (strip) | 940×104 | draws 185 bars, **no axis chrome** |
 | backbone angles (column) | 282×125 | draws 181 dots over a **56px band**, no axis chrome. At 1440 it is 175px and draws its axes: same rule, two answers |
 | the contact table | 282×125 | its own rows, its own scroll |
@@ -99,7 +99,7 @@ A drag that shrinks the satellites past the point where they can draw their mark
 | the satellite **column**'s width | 256 | the page's own `clamp(16rem, …)` — *the width at which a scatter still reads as a shape* — and never below the mark floor's width arm (105) |
 | the **focus column**'s width | 360 | that same clamp's CEILING, `22.5rem`: the widest a satellite tile can ever be, because **a focus the size of a tile is not a focus** |
 | the satellite **strip**'s height | 148 | the mark floor (102) plus a tile's own chrome (46) |
-| the **focus row**'s height | 333 | `AXIS_ROOM` (170) plus the focused card's own chrome (163). The focus is the one pane that KEEPS its axis labels, and the labels are also the encoding pickers — a focus that dropped them would take this page's only re-encode control off the screen |
+| the **focus row**'s height | 289 | `AXIS_ROOM` (170) plus the focused card's own chrome (119). The focus is the one pane that KEEPS its axis labels, and the labels are also the encoding pickers — a focus that dropped them would take this page's only re-encode control off the screen |
 
 **The mark floor is one clamp above the library's own.** `vizfootprint-ui · framePlotBox` clamps: a frame shorter than its own margin draws an empty box, so `pad.t + pad.b` is where the LIBRARY says there is no plot left, and the disaster recorded above was five pixels past it (a 67px frame under `VizLine`'s 62px margin — 185 dots reported, a 5px band, nothing visible). So the floor asks the marks to get **half the pane's own margin back as plot**: `(pad.t + pad.b) × 1.5`, which at `framePad(['line','bar','point'])` (20 above, 48 below) is **102px of pane for 34px of band**. It refuses the pane that was broken, accepts both panes this page measures as honest (the strip's 104px frame drawing 185 bars, the column's 125px drawing 181 dots over a 56px band), and sits BELOW `AXIS_ROOM` — which is the same question asked about the LABELS. Between the two a pane draws its marks and drops its labels, which is what ships.
 
@@ -119,7 +119,7 @@ A real `role="separator"` (`Chrome.tsx · RegionDivider`), focusable, with `aria
 
 Two fractions are stored, each the SATELLITE side's share of its own axis, and **they are clamped on read as well as on write** — `parseSplit` refuses a share outside `(0, 1)` without needing a region, and `clampShare` is asked on *every render* against the CURRENT window, so a fraction written at 1,920px cannot reproduce the broken layout when it is read into a 700px one. A window too small to give both sides their floor falls back to the page's own arrangement and **keeps the reader's preference**, which comes back when the window grows.
 
-`null` means *where the page put it*, and the default track is the page's own expression (`columnTracks(null)` IS `clamp(16rem, 22vw, 22.5rem)`, spelled from `COLUMN_CLAMP`, the one owner of those numbers). A default expressed as a fraction would have been a second, drifting copy of `22vw` — and this way the page at rest is unchanged to the pixel: the divider's 10px track is the ten pixels the grid's `gap` used to be, and `tests/prot-viewport.smoke.test.ts` measures the same 906×278 focus, the same 940×104 strip and the same 282×125 column pane it always did.
+`null` means *where the page put it*, and the default track is the page's own expression (`columnTracks(null)` IS `clamp(16rem, 22vw, 22.5rem)`, spelled from `COLUMN_CLAMP`, the one owner of those numbers). A default expressed as a fraction would have been a second, drifting copy of `22vw` — and this way the page at rest is unchanged to the pixel: the divider's 10px track is the ten pixels the grid's `gap` used to be, and `tests/prot-viewport.smoke.test.ts` measures the same 940×104 strip and the same 282×125 column pane it always did. (The FOCUS pane is 906×322 rather than 906×278 now, and that is the card's face being cleared rather than the divider: the two sentences that came off it were 44px of chrome, and the picture took every pixel.)
 
 ### The layers held, and one thing to know about where the code sits
 
@@ -129,27 +129,106 @@ The one thing that is not obvious: those pieces landed in **`charts.ts` and `Chr
 
 ### Named, not fixed: the focus card's own chrome grows when the card is narrow
 
-`CARD_CHROME` (163px) is measured at the width the page ships — a 441px card holding a 906×278 picture at 1280×800, a 516px card holding 1031×353 at 1440×900, identically. It is **not** constant across widths: at the focus column's own floor (360px) the card's title, the library's derived how-to-read line, the `Full note` control and the Mono footer wrap, and they take **257px**. So with BOTH boundaries pushed to their stops at once the focus card is 360×333 and its own picture is 326×**76** — under the mark floor a satellite would be held to.
+`CARD_CHROME` (**119px**, and 163px before the card's face was cleared) is measured at the width the page ships — a 441px card holding a 906×322 picture at 1280×800, a 516px card holding 1031×397 at 1440×900, identically. **The floor followed it without anybody re-choosing a number**, from 333 to 289, which is the discipline working: the floor is folded from the constant, so clearing the face moved the stop too.
+
+It is still **not** constant across widths: at the focus column's own floor (360px) the card's title, the `Full note` control and the Mono footer wrap, and they take **172px** (it was 257px with two more sentences on the face). So with BOTH boundaries pushed to their stops at once the focus card is 360×289 and its own picture is 326×**117**.
+
+**And that corner is no longer the broken one it was.** The same measurement used to read 326×**76** — *under* the mark floor a satellite is held to — and 117px clears the 102px floor with room to spare. The face being cleared fixed it; it was never fixed by moving a floor.
 
 Measured and printed rather than hidden (`tests/prot-dividers.smoke.test.ts` · *holds BOTH boundaries at once*), and left as it is, because:
 
 * the law this packet is about is the SATELLITES', and it holds at both stops together — every pane that drew still draws its marks over the band the floor promises, and **a pick in a tile still takes the focus's marks down** with the region squeezed from two sides. The test asserts all of it;
-* the focus's own stop promises that it is **not smaller than a tile**, and at 360×333 it is not;
+* the focus's own stop promises that it is **not smaller than a tile**, and at 360×289 it is not;
 * and the floor **must** be folded from a constant rather than from the real chrome, which is the interesting half. The library does hand the number over — `ChartFrame`'s child is `(size) => ReactNode`, so the composition could capture the picture's box on every measure and subtract. What it could not then do is USE it as a floor: the card's chrome depends on the very box the floor constrains, so a floor derived from it is a control loop — squeeze the row, the chrome wraps and grows, the floor rises, the clamp pushes the row back, the chrome unwraps. **A floor must be folded from something the floor does not move**, and the card's own chrome is not that.
 
-**The library finding, then, is about the CARD and not about the measurement:** a card whose chrome REFLOWS with its width cannot carry a floor expressed on its picture. The way out is the rule this desk already applies to the footer — *if it wraps, the attribution shortens, never the numbers* — extended to the derived how-to-read line: a card whose chrome is constant in height at every width can be given a floor, and one whose chrome grows by 94px between 906px and 360px cannot.
+**The library finding, then, is about the CARD and not about the measurement:** a card whose chrome REFLOWS with its width cannot carry a floor expressed on its picture. A card whose chrome is constant in height at every width can be given a floor, and one whose chrome grows by 53px between 906px and 360px cannot. The face being cleared cut that growth from 94px to 53px and took the corner above the mark floor, which is the same answer arrived at from the other side: **the way to make a floor hold is to stop the chrome moving, not to raise the floor.**
 
-Raising the row's floor to the narrow chrome unconditionally was the other alternative, and it is rejected with its number: it would make the focus row's floor 427px, which at 1280×800 leaves the strip a range of 148–164px — taking the row divider's usefulness away at every width to fix one corner.
+Raising the row's floor to the narrow chrome unconditionally was the other alternative, and it stays rejected with its number: it would make the focus row's floor 342px, taking room off the row divider at every width to fix one corner that is no longer broken.
 
 ### One measurement worth knowing
 
-**The bottom strip ships about two pixels above its own floor.** At 1280×800 the strip band is 150px and its floor is 148px, so the horizontal divider can give the strip a great deal more room (up to 258px, where the focus reaches its own stop) and essentially none less. That is not a flaw in the divider — it is what *the reclaimed height goes to the tiles* already spent. The row divider is, in practice, a one-way control at this budget, and a reader who drags it down meets the stop sentence almost at once.
+**The bottom strip ships about two pixels above its own floor.** At 1280×800 the strip band is 150px and its floor is 148px, so the horizontal divider can give the strip a great deal more room (up to **302px**, where the focus reaches its own stop — it was 258px before the card's face was cleared dropped the focus row's floor by 44px) and essentially none less. That is not a flaw in the divider — it is what *the reclaimed height goes to the tiles* already spent. The row divider is, in practice, a one-way control at this budget, and a reader who drags it down meets the stop sentence almost at once.
 
 ## A STEP THAT WILL NOT RUN GETS A CARD, and the reason is inside it
 
 > for not-available, show the widget and tell inside it a text to tell why it's not there
 
 So the reason is read at the size and in the position of the thing it is about. **In the right column the three of them share ONE card of three rows** (`ChartCard.tsx · BlockedGroup`): as three separate cards they spent 177px of a 583px column on three sentences — more than the two real charts got between them — and the reclaimed height went to the drawings. Each row keeps its tag, its name and its reason's first clause verbatim, and each row is its own control opening its own card. Stages 5 and 6 declare no views at all, so their card has **no chart and no frame pretending to be one** — an empty axis would be the lie this desk exists to avoid. The card carries the kind of blocked, the reason's own first clause (`panel.ts · firstClause`) and the declared sentence; the whole paragraph is behind the same `Full note` press every other card has.
+
+## THE BAR MEANS FOCUS. `aria-current` MEANS FOCUS. THE CURSOR IS A DIFFERENT FACT.
+
+Measured in a real browser at 1280×800: pressing **Hot Spot Prediction** moved the focused pane to `stage:hotspots` and left `aria-current` and the 3px accent bar under stage 3. The press worked, the screen changed, and the page held two ideas of *where you are* that disagreed — because the mark followed the CURSOR, and a blocked stage deliberately does not move it.
+
+**The stepper is this page's navigation, and a control that does not visibly respond to being pressed is broken however correct its internals.** So the ruling, and it is three rules rather than one:
+
+| the fact | who says it | where |
+|---|---|---|
+| **which stage you are looking at** | the stepper's 3px bar and `aria-current="step"`, for all six kinds — landed, the step that landed at the root, and all three kinds of blocked | `Stepper.tsx` · `StepView.focused`, fed by `steps.ts` · `stepViews` from `protDesk.tsx` · `focusedStage` |
+| **where the cursor is standing** | the header's commit line, unchanged and visible through every press | `protDesk.tsx` — the header's `at` slot, off `protRows.ts` · `ResiduesNow.cursor` |
+| **that those two have parted company** | one line on the FOCUSED card, below the picture with the figures and the refusal | `panel.ts` · `focusVsCursor` → `ChartCard.tsx` · `cursorElsewhere` |
+
+```
+You are looking at stage 5, Hot Spot Prediction — the cursor is standing in
+stage 3, Structure Analysis, and every picture here is drawn where the cursor is.
+```
+
+**The third line is DERIVED from the two facts and knows nothing about a button.** That is the whole of its correctness: it is right after a window resize, after a reload, after a rail tile is promoted, and after a seek from the record drawer — four routes into one state. `tests/prot-focus.smoke.test.ts` proves it by reaching the disagreeing state through the drawer, with no press on the stepper at all, and finding the same sentence. When the two agree there is no row: an absence is absent.
+
+**And `focusedStage` is derived too** — a blocked step's own card when one is promoted into the slot, otherwise the stage that owns the picture that is. Never a memory of which control was last pressed.
+
+## A CARD'S FACE IS A TITLE, A PICTURE AND ONE LINE OF FIGURES
+
+Two sentences used to stand above every picture and both are gone from the face — *not deleted*, moved behind the card's own `Full note`, which `ChartCard.tsx` now renders itself so no caller can forget:
+
+```
+How to read: a scatter with phi on x, psi on y     ← the LIBRARY's derived prose
+STAGE 1  landed by the parse, before this record starts    ← engine vocabulary
+```
+
+The author's argument, and it is right: **a scientist reading a Ramachandran plot does not care about stage 1 or commits**, and a *how to read* line that describes the ENCODING tells a reader nothing the two axis labels do not. (That second half is a finding about derived prose, reported: the library is deriving the wrong kind of sentence for that slot.)
+
+What stays below the picture is the RECORD, and it stays: the stage's own numbers, its refusal, the focus-and-cursor line, and the Mono footer of counts. **It is the prose above the picture that went, never the figures below it.** A card whose picture has no long caption still gets a `Full note` control (`ChartCard.tsx` · `hasNote`) — otherwise the move off the face would be a deletion for that card.
+
+### And the stage attribution came off the footer with them — ONE OWNER PER QUESTION
+
+`ownerLine` folded `Stage 3 · Structure Analysis` into the right of every footer, and it is gone (the note where it was, in `charts.ts`, says so). The question is *which stage produced the picture I am looking at*, and **once the bar follows the focus the stepper answers it** — for every chart, because pressing any tile promotes it and moves the bar. The fact stopped being printed eight times and became one press away.
+
+**The dependency is the whole risk and the order was not optional:** defect 1 first, verified in a browser for all six kinds, and only then the attribution off. Until the bar followed the focus the footer was the ONLY place a reader learned which stage a picture came from, and cutting it first would have put the fact nowhere — the same failure as two cuts each justified by the other place. Before cutting it, every fact in it was traced: the stage is on the stepper and at the lead of the card's note, and step 1's `no act, no commit` is in that note's account, in its quiet line and in the accessible name of its own stepper control (`steps.ts` · `focusLabelOf`). What a reader loses AT A GLANCE — a small pane labelling its own stage while another stage is focused — is named in `protDesk.tsx` · `NotHere`.
+
+## A MARK A READER IS MEANT TO PRESS NEEDS A POINTER-SIZED TARGET
+
+The interaction grammar was declared, tested and unreachable. Measured: the cross-chain bar tile draws **185 bars**, the strip gives them a **922px** pane, `framePad` takes 70 of it, so a band is **4.6px** and a bar is **3.5px** — and `locator.click()` refused, reporting the target as not stable. Worse, and the sharper half: **167 of those 185 residues touch no other chain**, so their count is a real ZERO, and an SVG rect of zero height has no area to press at all.
+
+**What the library offers a host here is nothing.** Looked for by name in `vizfootprint-ui`: a hit area wider than the mark, a minimum mark width, a nearest-mark pick. `VizBar`'s clickable element IS the bar (`x = band*0.12`, `width = band*0.76`, `height =` the value); its `bandAt` pointer-to-band map is private to the drag-run and a run may only BEGIN on a bar; no prop on any chart widens a target. Reported as a finding.
+
+**And this page may not fix it by drawing.** A bar whose width lies about its category is worse than a bar that is hard to hit, and a zero given area would be a count of nothing claiming something. So the page does the only honest thing left: **it says so, in the tile, in the tile's own voice.**
+
+```ts
+// charts.ts · reachClause — folded against the INSTRUMENT'S width, which is an
+// upper bound on any pane inside it: a sentence means no pane on this page could
+// give these marks a target, which is why it does not promise the focus
+'185 marks in this width — too thin to press; Tab picks one'
+```
+
+| the rule | how it is kept |
+|---|---|
+| the floor is not a number anybody picked | `POINTER_TARGET` = 24, WCAG 2.2 SC 2.5.8 *Target Size (Minimum)* |
+| the plot is not a number anybody picked | `markPitch` subtracts `framePad`'s own left and right — the library's margin, the same one the divider floors are folded from |
+| the clause **corrects itself** | it is derived per render: a crossfilter that cuts 185 marks to 12 makes the pitch 71px and the clause returns `null`, with nothing to clean up |
+| it promises nothing false | *press it to pick in the focus* would be a lie — at 185 marks the focus slot is 4.5px a band too. It names the keyboard, which the library already gives every bar (`role="button"`, `tabIndex`, its own accessible name) |
+| it costs the picture nothing | it rides the tile's own line of FIGURES, after them, because this tile ships about two pixels above its mark floor. Numbers first, and the clause is what clips |
+| the long form is never lost | the arithmetic, both reasons and the two other remedies (narrow the rows from another chart; re-encode the category to `chain`) are in the picture's own note, whole |
+
+`tests/prot-focus.smoke.test.ts` presses a bar **with a real pointer at the mark's own coordinates** and asserts the selection landed and the residue is named — the assertion the suite could not make — and prints the measurement the clause is folded from while it does it.
+
+## A DECLARATION THE RECORD CARRIES, AND A PROP IT DOES NOT
+
+The backbone-angle plot got the two things that make it a Ramachandran plot rather than a cloud of dots in a box, and **they are not the same kind of thing**, which is the point worth keeping:
+
+* **the crosshair is DECLARED.** `src/prot/def.ts` · `PROT_ENCODINGS` gives the rama entry `frame: { x: { zeroGuide: true }, y: { zeroGuide: true } }` — the axis arm of the shape, so no `mode` (the def door refuses it by name on a layerless view). `charts.ts` · `zeroGuideOf` reads that declaration and hands it over as `ChartDomain.zeroGuide`; the record carries the ask.
+* **the box is a PROP.** `protCells.tsx` · `TORSION_RANGE` is `[-180, 180]`, because φ and ψ span that BY DEFINITION and a residue at 107° drawn hard against the right edge reads as the edge of torsion space. The library's frame vocabulary is words (`domain: 'union'`, folded from the rows), so there is no way to declare a numeric domain — and **a prop is on no commit**. The shortfall is announced in `protDesk.tsx` · `NotHere` the way the structure file's missing version is, and the declaration replaces the prop the day the library can take one.
+
+**It was meant to be read off the FOLD and it cannot be**, which is this section's finding: the session serves the declaration verbatim (measured, on its own `overview()`), and the reader-side mapper drops it — `vizfootprint-ui` · `sessionView.ts` · `mapFrame` keeps a channel only when it carries `mode: 'shared' | 'independent'`, and a layerless axis entry may not carry `mode` at all. So `SessionViewState.views[].frame` arrives `{}` and this page reads the def it owns, exactly as `shapeOfView` already does for the declared `chartKind` the wire serves only for a layer. `tests/prot-def.test.ts` pins both halves — **and fails the day the mapper is fixed**, which is the reminder to put the fold back on the fold.
 
 ## NO PROSE UNDER A DRAWING, in any card, focused or tiled
 

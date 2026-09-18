@@ -208,6 +208,45 @@ export const BLOCKED_CARDS: readonly BlockedCard[] = PROT_BLOCKED.map((stage) =>
   why: stage.why,
 }));
 
+/**
+ * WHEN THE FOCUS AND THE CURSOR PART COMPANY, THE PAGE SAYS SO — one line, on
+ * the focused card, where the reader is looking.
+ *
+ * ── WHY IT EXISTS ──────────────────────────────────────────────────────────
+ * The stepper's bar and `aria-current` mark the FOCUSED stage
+ * (`./Stepper.tsx` · `StepView.focused`), because the stepper is this page's
+ * navigation and a control that does not visibly respond to being pressed is
+ * broken. But three of the six columns move the focus and NOT the cursor — the
+ * step that landed at the root has no commit to seek to, and the three that
+ * will not run here landed none — so after such a press the reader is focused
+ * on a stage the cursor is not standing in. That is a real state, and this desk
+ * announces a real state rather than leaving it to be inferred.
+ *
+ * ── IT IS DERIVED FROM THE TWO FACTS, NEVER FROM A PRESS ───────────────────
+ * Both arguments are folds the page already holds: `focused` is the stage whose
+ * thing is in the focus slot (`web/src/protDesk.tsx` · `focusedStage`) and
+ * `cursor` is `web/src/protStages.ts` · `stageAtCursor`. So the line is right
+ * after a window resize, after a reload, after a seek from the record drawer
+ * and after a rail tile is promoted — every route into the disagreeing state,
+ * not just the stepper. Nothing here knows a button exists.
+ *
+ * `null` when they agree, which is the landing state and the state every landed
+ * press leaves behind: an absence is absent.
+ */
+export function focusVsCursor(focused: StepperStage | null, cursor: StepperStage | null): string | null {
+  if (focused === null) return null;
+  if (cursor !== null && cursor.stage === focused.stage) return null;
+  // the cursor's half, and the two arms are two different facts rather than one
+  // with a hole in it: a cursor standing in ANOTHER stage, and a cursor
+  // standing in none at all (the root of the log, a commit behind every stage's
+  // own, or a fork this page draws no map of — `stageWords`' `where` says which)
+  const standing =
+    cursor === null
+      ? 'the cursor is not standing in any stage'
+      : `the cursor is standing in stage ${num(cursor.number)}, ${cursor.name}`;
+  return `You are looking at stage ${num(focused.number)}, ${focused.name} — ${standing}, and every picture here is drawn where the cursor is.`;
+}
+
 /** Everything the focused card says about the stage that landed it, as plain data. */
 export interface StageWords {
   /** `Stage 3 · How much of each residue the solvent can reach` — the lead of the note. */

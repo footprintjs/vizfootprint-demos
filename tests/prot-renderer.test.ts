@@ -190,6 +190,11 @@ describe('the conformance kit over the Mol* renderer', () => {
       'match: ok',
       'neighbourhood: ok',
       'layers: ok',
+      // LAW 13, and the kit grew it rather than this demo: every emission kind
+      // the renderer DECLARED in its handshake has to be delivered by the end
+      // of the run (`vizfootprint-ui` · `contract/conformance.ts`). Mol* here
+      // declares `point` alone and lands one, so it passes as it stands.
+      'declared-delivered: ok',
       'navigate: ok',
       'unmount: ok',
     ]);

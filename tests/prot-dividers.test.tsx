@@ -119,7 +119,7 @@ describe('THE FLOORS ARE DERIVED — every one of them out of a number the libra
     expect(FLOORS.rail.near).toBe(COLUMN_CLAMP.ceiling * COLUMN_CLAMP.rootPx);
     expect(FLOORS.strip.far).toBe(markFloor(PAD).height + TILE_CHROME);
     expect(FLOORS.strip.near).toBe(AXIS_ROOM + CARD_CHROME);
-    expect(FLOORS).toEqual({ rail: { near: 360, far: 256 }, strip: { near: 333, far: 148 } });
+    expect(FLOORS).toEqual({ rail: { near: 360, far: 256 }, strip: { near: 289, far: 148 } });
     console.log(
       `the stops: the satellite column ${String(FLOORS.rail.far)}px (the page's own clamp(${String(COLUMN_CLAMP.floor)}rem, …)) · the focus column ${String(FLOORS.rail.near)}px (that clamp's ceiling — the widest a tile can be) · the satellite strip ${String(FLOORS.strip.far)}px (${String(markFloor(PAD).height)} of marks + ${String(TILE_CHROME)} of tile chrome) · the focus row ${String(FLOORS.strip.near)}px (AXIS_ROOM ${String(AXIS_ROOM)} + ${String(CARD_CHROME)} of card chrome)`,
     );
@@ -168,7 +168,7 @@ describe('THE CLAMP — one rule, pure, and asked of a drag, a key press and a s
     expect((held.share ?? 0) * ROOM.h).toBeCloseTo(148, 6);
     const other = strip(0.9);
     expect(other.stop).toBe('focus');
-    expect((1 - (other.share ?? 0)) * ROOM.h).toBeCloseTo(333, 6);
+    expect((1 - (other.share ?? 0)) * ROOM.h).toBeCloseTo(289, 6);
   });
 
   it('CLAMPS A STORED VALUE THAT WOULD VIOLATE A FLOOR — the broken state cannot be reproduced from storage', () => {

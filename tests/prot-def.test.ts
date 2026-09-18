@@ -23,6 +23,7 @@
  * should fail here rather than quietly make the report wrong.
  */
 import { describe, expect, it } from 'vitest';
+import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import { buildDashboard } from 'vizfootprint/agent';
 import type { DashboardDef } from 'vizfootprint/agent';
 import { INTERFACE_VIEW, PAIRS_VIEW, PROT_VIEWS, PROT_WORDS, RAMA_VIEW, RESIDUES_TABLE, RESIDUE_KEY, SHEET_VIEW, STRUCTURE_VIEW, SURFACE_VIEW, protCaption, protDef, protGrains } from '../src/prot/def.js';
@@ -284,5 +285,46 @@ describe('(b−) the same declaration with no per-kind requirement, and (a) no d
       expect(refused.rejection.code).toBe('guard-failed');
       expect(refused.rejection.detail).toBe('view "structure" declares no encoding surface');
     }
+  });
+});
+
+/**
+ * THE CROSSHAIR THIS DEF DECLARES, AND HOW FAR IT GETS — law 12, and the
+ * finding this page owes the library.
+ *
+ * `PROT_ENCODINGS`' rama entry declares `frame: { x: { zeroGuide: true },
+ * y: { zeroGuide: true } }`: a backbone φ against ψ is the figure the library
+ * built the key for, because its whole meaning is which QUADRANT a residue
+ * falls in. The declaration is meant to reach the picture off the FOLD — the
+ * session serves a view's frame, and a host hands it over as
+ * `ChartDomain.zeroGuide`.
+ *
+ * It cannot, and both halves are measured below. The SESSION serves it. The
+ * reader-side mapper then drops it: `vizfootprint-ui` · `sessionView.ts` ·
+ * `mapFrame` keeps a channel only when it carries
+ * `mode: 'shared' | 'independent'`, and a LAYERLESS view may not carry `mode`
+ * at all — the def door refuses it there by name (`AXIS_SHAPE`). So
+ * `SessionViewState.views[].frame` arrives EMPTY and a declaration that is on
+ * the wire cannot reach the drawing.
+ *
+ * Meanwhile the page reads the declaration from the def it owns
+ * (`web/src/workbench/charts.ts` · `zeroGuideOf`), exactly as it already does
+ * for the declared `chartKind` the wire serves only for a layer.
+ * **WHEN THE LIBRARY FIXES THE MAPPER, THE SECOND ASSERTION HERE FAILS** — and
+ * that is why it is written: it is the reminder to put the fold back on the
+ * fold.
+ */
+describe('the crosshair this view declares reaches the wire, and the reader’s own mapper drops it', () => {
+  it('is served by the session, verbatim, as the words the def wrote', async () => {
+    const { overview } = await overviewOf(DEF);
+    const rama = (overview.views as readonly { viewId: string; frame?: unknown }[]).find((v) => v.viewId === RAMA_VIEW);
+    expect(rama?.frame).toEqual({ x: { zeroGuide: true }, y: { zeroGuide: true } });
+  });
+
+  it('and arrives EMPTY on the reader’s side, because a layerless axis entry carries no `mode` for the mapper to keep', async () => {
+    const { session } = await overviewOf(DEF);
+    const view = createSessionView(sessionSource(session), { as: 'user' });
+    await view.refresh();
+    expect(view.getState().views.find((v) => v.viewId === RAMA_VIEW)?.frame).toEqual({});
   });
 });
