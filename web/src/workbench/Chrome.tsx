@@ -319,3 +319,190 @@ export function RecordDrawer({ label, title, children }: RecordDrawerProps): JSX
     </div>
   );
 }
+
+// ── the boundary a reader moves, as a control ────────────────────────────────
+
+/**
+ * WHAT A GESTURE ON A DIVIDER MEANS — the component reports the gesture and
+ * knows nothing of what it costs.
+ *
+ * `move` carries the pointer's own client coordinate along the divider's axis,
+ * because a component that takes only props cannot know where the region it
+ * divides begins. `nudge` is px TOWARDS THE FOCUS GROWING, positive, so the
+ * boundary moves the way the key points. `edge` is a stop, `default` is the way
+ * back to where the page had it. Turning any of them into a fraction is the
+ * rules layer's job (`./charts.ts` · `shareAtPointer`, `shareAfterStep`,
+ * `shareAtEdge`) and a floor is applied in exactly one place there
+ * (`clampShare`).
+ */
+export type DividerAction =
+  | { readonly kind: 'move'; readonly pointer: number }
+  | { readonly kind: 'nudge'; readonly px: number }
+  | { readonly kind: 'edge'; readonly to: 'min' | 'max' }
+  | { readonly kind: 'default' };
+
+export interface RegionDividerProps {
+  /** `'vertical'` for the line that stands between two COLUMNS; `'horizontal'` for the one that lies between two ROWS. */
+  readonly orientation: 'vertical' | 'horizontal';
+  /** WHICH TWO REGIONS IT DIVIDES — the accessible name, and nothing about how it is worked. */
+  readonly label: string;
+  /** HOW IT IS WORKED — the tooltip, which is the half a mouse reader would otherwise never meet. */
+  readonly hint: string;
+  /** The FOCUS side's share of the region, in whole percents, with its two stops. */
+  readonly now: number;
+  readonly min: number;
+  readonly max: number;
+  /** Pixels one arrow press moves it. Ten of them with `Shift`, so the whole range is reachable without holding a key down. */
+  readonly step: number;
+  /** THE SENTENCE READ AT A STOP, or `null` at rest — a reason and never an error (`./charts.ts` · `stopSentence`). */
+  readonly stop: string | null;
+  onAct(action: DividerAction): void;
+}
+
+/**
+ * A DIVIDER BETWEEN TWO REGIONS OF THE INSTRUMENT — a real `role="separator"`,
+ * and a control rather than a mouse affordance.
+ *
+ * ── WHAT MAKES IT A CONTROL AND NOT A DRAG HANDLE ──────────────────────────
+ *   · it is FOCUSABLE and carries `aria-orientation`, `aria-valuenow`,
+ *     `aria-valuemin` and `aria-valuemax`, so a screen reader is told where the
+ *     boundary stands and how far it may go;
+ *   · the ARROW KEYS move it, `Home` and `End` go to its two stops, and `Enter`
+ *     puts it back where the page had it. A mouse-only resize is not a control,
+ *     and a resize with no way back is a trap;
+ *   · POINTER events, not mouse events, so a trackpad and a touch screen both
+ *     work — with the pointer CAPTURED on the handle, so a fast drag that
+ *     leaves the 10px track does not lose the gesture, and `touch-action:
+ *     none` so a touch drag is not read as a scroll;
+ *   · the visible line is 2px and the TARGET is the whole track. A 2px hit area
+ *     is not a hit area;
+ *   · and there is no transition on ANY of it, in any case. A divider that
+ *     eases is a divider that lags, which is worse than one that does not
+ *     animate — so `prefers-reduced-motion` has nothing to turn off here.
+ *
+ * Every paint is a `--pw-*` token: the line is the desk's own rule colour at
+ * rest and the accent while it is hovered, focused or held, which is the same
+ * pair every other control on this page uses.
+ */
+export function RegionDivider({ orientation, label, hint, now, min, max, step, stop, onAct }: RegionDividerProps): JSX.Element {
+  const [dragging, setDragging] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [ring, setRing] = useState(false);
+  const vertical = orientation === 'vertical';
+  const lit = dragging || hovered || ring;
+  // THE LINE IS PAINTED BY THE TRACK ITSELF, as a gradient, so the separator
+  // element has no children: a 2px rule centred in a 10px target, 3px while it
+  // is live so the reader can see what they have hold of.
+  const half = lit ? 1.5 : 1;
+  const ink = lit ? 'var(--pw-accent)' : 'var(--pw-rule-divider)';
+  const line = `linear-gradient(to ${vertical ? 'right' : 'bottom'}, transparent ${String(5 - half)}px, ${ink} ${String(5 - half)}px, ${ink} ${String(5 + half)}px, transparent ${String(5 + half)}px)`;
+  return (
+    // `width`/`height` 100% is LOAD-BEARING and was a bug for one round: the
+    // only child below is absolutely positioned, so this box's own content
+    // height is zero — the grid item stretches, this did not, and the separator
+    // was a 10×0 target that no pointer could ever land on. The keyboard worked
+    // throughout, which is exactly the kind of half-working control a test that
+    // only drove the keyboard would have passed.
+    <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0, minHeight: 0 }}>
+      <div
+        role="separator"
+        tabIndex={0}
+        aria-label={label}
+        title={hint}
+        aria-orientation={vertical ? 'vertical' : 'horizontal'}
+        aria-valuenow={now}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        onPointerDown={(e) => {
+          if (e.pointerType === 'mouse' && e.button !== 0) return;
+          e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          e.currentTarget.focus();
+          setDragging(true);
+        }}
+        onPointerMove={(e) => {
+          if (!dragging) return;
+          onAct({ kind: 'move', pointer: vertical ? e.clientX : e.clientY });
+        }}
+        onPointerUp={(e) => {
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+          setDragging(false);
+        }}
+        onPointerCancel={() => setDragging(false)}
+        onDoubleClick={() => onAct({ kind: 'default' })}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        // `:focus-visible` asked of the element itself, because a keyboard
+        // reader needs the ring and a reader who just grabbed the handle with a
+        // mouse does not.
+        onFocus={(e) => setRing(e.currentTarget.matches(':focus-visible'))}
+        onBlur={() => setRing(false)}
+        onKeyDown={(e) => {
+          const px = step * (e.shiftKey ? 10 : 1);
+          const grow = vertical ? 'ArrowRight' : 'ArrowDown';
+          const shrink = vertical ? 'ArrowLeft' : 'ArrowUp';
+          if (e.key === grow || e.key === shrink) {
+            e.preventDefault();
+            onAct({ kind: 'nudge', px: e.key === grow ? px : -px });
+            return;
+          }
+          if (e.key === 'Home' || e.key === 'End') {
+            e.preventDefault();
+            onAct({ kind: 'edge', to: e.key === 'Home' ? 'min' : 'max' });
+            return;
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onAct({ kind: 'default' });
+          }
+        }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: line,
+          cursor: vertical ? 'col-resize' : 'row-resize',
+          touchAction: 'none',
+          transition: 'none',
+          ...(ring ? { outline: '2px solid var(--pw-accent)', outlineOffset: -1 } : { outline: 'none' }),
+        }}
+      />
+      {/*
+        THE REASON A STOP GIVES, and it is ABSOLUTELY POSITIONED on purpose: the
+        page is exactly the window and never scrolls, so a line that took layout
+        space would move the pictures it is about. It reads beside the divider
+        it belongs to — left of a vertical one, above a horizontal one — and is
+        absent at rest.
+      */}
+      {stop === null ? null : (
+        <div
+          role="status"
+          // ITS OWN MARK, because the page has another `role="status"`: the
+          // line that says which commit the pictures are drawn at. A test that
+          // read the first status on the page would read that one.
+          data-divider-stop="true"
+          style={{
+            position: 'absolute',
+            ...(vertical ? { right: '100%', top: '50%', transform: 'translateY(-50%)', marginRight: 8 } : { left: '50%', bottom: '100%', transform: 'translateX(-50%)', marginBottom: 8 }),
+            zIndex: 4,
+            width: 'max-content',
+            maxWidth: '30ch',
+            padding: '7px 10px',
+            fontFamily: 'var(--pw-font-sans)',
+            fontSize: 11,
+            lineHeight: 1.45,
+            color: 'var(--pw-mid)',
+            background: 'var(--pw-glass-panel)',
+            backdropFilter: 'var(--pw-blur-panel)',
+            WebkitBackdropFilter: 'var(--pw-blur-panel)',
+            border: '1px solid var(--pw-rule-divider)',
+            borderRadius: 'var(--pw-r-card)',
+            boxShadow: 'var(--pw-shadow-hero)',
+            pointerEvents: 'none',
+          }}
+        >
+          {stop}
+        </div>
+      )}
+    </div>
+  );
+}

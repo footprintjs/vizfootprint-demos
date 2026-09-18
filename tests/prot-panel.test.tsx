@@ -43,6 +43,7 @@ import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
 import { stepperStages } from '../web/src/protStages.js';
 import { ChartCard } from '../web/src/workbench/ChartCard.js';
 import { BLOCKED_CARDS, NARRATIVE_LINES, firstClause, stageFacts, stageWords } from '../web/src/workbench/panel.js';
+import { columnTracks, rowTracks } from '../web/src/workbench/charts.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -394,8 +395,21 @@ describe('THE BAND IS GONE FROM THE COMPOSITION, and nothing prose-shaped replac
     // the marks of the L: one focus slot, a bottom strip, a right column whose
     // width scales between a floor and the width the design drew — and not one
     // fixed pixel height anywhere in the instrument
-    expect(desk).toContain('gridTemplateColumns: \'minmax(0, 1fr) clamp(16rem, 22vw, 22.5rem)\'');
-    expect(desk).toContain('gridTemplateRows: \'minmax(0, 1fr) minmax(0, 0.34fr)\'');
+    /*
+      THE TWO TRACK EXPRESSIONS MOVED TO THE RULES LAYER when the dividers
+      landed: the reader may now move either boundary, so the DEFAULT has to be
+      spelled from the same numbers the floors are folded from, and
+      `workbench/charts.ts` · `COLUMN_CLAMP` is the one owner of `16rem`,
+      `22vw` and `22.5rem` (`STRIP_FR` of `0.34`). The composition names the
+      folds; the folds still produce the same expression this used to read
+      literally, plus the divider's own 10px track — which is the ten pixels the
+      grid's `gap` used to be, so the page at rest is unchanged to the pixel.
+      `tests/prot-dividers.test.tsx` pins both strings exactly.
+    */
+    expect(desk).toContain('gridTemplateColumns: columnTracks(railHeld.share)');
+    expect(desk).toContain('gridTemplateRows: rowTracks(stripHeld.share)');
+    expect(columnTracks(null)).toBe('minmax(0, 1fr) 10px clamp(16rem, 22vw, 22.5rem)');
+    expect(rowTracks(null)).toBe('minmax(0, 1fr) 10px minmax(0, 0.34fr)');
     // THE RIGHT COLUMN'S ROWS ARE NOT EQUAL: the panes that DRAW get `1fr`
     // each; the pane that says it instead, and the one card of blocked steps,
     // take their content's height and no more

@@ -82,6 +82,69 @@ The cost, named: a tile's axis labels are also the encoding pickers, so re-encod
 
 **A tile's header is the control, not the whole tile.** The picture inside is live: a button may not contain the library's own axis controls, and a press anywhere would swallow the gesture that makes the tile worth drawing.
 
+## AND THE READER MOVES THE BOUNDARY — two dividers, with floors derived from the honesty floor above
+
+The author asked for a **corner resize on the focus widget, aspect-ratio locked**. Two things about that were changed on the way in, and the reasons are here rather than in a commit message because the choice has to stay legible.
+
+**Not a corner scale — two dividers.** The useful gesture is not *make this box bigger*, it is *give the focus more room and the satellites less*. A corner drag scales one pane and leaves the grid to cope, which on a layout that is `height: 100dvh` and never scrolls means either dead space or overflow — the exact two failures the section above is a record of. Moving the **boundary** redistributes the grid's own fractions, so the two always sum to one and the region stays exactly full. One divider between the focus and the right column, one between the focus and the bottom strip.
+
+**Not aspect-ratio locked.** The ratios differ by three to four times across what lands in the slot — the surface run wants 3.4 : 1, the Ramachandran 1 : 1, off the design's own artboards (`charts.ts · shapeOfView` carries the table). One locked ratio is wrong for most of them, and locking to the *current* chart would change the slot's shape on every stage press, which is the disorienting thing this page already decided against (`tests/prot-viewport.smoke.test.ts` pins the focus card's height across a promotion). The slot stays a free rectangle and each chart draws honestly into what it gets, which the library's frame already does.
+
+### THE LAW: a drag may not break what the layout promises
+
+A drag that shrinks the satellites past the point where they can draw their marks destroys the only thing this layout is for, and does it **silently**. So every divider has a floor — and **not one of the four is a number anybody picked for the gesture.** Each is folded out of a number the library or this page already measured (`charts.ts · dividerFloors`):
+
+| the stop | px | folded from |
+|---|---|---|
+| the satellite **column**'s width | 256 | the page's own `clamp(16rem, …)` — *the width at which a scatter still reads as a shape* — and never below the mark floor's width arm (105) |
+| the **focus column**'s width | 360 | that same clamp's CEILING, `22.5rem`: the widest a satellite tile can ever be, because **a focus the size of a tile is not a focus** |
+| the satellite **strip**'s height | 148 | the mark floor (102) plus a tile's own chrome (46) |
+| the **focus row**'s height | 333 | `AXIS_ROOM` (170) plus the focused card's own chrome (163). The focus is the one pane that KEEPS its axis labels, and the labels are also the encoding pickers — a focus that dropped them would take this page's only re-encode control off the screen |
+
+**The mark floor is one clamp above the library's own.** `vizfootprint-ui · framePlotBox` clamps: a frame shorter than its own margin draws an empty box, so `pad.t + pad.b` is where the LIBRARY says there is no plot left, and the disaster recorded above was five pixels past it (a 67px frame under `VizLine`'s 62px margin — 185 dots reported, a 5px band, nothing visible). So the floor asks the marks to get **half the pane's own margin back as plot**: `(pad.t + pad.b) × 1.5`, which at `framePad(['line','bar','point'])` (20 above, 48 below) is **102px of pane for 34px of band**. It refuses the pane that was broken, accepts both panes this page measures as honest (the strip's 104px frame drawing 185 bars, the column's 125px drawing 181 dots over a 56px band), and sits BELOW `AXIS_ROOM` — which is the same question asked about the LABELS. Between the two a pane draws its marks and drops its labels, which is what ships.
+
+`framePad` is the library's own function, so **the floor moves if the library's chart margin ever does**, and `tests/prot-dividers.test.tsx` pins the value it returns: a change there fails a test rather than quietly moving a floor.
+
+**A stop is a reason, not an error.** The page says so in its own voice, beside the divider, only while it is parked there (`charts.ts · stopSentence`): *"That is as far as it goes. The panes on the right are at the width where a scatter still reads as a shape, and narrower they would stop being able to show a selection — which is what this layout is for."*
+
+**And the measurement is checked where it counts.** `tests/prot-dividers.smoke.test.ts` pushes each divider all the way to each stop in a real browser at 1280×800 and asserts the marks, their BAND, and that the page height is still exactly the viewport — then makes **a pick in a tile with the divider at its stop and watches the focus's marks come down.** A layout test alone would not have caught the loss of the thing the floor exists to protect.
+
+### The gesture, and why it is a control
+
+A real `role="separator"` (`Chrome.tsx · RegionDivider`), focusable, with `aria-orientation` and `aria-valuenow`/`min`/`max` about the FOCUS side, and an accessible name that says which two regions it divides. **Pointer** events with the pointer CAPTURED, so a trackpad and a touch screen both work and a fast drag that leaves the 10px track does not lose the gesture; `touch-action: none` so a touch drag is not read as a scroll. The **arrow keys** move it by the divider's own width (ten of them with `Shift`), `Home` and `End` go to its two stops, and `Enter` — or a double-click — puts it back where the page had it. A mouse-only resize is not a control, and a resize with no way back is a trap. The visible rule is 2px and the **target is the whole track**. There is **no transition on any of it, in any case**: a divider that eases is a divider that lags, so `prefers-reduced-motion` has nothing to turn off here. The line is `--pw-rule-divider` at rest and `--pw-accent` while it is hovered, focused or held — the same pair every other control on this desk uses, and not a literal anywhere.
+
+### Where the state lives, and what it is not
+
+**A drag is a layout preference, not an analytical act.** It lands no commit, appears nowhere on the log, and nothing in the session's account of itself mentions it — the browser test asserts the record bar's own counts are identical before and after three gestures. So it is remembered in **`localStorage`, in this browser only** (`charts.ts · SPLIT_STORAGE_KEY`), wrapped in try/catch on both read and write: a private window, cleared site data or a preview costs the memory and nothing else. It is named in `protDesk.tsx · NotHere`, where every other omission is.
+
+Two fractions are stored, each the SATELLITE side's share of its own axis, and **they are clamped on read as well as on write** — `parseSplit` refuses a share outside `(0, 1)` without needing a region, and `clampShare` is asked on *every render* against the CURRENT window, so a fraction written at 1,920px cannot reproduce the broken layout when it is read into a 700px one. A window too small to give both sides their floor falls back to the page's own arrangement and **keeps the reader's preference**, which comes back when the window grows.
+
+`null` means *where the page put it*, and the default track is the page's own expression (`columnTracks(null)` IS `clamp(16rem, 22vw, 22.5rem)`, spelled from `COLUMN_CLAMP`, the one owner of those numbers). A default expressed as a fraction would have been a second, drifting copy of `22vw` — and this way the page at rest is unchanged to the pixel: the divider's 10px track is the ten pixels the grid's `gap` used to be, and `tests/prot-viewport.smoke.test.ts` measures the same 906×278 focus, the same 940×104 strip and the same 282×125 column pane it always did.
+
+### The layers held, and one thing to know about where the code sits
+
+The divider component is presentational — props in, markup out; it reports the POINTER'S OWN COORDINATE rather than a fraction, because a component that computed one would have to know the region it divides and would stop being able to move into `vizfootprint-ui`. The clamping rule is a pure function of numbers, tested without a DOM. The tokens are the theme's. `protDesk.tsx` wires them.
+
+The one thing that is not obvious: those pieces landed in **`charts.ts` and `Chrome.tsx` rather than in files of their own.** `tests/prot-layers.test.ts` asserts the folder's MANIFEST by name, so that a module added here cannot slip past the four rules by being classified as something nobody checks — and a sixth rule module would have meant editing that suite, which this packet was asked to leave alone. The functions belong to the job `charts.ts` already has (`splitByFocus`, `shapeOfView`, `byPlanStep`: **where each picture goes**), so they sit beside it. Both new pieces are judged by the four rules exactly as everything else in the folder is.
+
+### Named, not fixed: the focus card's own chrome grows when the card is narrow
+
+`CARD_CHROME` (163px) is measured at the width the page ships — a 441px card holding a 906×278 picture at 1280×800, a 516px card holding 1031×353 at 1440×900, identically. It is **not** constant across widths: at the focus column's own floor (360px) the card's title, the library's derived how-to-read line, the `Full note` control and the Mono footer wrap, and they take **257px**. So with BOTH boundaries pushed to their stops at once the focus card is 360×333 and its own picture is 326×**76** — under the mark floor a satellite would be held to.
+
+Measured and printed rather than hidden (`tests/prot-dividers.smoke.test.ts` · *holds BOTH boundaries at once*), and left as it is, because:
+
+* the law this packet is about is the SATELLITES', and it holds at both stops together — every pane that drew still draws its marks over the band the floor promises, and **a pick in a tile still takes the focus's marks down** with the region squeezed from two sides. The test asserts all of it;
+* the focus's own stop promises that it is **not smaller than a tile**, and at 360×333 it is not;
+* and the floor **must** be folded from a constant rather than from the real chrome, which is the interesting half. The library does hand the number over — `ChartFrame`'s child is `(size) => ReactNode`, so the composition could capture the picture's box on every measure and subtract. What it could not then do is USE it as a floor: the card's chrome depends on the very box the floor constrains, so a floor derived from it is a control loop — squeeze the row, the chrome wraps and grows, the floor rises, the clamp pushes the row back, the chrome unwraps. **A floor must be folded from something the floor does not move**, and the card's own chrome is not that.
+
+**The library finding, then, is about the CARD and not about the measurement:** a card whose chrome REFLOWS with its width cannot carry a floor expressed on its picture. The way out is the rule this desk already applies to the footer — *if it wraps, the attribution shortens, never the numbers* — extended to the derived how-to-read line: a card whose chrome is constant in height at every width can be given a floor, and one whose chrome grows by 94px between 906px and 360px cannot.
+
+Raising the row's floor to the narrow chrome unconditionally was the other alternative, and it is rejected with its number: it would make the focus row's floor 427px, which at 1280×800 leaves the strip a range of 148–164px — taking the row divider's usefulness away at every width to fix one corner.
+
+### One measurement worth knowing
+
+**The bottom strip ships about two pixels above its own floor.** At 1280×800 the strip band is 150px and its floor is 148px, so the horizontal divider can give the strip a great deal more room (up to 258px, where the focus reaches its own stop) and essentially none less. That is not a flaw in the divider — it is what *the reclaimed height goes to the tiles* already spent. The row divider is, in practice, a one-way control at this budget, and a reader who drags it down meets the stop sentence almost at once.
+
 ## A STEP THAT WILL NOT RUN GETS A CARD, and the reason is inside it
 
 > for not-available, show the widget and tell inside it a text to tell why it's not there

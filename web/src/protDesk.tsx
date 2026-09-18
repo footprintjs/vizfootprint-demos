@@ -51,7 +51,7 @@
  * moving the stepper moves the big card and no card is hard-coded as the big
  * one.
  */
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ChartFrame,
   CommitLog,
@@ -60,6 +60,7 @@ import {
   SavedSelections,
   SelectionChips,
   Sheet,
+  framePad,
   sessionSheetData,
   themeAttr,
   useSessionView,
@@ -69,15 +70,44 @@ import {
 import type { EntryCredit, ProtCounts } from '../../src/prot/etl.js';
 import type { ActOutcome, ProtRun } from '../../src/prot/orchestrator.js';
 import { STRUCTURE_VIEW } from '../../src/prot/def.js';
-import { useProtCells, type ProtCell, type ProtDeskData } from './protCells.js';
+import { AXIS_ROOM, useProtCells, type ProtCell, type ProtDeskData } from './protCells.js';
 import { useProtProjection } from './protProjection.js';
 import { ActRow, RunNarrative, narrativeTitle } from './protTrace.js';
 import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from './protStages.js';
-import { Count, Disclosure, RecordDrawer, WorkbenchHeader } from './workbench/Chrome.js';
+import { Count, Disclosure, RecordDrawer, RegionDivider, WorkbenchHeader, type DividerAction } from './workbench/Chrome.js';
 import { BlockedGroup, ChartCard, ChartTile, ViewerBox } from './workbench/ChartCard.js';
 import { StageStepper } from './workbench/Stepper.js';
 import { methodLine } from './workbench/bands.js';
-import { byPlanStep, chainChips, ownerLine, promoteCardLabel, promoteChartLabel, shapeOfView, splitByFocus, stageOfChart } from './workbench/charts.js';
+import {
+  DIVIDER_HINT,
+  DIVIDER_LABEL,
+  DIVIDER_TRACK,
+  SPLIT_DEFAULT,
+  SPLIT_STORAGE_KEY,
+  byPlanStep,
+  chainChips,
+  clampShare,
+  columnTracks,
+  dividerFloors,
+  dividerValues,
+  ownerLine,
+  parseSplit,
+  promoteCardLabel,
+  promoteChartLabel,
+  rowTracks,
+  serialiseSplit,
+  shapeOfView,
+  shareAfterStep,
+  shareAtEdge,
+  shareAtPointer,
+  splitByFocus,
+  stageOfChart,
+  stopSentence,
+  trackPx,
+  type DividerId,
+  type RegionSplit,
+  type SplitStop,
+} from './workbench/charts.js';
 import { BLOCKED_CARDS, stageWords, type BlockedCard } from './workbench/panel.js';
 import { STEPPER_LABEL, actsLabelOf, stepViews } from './workbench/steps.js';
 import { useWorkbenchInk } from './workbench/tokens.js';
@@ -149,7 +179,7 @@ export interface ProtDeskProps {
 const ABOUT_TITLE = 'About this dashboard and this desk — the definition’s own summary at this cursor, and the claim this desk makes about itself';
 
 /** What that fold is called — the one place the count of omissions is spelled. */
-const NOT_HERE_TITLE = 'What the other three desks show and this page does not — seven things it does without, each one named rather than quietly missing, one affordance it no longer announces, one thing it adds, and one request it makes';
+const NOT_HERE_TITLE = 'What the other three desks show and this page does not — seven things it does without, each one named rather than quietly missing, one affordance it no longer announces, one thing it adds, one thing it remembers that is not on the record, and one request it makes';
 
 /**
  * WHAT THE OTHER THREE DESKS SHOW AND THIS PAGE DOES NOT — named, because an
@@ -195,6 +225,11 @@ function NotHere(): JSX.Element {
         bars for a run</i> before anybody has clicked anything. That is an instruction rather than a fact, and this desk&rsquo;s instrument has no room between the stepper and the charts for either — so the strip appears only once
         there IS a selection, in the library&rsquo;s own words. <b>The consequence, said plainly:</b> a reader arriving here is not told that clicking a mark selects a residue, dragging an axis keeps a range, and shift-clicking adds to
         what is already kept. Every one of those still works, and every one of them lands a real commit on the record below.
+      </li>
+      <li>
+        <b>And one thing this page remembers that is not on the record:</b> where you put the two dividers between the focus and its satellite panes. That is a LAYOUT PREFERENCE and not an analytical act — it lands no commit, appears
+        nowhere on the log below and nothing in the session&rsquo;s own account of itself mentions it — so it is kept in this browser&rsquo;s own storage, for you only, and it travels with no saved picture and no link. Clearing this
+        site&rsquo;s data puts both boundaries back where the page had them, and so does pressing <code>Enter</code> on a divider.
       </li>
       <li>
         <b>And one request this page makes that the other three do not:</b> it asks <code>fonts.googleapis.com</code> for IBM Plex Sans, Serif and Mono. That is a THIRD-PARTY REQUEST from a page that otherwise makes none — every byte of data
@@ -256,6 +291,36 @@ export function RunStepper({ outcomes }: { readonly outcomes: readonly ActOutcom
   return <StageStepper steps={steps} label={STEPPER_LABEL} refusedSeek={said} onSeek={() => setSaid('nothing here is a control yet — the cursor arrives with the desk')} />;
 }
 
+/**
+ * THE INSTRUMENT REGION'S OWN PADDING, in px — declared once, because two
+ * things read it.
+ *
+ * The style below spends it, and the divider arithmetic measures the CONTENT
+ * box inside it (`./workbench/charts.ts` · `shareAtPointer` is handed where
+ * that box starts). Two spellings of 24 would put the boundary a pointer asked
+ * for 24px away from where the pointer was.
+ */
+const REGION_PAD = { x: 24, top: 8, bottom: 40 } as const;
+
+/**
+ * WHAT THIS BROWSER REMEMBERS ABOUT THE BOUNDARIES — read safely, and
+ * defaulting cleanly whatever it answers.
+ *
+ * A private window, cleared site data, a preview or a host that has blocked
+ * storage all either throw or answer nothing, and every one of them means the
+ * same thing: *the page's own arrangement*. The value's SHAPE is judged by
+ * `./workbench/charts.ts` · `parseSplit`, and its floors are judged on every
+ * render by `clampShare` against the window it is read INTO — so a fraction
+ * stored at one window size cannot reproduce the broken layout at another.
+ */
+function rememberedSplit(): RegionSplit {
+  try {
+    return parseSplit(window.localStorage.getItem(SPLIT_STORAGE_KEY));
+  } catch {
+    return SPLIT_DEFAULT;
+  }
+}
+
 /** The whole workbench. See the file header for the four layers and what this file is allowed to do. */
 export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, record, onSearchAgain }: ProtDeskProps): JSX.Element {
   // ── LAYER 4: the data ─────────────────────────────────────────────────────
@@ -271,6 +336,148 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
   // their own `colorOf`, never through a selector into their SVG).
   const cells = useProtCells(desk, data, ink);
   const [said, setSaid] = useState<string | null>(null);
+
+  /*
+    ── THE READER MOVES THE BOUNDARY, and the state is a LAYOUT PREFERENCE ───
+    A drag is not an analytical act: it lands no commit, appears on no log and
+    nothing in `why()` mentions it. So it lives here and in this browser's
+    `localStorage`, never on the session — a saved picture that carried a pane's
+    size would be claiming a reader's furniture was part of their finding. It is
+    named in {@link NotHere} for the same reason every other omission is.
+
+    `split` is the reader's RAW preference and is never rewritten by the window:
+    the floors are applied where the layout is computed, so a boundary that
+    cannot be honoured in a small window comes back when the window grows.
+  */
+  const instrument = useRef<HTMLDivElement>(null);
+  const [split, setSplit] = useState<RegionSplit>(rememberedSplit);
+  const [stop, setStop] = useState<{ readonly which: DividerId; readonly at: SplitStop } | null>(null);
+  /**
+   * THE REGION AS THE BROWSER LAID IT OUT — its content box, and the two
+   * satellite tracks' USED sizes.
+   *
+   * The tracks are READ rather than re-derived (`./workbench/charts.ts` ·
+   * `trackPx`), so a separator's `aria-valuenow` is the truth about the layout
+   * whether the track is the page's own `clamp(16rem, 22vw, 22.5rem)` or a
+   * fraction the reader chose. Re-deriving `22vw` here would have been a second,
+   * drifting copy of the page's own expression.
+   */
+  const [laid, setLaid] = useState<{ readonly w: number; readonly h: number; readonly rail: number; readonly strip: number }>({ w: 0, h: 0, rail: 0, strip: 0 });
+  const measure = useCallback((): void => {
+    const el = instrument.current;
+    if (el === null) return;
+    const used = window.getComputedStyle(el);
+    const columns = trackPx(used.gridTemplateColumns);
+    const rows = trackPx(used.gridTemplateRows);
+    setLaid((was) => {
+      const next = {
+        w: el.clientWidth - REGION_PAD.x * 2,
+        h: el.clientHeight - REGION_PAD.top - REGION_PAD.bottom,
+        rail: columns[2] ?? was.rail,
+        strip: rows[2] ?? was.strip,
+      };
+      return next.w === was.w && next.h === was.h && next.rail === was.rail && next.strip === was.strip ? was : next;
+    });
+  }, []);
+  // A LAYOUT EFFECT, so a remembered boundary is clamped BEFORE the first paint
+  // rather than flashing the page's own arrangement first.
+  useLayoutEffect(() => {
+    const el = instrument.current;
+    if (el === null) return undefined;
+    measure();
+    const watching = new ResizeObserver(() => measure());
+    watching.observe(el);
+    return () => watching.disconnect();
+  }, [measure]);
+  // …and again when the READER moved a boundary, which changes the tracks
+  // without changing the region, so the observer above never fires for it.
+  useLayoutEffect(() => {
+    measure();
+  }, [measure, split]);
+  /*
+    REMEMBERED PER READER, and never allowed to fail loudly: storage that
+    throws or is absent costs the memory and nothing else — the boundary still
+    moves, it is simply not there next time.
+  */
+  useEffect(() => {
+    try {
+      const raw = serialiseSplit(split);
+      if (raw === null) window.localStorage.removeItem(SPLIT_STORAGE_KEY);
+      else window.localStorage.setItem(SPLIT_STORAGE_KEY, raw);
+    } catch {
+      /* a private window, cleared site data, a preview */
+    }
+  }, [split]);
+  /**
+   * THE FOUR FLOORS — folded out of the library's OWN margin and this page's
+   * own axis threshold, never out of a number chosen for the gesture
+   * (`./workbench/charts.ts` · `dividerFloors` carries the table).
+   *
+   * `framePad` is `vizfootprint-ui`'s own union of the margins of the kinds
+   * this desk draws, so the floor moves if the library's padding ever does.
+   */
+  const floors = useMemo(() => dividerFloors({ pad: framePad(['line', 'bar', 'point']), axisRoom: AXIS_ROOM }), []);
+  /** THE SHARES THE LAYOUT GETS — the reader's, held at a floor when it asks for more than the window can give. */
+  const railHeld = clampShare(split.rail, laid.w, floors.rail);
+  const stripHeld = clampShare(split.strip, laid.h, floors.strip);
+  /** Where each boundary STANDS, read off the used tracks — the share a key press moves from, default or not. */
+  const standing = (which: DividerId): number => {
+    const room = (which === 'rail' ? laid.w : laid.h) - DIVIDER_TRACK;
+    return room <= 0 ? 0 : (which === 'rail' ? laid.rail : laid.strip) / room;
+  };
+  /**
+   * ONE GESTURE ON ONE DIVIDER — the only place a share is written, and the
+   * only place a floor is applied.
+   *
+   * The component reports the gesture and nothing else (`./workbench/Chrome.tsx`
+   * · `DividerAction`); the rules turn it into a share; `clampShare` decides
+   * whether it may have it and says which stop held it, which is what the page
+   * then reads out in its own voice.
+   */
+  const act = (which: DividerId, action: DividerAction): void => {
+    const el = instrument.current;
+    if (el === null) return;
+    const box = el.getBoundingClientRect();
+    const axis = which === 'rail' ? { start: box.left + REGION_PAD.x, extent: laid.w } : { start: box.top + REGION_PAD.top, extent: laid.h };
+    const stops = which === 'rail' ? floors.rail : floors.strip;
+    if (action.kind === 'default') {
+      // THE WAY BACK, and it leaves nothing of the reader's behind: the stored
+      // key is removed, not set to the default, so a reader who resets is a
+      // reader this browser has forgotten.
+      setSplit(which === 'rail' ? { rail: null, strip: split.strip } : { rail: split.rail, strip: null });
+      setStop(null);
+      return;
+    }
+    const asked =
+      action.kind === 'move'
+        ? shareAtPointer(action.pointer, axis)
+        : action.kind === 'nudge'
+          ? shareAfterStep(standing(which), axis.extent, action.px)
+          : shareAtEdge(stops, axis.extent, action.to);
+    const held = clampShare(asked, axis.extent, stops);
+    setSplit(which === 'rail' ? { rail: held.share, strip: split.strip } : { rail: split.rail, strip: held.share });
+    /*
+      AND `Home` / `End` SAY WHAT THEY WENT TO. They land exactly ON a floor,
+      which the clamp reads as *not past it* and therefore says nothing about —
+      so the sentence is set here instead. A reader who asked for the stop is
+      owed the reason as much as one who pushed into it, and `min` is the focus
+      at its own floor while `max` is the satellites at theirs.
+    */
+    const at: SplitStop = action.kind === 'edge' ? (action.to === 'min' ? 'focus' : 'satellites') : held.stop;
+    setStop(at === null ? null : { which, at });
+  };
+  /** One divider's whole prop bundle, so the two cannot be wired differently. */
+  const dividerOf = (which: DividerId): { readonly label: string; readonly hint: string; readonly now: number; readonly min: number; readonly max: number; readonly step: number; readonly stop: string | null; onAct(action: DividerAction): void } => {
+    const values = dividerValues(standing(which), which === 'rail' ? laid.w : laid.h, which === 'rail' ? floors.rail : floors.strip);
+    return {
+      label: DIVIDER_LABEL[which],
+      hint: DIVIDER_HINT[which],
+      ...values,
+      step: DIVIDER_TRACK,
+      stop: stop === null || stop.which !== which ? null : stopSentence(which, stop.at),
+      onAct: (action) => act(which, action),
+    };
+  };
 
   // ── LAYER 3: the rules ───────────────────────────────────────────────────
   const stages = useMemo(() => stepperStages(outcomes, run), [outcomes, run]);
@@ -827,6 +1034,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         square-ish pictures.
       */}
       <div
+        ref={instrument}
         style={{
           /*
             THE LAST ROW OF THE PAGE'S GRID, named from the end — and it has to
@@ -854,7 +1062,17 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
             not wrap — because this is an instrument for a desk, and a second
             layout for a phone is a different product.
           */
-          gridTemplateColumns: 'minmax(0, 1fr) clamp(16rem, 22vw, 22.5rem)',
+          /*
+            AND THE READER MAY MOVE IT. `columnTracks(null)` IS the expression
+            above, spelled from its own numbers (`./workbench/charts.ts` ·
+            `COLUMN_CLAMP`, the one owner of them) plus a 10px DIVIDER TRACK
+            between the two columns; a share from the reader replaces the two
+            outer tracks with fractions and leaves the divider alone. The `gap`
+            is 0 because those ten pixels are now a track: the same ten pixels,
+            so the page at rest is unchanged to the pixel and the viewport
+            smoke test's numbers still hold.
+          */
+          gridTemplateColumns: columnTracks(railHeld.share),
           /*
             THE RECLAIMED HEIGHT GOES TO THE TILES, not to the focus slot: the
             author's call. The strip is a BAND of its own — about a third of the
@@ -863,19 +1081,41 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
             instrument resizes itself to its pane as the window changes. There
             is not one fixed pixel height in here.
           */
-          gridTemplateRows: 'minmax(0, 1fr) minmax(0, 0.34fr)',
-          gap: 10,
-          padding: '8px 24px 40px',
+          gridTemplateRows: rowTracks(stripHeld.share),
+          gap: 0,
+          padding: `${String(REGION_PAD.top)}px ${String(REGION_PAD.x)}px ${String(REGION_PAD.bottom)}px`,
         }}
       >
         <div style={{ gridColumn: 1, gridRow: 1, minHeight: 0, minWidth: 0 }}>{promotedCard === null ? (hero === null ? null : card(hero, true, true)) : blockedCard(promotedCard, true)}</div>
+        {/*
+          THE BOUNDARY BETWEEN THE FOCUS AND THE STRIP BELOW IT — the row the
+          `gap` used to be, now a control.
+
+          Its floors: the strip stops where its bars stop being a band rather
+          than a line, and the focus stops where it would lose its own axis
+          labels — which are also this page's only encoding pickers. Neither is
+          a number chosen here (`./workbench/charts.ts` · `dividerFloors`).
+        */}
+        <div style={{ gridColumn: 1, gridRow: 2, minHeight: 0, minWidth: 0 }}>
+          <RegionDivider orientation="horizontal" {...dividerOf('strip')} />
+        </div>
         {/*
           THE BOTTOM STRIP — the pictures that want width, as a row of controls.
           They are the wide charts' waiting room: one press puts one of them in
           the focus, where it has the width it was drawn for.
         */}
-        <div style={{ gridColumn: 1, gridRow: 2, minWidth: 0, display: 'flex', gap: 10, alignItems: 'stretch' }}>
+        <div style={{ gridColumn: 1, gridRow: 3, minWidth: 0, display: 'flex', gap: 10, alignItems: 'stretch' }}>
           {wide.map((c) => tile(c, true))}
+        </div>
+        {/*
+          AND THE BOUNDARY BETWEEN THE FOCUS AND THE RIGHT COLUMN — the one
+          with the range, because the column is the pane a reader most often
+          wants more or less of. It stops at the width where a scatter still
+          reads as a shape (the page's own `16rem`), and at the other end where
+          the focus would be no wider than the widest tile.
+        */}
+        <div style={{ gridColumn: 2, gridRow: '1 / -1', minHeight: 0, minWidth: 0 }}>
+          <RegionDivider orientation="vertical" {...dividerOf('rail')} />
         </div>
         {/*
           THE RIGHT COLUMN — the pictures that want a square or rows, and the
@@ -892,8 +1132,8 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         */}
         <div
           style={{
-            gridColumn: 2,
-            gridRow: '1 / span 2',
+            gridColumn: 3,
+            gridRow: '1 / -1',
             minHeight: 0,
             minWidth: 0,
             display: 'grid',

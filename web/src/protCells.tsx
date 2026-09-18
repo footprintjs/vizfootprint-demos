@@ -395,8 +395,13 @@ export interface ProtCell extends DeskChart {
  *
  * The cost, named: a tile's axis labels are also the ENCODING PICKERS, so
  * re-encoding is a focus-slot gesture. An illegible picker was never a control.
+ *
+ * EXPORTED since the dividers landed, and that is the point of it: the floors a
+ * drag stops at are folded out of this number rather than out of one somebody
+ * picked (`./workbench/charts.ts` · `dividerFloors`, `./protDesk.tsx` wires it
+ * in). The honesty floor and the floor of the gesture are the same floor.
  */
-const AXIS_ROOM = 170;
+export const AXIS_ROOM = 170;
 
 export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: WorkbenchInk): readonly ProtCell[] {
   const { residues, counts, skipped, structure, run, refusals, notes } = data;
