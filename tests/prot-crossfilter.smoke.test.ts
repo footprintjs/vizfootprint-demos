@@ -24,36 +24,39 @@
  * question of whether a reader can select FROM a tile: they can, and this is
  * the proof.
  *
- * It is NOT a drag across the focused surface chart, and that is the library's
- * own law rather than a gap here: that chart's x is a BAND of residue numbers
- * (the two chains share the axis), and `vizfootprint-ui` · `VizLine` says *a
- * band line draws no brush — an interval has no meaning on a band*. So the
- * chart in the focus slot is not the one that can start a selection on this
- * entry, which is exactly why every other pane has to be on screen and live.
+ * A DRAG ACROSS A RUN IS ASSERTED TOO, in the last test, and it now LANDS.
  *
- * ── AND A DECLARED CAPABILITY NOTHING DELIVERS, MEASURED MORE SHARPLY ─────
- * `src/prot/def.ts` · `capabilities` declares
- * `{ viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] }` — and the
- * same for the conservation run beside it — so the page DECLARES a gesture, and
- * both captions faithfully repeat the claim (*drag across the axis to keep a
- * range of residue numbers*). It does not work, and this file used to record
- * the cause as *the renderer draws no brush for that view's band x*. **That was
- * wrong, and the test below is where the sharper measurement now lives:** the
- * brush IS drawn (the live rectangle appears under a real pointer drag) and the
- * gesture IS emitted; what happens is that the SESSION REFUSES THE CLAUSE, and
- * the refusal lands as one more gap on the ledger.
+ * ── THE CAUSE WAS RECORDED WRONG HERE TWICE, AND THIS IS THE MEASUREMENT ───
+ * For three packets a reader's drag across either run did nothing: the brush
+ * drew, the gesture fired, and the refusal ledger climbed once per drag. This
+ * file recorded the reason twice and was wrong both times — first *a band line
+ * draws no brush* (it does; the live rectangle appears under a real pointer),
+ * then *the run positions itself through `epochOf` and emits string DATE keys*
+ * (true of a line over a NUMBER axis, and a real defect fixed in the library —
+ * but not this chart's, because these two are bands).
  *
- * The reason is in the library's own line: `VizLine` positions a run through
- * `epochOf` and snaps a drag to *the nearest distinct data date per endpoint*,
- * so the interval it emits carries the STRING KEYS of its own x positions.
- * These two runs' x is `resnum` — a number — and a string interval on that
- * column is not a clause this table can answer.
+ * THE MEASURED CAUSE WAS TWO CAUSES, ONE PER TIER, and neither was visible
+ * without reading the session's own refused-requests panel:
  *
- * It is capability law 1 broken at the DECLARATION rather than at the caption:
- * a true caption over a false declaration is still a false declaration, and
- * fixing the caption alone is expressly not the answer. Its fix is its own
- * packet on both sides. What this file owes it meanwhile is a MEASUREMENT that
- * cannot rot, which is the last test here.
+ *   1. `src/prot/def.ts` declared `encodings: ['interval']` for both runs. A
+ *      line over a BAND emits a MATCH on a drag and a POINT on a tap; an
+ *      interval is a voice it never had. So the session refused for the
+ *      capability — *view "conservation" does not encode a match selection* —
+ *      which the library had already pinned: *a view declaring only point
+ *      accepts a match; one declaring only interval refuses it as guard-failed*.
+ *   2. With that fixed the clause LANDED and kept NOTHING: a band's slots are
+ *      named `String(cell)`, so the match carried the spellings `["27","28",…]`
+ *      to `resnum`, which holds numbers. Worse than the dead gesture, because
+ *      the record then claimed the question was answered. The library's answer
+ *      is `slotValues` — *a slot is a NAME for a value, and a clause carries
+ *      the value* — plus a door that refuses a spelling by name
+ *      (`unaddressable-value`) rather than landing an empty commit. This page
+ *      delivers it by handing the chart `cell` beside each slot name
+ *      (`web/src/protCells.tsx` · `surfaceRun`).
+ *
+ * THE LESSON, worth more than either fix: the page was printing the answer in
+ * words the whole time, on its own ledger. Read the refusal off the record
+ * before theorising about it.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright-core';
@@ -301,7 +304,7 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     not about the new column: the conservation run inherited it by being a line
     over a number, exactly as the surface run has been since it landed.
   */
-  it('AND NEITHER RUN’S DRAG LANDS A CLAUSE — the brush is drawn, the session refuses it, and the ledger says so', async () => {
+  it('AND A DRAG ON EITHER RUN NOW LANDS ITS CLAUSE AND NARROWS THE DESK — nothing refused', async () => {
     /** How many requests the session has refused, read off the record drawer's own count. */
     const gapsSoFar = async (): Promise<number> => {
       for (let tries = 0; tries < 5; tries += 1) {
@@ -354,17 +357,31 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
       await page.mouse.up();
       await page.waitForTimeout(1200);
 
-      // …AND NOTHING WAS KEPT: no clause to clear, and every pane's marks stand
-      expect(await page.locator('button[aria-label^="clear the"]').count(), `${view} landed a clause`).toBe(0);
+      // …AND THE CLAUSE LANDED: there is something to clear, and the OTHER pane
+      // narrowed. The bar is the witness rather than the dragged run itself —
+      // a run keeps drawing every slot of its own band and shows its selection
+      // as an outline, so its mark count is the wrong question to ask it.
+      expect(await page.locator('button[aria-label^="clear the"]').count(), `${view} landed no clause`).toBeGreaterThan(0);
       const after = await marks(page);
-      expect(after[INTERFACE_VIEW]).toBe(before[INTERFACE_VIEW]);
-      expect(after[view]).toBe(before[view]);
-      // the session says why, on its own ledger, once per drag
+      expect(after[INTERFACE_VIEW], `the bar did not narrow after a drag on ${view}`).toBeLessThan(before[INTERFACE_VIEW]!);
+      expect(after[INTERFACE_VIEW]).toBeGreaterThan(0);
+      // AND NOTHING WAS REFUSED — the ledger stands exactly where boot left it.
+      // This is the assertion that matters: it stood at +1 per drag for three
+      // packets, and the reason recorded here was wrong twice (a band draws no
+      // brush; then a date-shaped interval). The measured cause was TWO, one
+      // per tier — the view declared `interval` while a line over a band emits
+      // a match and a point, and then the band emitted its slot NAMES against a
+      // column of numbers. Both are fixed at their own tier, and a spelling on
+      // the wire now refuses by name (`unaddressable-value`) instead of landing
+      // a commit that keeps nothing.
       const now = await gapsSoFar();
-      say(`  the drag across ${view} (${String(drag!.dots)} marks, ${String(Math.round(drag!.x1))}→${String(Math.round(drag!.x2))}) drew its brush and was REFUSED — the ledger is at ${String(now)}`);
-      expect(now).toBe(refused + 1);
-      refused = now;
+      say(`  the drag across ${view} (${String(drag!.dots)} marks, ${String(Math.round(drag!.x1))}→${String(Math.round(drag!.x2))}) landed its clause — the bar went ${String(before[INTERFACE_VIEW])}→${String(after[INTERFACE_VIEW])} bars, the refusal ledger is still at ${String(now)}`);
+      expect(now, `${view}'s drag was refused`).toBe(refused);
       await shut();
+      // give the next run a clean desk, so its own narrowing is its own
+      const clear = page.locator('button[aria-label^="clear the"]');
+      if ((await clear.count()) > 0) await clear.first().click();
+      await page.waitForTimeout(900);
     }
   }, 180_000);
 

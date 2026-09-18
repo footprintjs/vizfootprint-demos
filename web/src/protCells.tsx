@@ -345,7 +345,13 @@ export function surfaceRun(residues: readonly Row[], xField: string, yField: str
     // label, because the encoding plane lets a line's x be one and a reader can
     // move that binding to `chain` or `resname`
     if (y === null || y === undefined || !placed(y) || x === null || x === undefined) return [];
-    return [{ x, point: { category: String(x), value: y, series: String(r[seriesField]) } }];
+    // `cell` IS WHY A DRAG ON THIS RUN WORKS. A band's slot is named
+    // `String(x)`, and a gesture that emitted the NAME would send the spelling
+    // "63" to a column holding the number 63 — a clause no row can answer. The
+    // library takes the value from here (`vizfootprint-ui` · `slotValues`) and
+    // the door refuses the gesture by name when it is missing, so this is not a
+    // nicety: without it the drag lands `unaddressable-value` every time.
+    return [{ x, point: { category: String(x), cell: x, value: y, series: String(r[seriesField]) } }];
   });
   // SORT ONLY WHEN THE AXIS IS A NUMBER. The band takes its slot order from the
   // order the points arrive in, so a numeric axis is sorted numerically — which

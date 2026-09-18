@@ -174,11 +174,22 @@ describe('the two folds the act-fed cells draw through', () => {
     // — and "10" comes after "2", which is exactly what an appearance-ordered band
     // would get wrong
     const run = surfaceRun(LANDED, 'resnum', 'sasa', 'chain');
+    // AND `cell` RIDES BESIDE THE SLOT NAME, which is what makes a drag on this
+    // run answerable: the slot is named "1" and the clause carries the NUMBER 1,
+    // because `resnum` holds numbers and a spelling addresses no row of it.
     expect(run).toEqual([
-      { category: '1', value: 10, series: 'A' },
-      { category: '1', value: 30, series: 'B' },
-      { category: '2', value: 20, series: 'A' },
-      { category: '10', value: 40, series: 'B' },
+      { category: '1', cell: 1, value: 10, series: 'A' },
+      { category: '1', cell: 1, value: 30, series: 'B' },
+      { category: '2', cell: 2, value: 20, series: 'A' },
+      { category: '10', cell: 10, value: 40, series: 'B' },
+    ]);
+    // …and on a STRING axis the cell IS the name, so a band over `chain` is
+    // byte-identical to what it was before the value rode along
+    expect(surfaceRun(LANDED, 'chain', 'sasa', 'chain')).toEqual([
+      { category: 'A', cell: 'A', value: 10, series: 'A' },
+      { category: 'A', cell: 'A', value: 20, series: 'A' },
+      { category: 'B', cell: 'B', value: 30, series: 'B' },
+      { category: 'B', cell: 'B', value: 40, series: 'B' },
     ]);
     // a STRING axis is a legal band for a line (the library's own requirement
     // widens x to a string) and nothing here knows a better order for one, so the
