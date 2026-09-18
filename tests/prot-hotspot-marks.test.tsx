@@ -404,12 +404,12 @@ describe('a press on stage 5 promotes the view bound to the rank — one binding
 
   it('with the rank BOUND, the press has the 3D view to promote', () => {
     const shown = { [STRUCTURE_VIEW]: { color: HOTSPOT_RANK_COLUMN }, [RAMA_VIEW]: { x: 'phi', y: 'psi' } };
-    expect(chartsOfStage(stageFive(LANDED), shown, ACT_COLUMNS)).toEqual([STRUCTURE_VIEW]);
+    expect(chartsOfStage(stageFive(LANDED), shown, ACT_COLUMNS, [stageFive(LANDED)])).toEqual([STRUCTURE_VIEW]);
   });
 
   it('with it UNBOUND the answer is EMPTY — which is a true answer and used to be a silent one', () => {
     const shown = { [STRUCTURE_VIEW]: { color: 'chain' }, [RAMA_VIEW]: { x: 'phi', y: 'psi' } };
-    expect(chartsOfStage(stageFive(LANDED), shown, ACT_COLUMNS)).toEqual([]);
+    expect(chartsOfStage(stageFive(LANDED), shown, ACT_COLUMNS, [stageFive(LANDED)])).toEqual([]);
     /*
       AND THE PRESS SAYS SO, naming the real reason: which columns the stage
       landed, and that no picture here reads them. A reader learns a FACT — the

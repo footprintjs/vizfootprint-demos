@@ -494,6 +494,26 @@ Which pictures a stage owns is an INTERSECTION of the columns its acts landed wi
 
 **And the empty case is now a STATED outcome** (`panel.ts · emptyFocusSaid`, said in the stepper's own `refusedSeek` slot), because it will recur for any future stage whose columns no chart has taken up — stage 6 will be exactly that on the day it lands. It names the real reason rather than apologising: *it landed `hotspot_rank`, `hotspot_cites`, `hotspot_reason` onto the rows, and no picture on this desk is bound to any of them.* A reader learns a fact — the columns exist and nothing reads them, and the Sheet shows them.
 
+### …AND THEN STAGE 5 GOT A PICTURE OF ITS OWN, because THE EXPLANATION WAS NEVER THE FIX
+
+> *"Why can this chart not render that? When we render all the residues — why can we not render one result, like these six residues, each click each residue highlights?"*
+
+The author, on his own desk, one question after the one above. The sentence was honest and the desk was still the only one on the page with a stage that drew nothing; its other picture was BORROWED (binding the rank to the 3D view takes that viewer from step 1), so stage 5 had a hero only while a reader had bound something. So stage 5 declares its own chart — `src/prot/def.ts · RANKING_VIEW`, six marks, one per ranked residue, each press one residue — and **the sentence stays in the code with its own test, because stage 6 will need it the day it lands; no reader meets it on a working desk** (`tests/prot-served.smoke.test.ts` asserts both halves).
+
+| the decision | what it is | why it is not the other thing |
+|---|---|---|
+| the HEIGHT | `interface_contacts`, a count | **never the rank.** Rank 1 is the strongest pick and would be the SHORTEST bar. `hotspot_rank` is declared `role: 'dimension', scale: 'discrete'` — *rank 6 is not six times rank 1* — and a dimension is an order and a label, not a length |
+| the ORDER and the COLOUR | `hotspot_rank`, on `color` | the rank is a PLACE, so it is which slot a mark stands in and which hue it takes — the same palette and the same index the 3D view paints a bound value with |
+| the CATEGORY | `residue_key` | it is the channel `VizBar` emits on, and a press has to be one residue |
+| the two alternatives | ruled out by a MEASUREMENT, not by taste | `interface_separation` is a distance where smaller is tighter and `relative_sasa` at an interface is an exposure where smaller means more buried, so on either the residue making the MOST cross-interface contacts is drawn BELOW THE MIDDLE. (The gap argument offered for `relative_sasa` was measured and is false on this entry — it is absent on 0 of 185 — which is why the def records the direction and not the gaps) |
+| WHICH ROWS become marks | the ones carrying a rank, sorted by rank | **the absence is the filter**, which is already the idiom here: the Ramachandran plots 181 of 185, the surface run drops a y that is not a magnitude |
+| the CAPTION | *6 of 185 residues ranked* | **never a bare six.** A reader has to be able to see that 179 residues were not named, because that is most of them |
+| WHERE it is declared | only where the act is | a view over `hotspot_rank` on a build that can never run stage 5 would be refused forever and would make the published definition differ |
+
+**AND THE OWNERSHIP FOLD HAD TO LEARN A LAW, because this is the first picture on this desk drawn from TWO stages' columns.** Its height is stage 4's and its colour is stage 5's, and `chartsOfStage` answered *whichever stage matches first* — which would have put stage 4's name on stage 5's picture and moved the stepper's bar to stage 4 when a reader pressed 5. So **a picture drawn from two stages' columns belongs to the LATER one**, which is a fact rather than a tie-break: a picture is produced when its last ingredient lands, and at stage 4's cursor this chart has no rank column and therefore no marks at all. Every picture that had one owner keeps it, byte for byte.
+
+**MEASURED IN A REAL BROWSER** at 1440×900 on the served page: pressing one mark (`A:38`) took the conservation run from 162 marks to 1, the surface run from 185 to 1, the cross-chain bars from 185 to 1 and the Ramachandran from 181 bright dots to 1 — in 111 ms — while this picture kept all of its own marks, which is the library excluding a view's self clause and is correct. The card's *select these N residues across the desk* control stays: **two gestures, two meanings** — the whole short list at once, or one residue.
+
 Three cases, three answers, and they stay distinct because they are different facts:
 
 | the press | what happens | why |

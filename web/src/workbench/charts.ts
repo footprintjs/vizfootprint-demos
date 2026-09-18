@@ -23,7 +23,7 @@
  * the log says why a line is orange — which is a finding about the library, not
  * a licence to hand-draw a mark.
  */
-import { PROT_ENCODINGS } from '../../../src/prot/def.js';
+import { PROT_ENCODINGS_ALL } from '../../../src/prot/def.js';
 import type { ProtCounts } from '../../../src/prot/etl.js';
 import type { StepperStage } from '../protStages.js';
 import { chartsOfStage } from '../protStages.js';
@@ -91,7 +91,7 @@ export function splitByFocus<T extends { readonly id: string; readonly clauseId?
  * `null` is left for a picture that binds nothing and is nobody's receipt.
  */
 export function stageOfChart(stages: readonly StepperStage[], viewId: string, shown: Readonly<Record<string, Readonly<Record<string, string>>>>, actColumns: ReadonlySet<string>): StepperStage | null {
-  return stages.find((stage) => chartsOfStage(stage, shown, actColumns).includes(viewId)) ?? null;
+  return stages.find((stage) => chartsOfStage(stage, shown, actColumns, stages).includes(viewId)) ?? null;
 }
 
 /*
@@ -162,7 +162,7 @@ export function byPlanStep<T>(slots: readonly RailSlot<T>[]): readonly T[] {
  *
  * So the bottom strip takes what wants WIDTH and the right column takes what
  * wants a SQUARE or height. Which is which is read off the def's own
- * `chartKind` (`src/prot/def.ts` · `PROT_ENCODINGS`) — a declared fact about
+ * `chartKind` (`src/prot/def.ts` · `PROT_ENCODINGS_ALL`) — a declared fact about
  * the view, not a typed list of where each chart goes: a `line` and a `bar` are
  * plotted against an axis of residues and are unreadable narrow; a `scatter` of
  * two angles and a molecule are unreadable wide; a view with no declared
@@ -178,7 +178,10 @@ const SHAPE_OF_KIND: Readonly<Record<string, TileShape>> = { line: 'wide', bar: 
 
 /** The shape one view's picture wants. A view the def gives no encoding surface draws rows, which want height. */
 export function shapeOfView(viewId: string): TileShape {
-  const declared = PROT_ENCODINGS.find((encoding) => encoding.viewId === viewId);
+  // EVERY surface the def CAN declare, not only the ones it always does: stage
+  // 5's chart is declared with its act (`src/prot/def.ts` · `RANKING_VIEW`), and
+  // a layout that could not find its kind would put a bar where a square goes.
+  const declared = PROT_ENCODINGS_ALL.find((encoding) => encoding.viewId === viewId);
   return declared === undefined ? 'tall' : (SHAPE_OF_KIND[declared.chartKind] ?? 'square');
 }
 

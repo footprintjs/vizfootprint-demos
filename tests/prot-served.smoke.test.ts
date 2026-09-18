@@ -28,7 +28,7 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { buildWebIfMissing, startServedProt, type ServedHandle } from './protServedServer.js';
 import { EXAMPLE_ENTRY } from '../src/prot/archive.js';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, RAMA_VIEW, RANKING_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { HOTSPOT_RANK_COLUMN, HOTSPOT_TAG } from '../src/prot/hotspots.js';
 import { BLOCKED_TAG } from '../src/prot/plan.js';
 
@@ -118,6 +118,9 @@ async function promoteHotspots(page: Page): Promise<void> {
 
 /** The 3D card's own name, as the def declares it — what its promote control and its note are called after. */
 const STRUCTURE_CARD = 'The complex, in three dimensions';
+
+/** STAGE 5'S OWN card, by the name the def declares for its view (`src/prot/def.ts` · the `ranking` actor). */
+const RANKING_CARD = 'The residues a model ranked as hot spots';
 
 /**
  * BRING ONE CARD INTO THE FOCUS AND OPEN ITS `Full note` — which is where a
@@ -471,37 +474,139 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the served desk bo
     expect(await bind.count(), 'the rank is not bindable, so the act did not land its column').toBeGreaterThan(0);
   });
 
-  it('A PRESS ON STAGE 5 PROMOTES THE VIEW BOUND TO THE RANK — and says so when nothing is bound', async () => {
+  it('A PRESS ON STAGE 5 PROMOTES ITS OWN PICTURE — and the empty-focus sentence is never met on a working desk', async () => {
     /*
-      The author's report: *clicking on the cursor stage nothing happens.*
+      THE HISTORY OF THIS TEST, because it used to assert the opposite and was
+      right to.
+
+      The author's report was *clicking on the cursor stage nothing happens*:
       `chartsOfStage` intersects what a stage landed with what each view binds,
-      and with the rank unbound that intersection is empty — a true answer, and
-      it used to be a SILENT one. So: unbound, the press says which columns
-      exist and that no picture reads them; bound, it promotes the 3D view.
+      stage 5 had no chart of its own, and with the rank unbound from the 3D
+      view that intersection was EMPTY — a true answer, and a silent one until
+      `panel.ts · emptyFocusSaid` said it out loud. Then the author asked the
+      next question: *why can we not render one result, like these six
+      residues?* — and **the explanation was never the fix.**
+
+      So stage 5 declares its own chart (`src/prot/def.ts` · `RANKING_VIEW`) and
+      the press promotes it with nothing bound anywhere. The sentence STAYS in
+      the code and keeps its own test (`tests/prot-hotspot-marks.test.tsx`),
+      because stage 6 will be exactly that case the day it lands — but no
+      reader meets it on this desk any more, and that is what is asserted here.
     */
-    await openNoteOf(page, STRUCTURE_CARD); // unbind state: the desk starts on `chain`
+    await openNoteOf(page, STRUCTURE_CARD); // the desk starts with the 3D view's colour on `chain`
     const five = page.getByRole('button', { name: /^move the desk to stage 5/ });
     expect(await five.count(), 'stage 5 is not a control, so the press cannot be tested').toBe(1);
     await five.first().click();
-    await page.waitForFunction(() => (document.body.textContent ?? '').includes('no picture on this desk is bound to any of them'), undefined, { timeout: 30_000 });
-    const unbound = await words(page);
-    expect(unbound).toContain('the cursor moved to stage 5, Hot Spot Prediction');
-    expect(unbound).toContain(HOTSPOT_RANK_COLUMN);
-    say(`the press on stage 5, with nothing bound: "${/the cursor moved to stage 5[^.]*\./.exec(unbound)?.[0] ?? '?'}"`);
+    // THE PRESS PROMOTED STAGE 5'S OWN PICTURE: a focused card is the one that
+    // offers a full note, so this is the focus slot answering by name
+    await page.waitForFunction(
+      (card) => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') ?? '').startsWith(`the full note for ${card}`)),
+      RANKING_CARD,
+      { timeout: 30_000 },
+    );
+    const promoted = await words(page);
+    expect(promoted).not.toContain('no picture on this desk is bound to any of them');
+    expect(promoted).toContain('residues ranked');
+    const counted = /(\d+) of (\d+) residues ranked/.exec(promoted);
+    expect(counted, `the promoted card should count the marks it drew against the whole table: ${promoted.slice(0, 200)}`).not.toBe(null);
+    say(`the press on stage 5 promoted its own picture: "${counted?.[0] ?? '?'}" — and the empty-focus sentence is nowhere on the page`);
+    // NEVER A BARE COUNT: the second number is the whole table, so a reader can
+    // see that most of the residues were not named
+    expect(Number(counted![2])).toBe(185);
+    expect(Number(counted![1])).toBeLessThan(10);
 
-    // NOW BIND IT, and the same press promotes the 3D view instead
+    // AND BINDING THE RANK TO THE 3D VIEW STILL WORKS — stage 5 then owns two
+    // pictures and the press still says nothing about an empty focus
     await promoteHotspots(page);
     await page.getByRole('button', { name: /colour the 3D structure by the model’s rank/ }).first().click();
-    await page.waitForFunction((column) => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') ?? '').includes('by chain again')) || (document.body.textContent ?? '').includes(column), HOTSPOT_RANK_COLUMN, { timeout: 60_000 });
+    /*
+      WAIT ON THE CONTROL'S OWN TEXT — the wait that was here read `aria-label`,
+      which these controls do not carry, and passed on its `||` arm instead: the
+      page happened to contain the word `hotspot_rank` because the EMPTY-FOCUS
+      SENTENCE was on screen. That sentence is exactly what this packet removed
+      from a working desk, so the wait's real arm had to be found. It is the one
+      the binding test above already uses: the control's name is derived from
+      the encoding fold at the cursor, so its text flipping IS the rebind
+      landing.
+    */
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('colour the 3D structure by chain again')), undefined, { timeout: 60_000 });
     await five.first().click();
     await page.waitForFunction(
-      () => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') ?? '').startsWith('the full note for The complex, in three dimensions')),
+      () => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') ?? '').startsWith('the full note for ')),
       undefined,
       { timeout: 30_000 },
     );
-    const bound = await words(page);
-    // ONE BINDING, TWO SYMPTOMS: the colours appear AND the stepper's press works
-    expect(bound).not.toContain('no picture on this desk is bound to any of them');
+    expect(await words(page)).not.toContain('no picture on this desk is bound to any of them');
+    expect(pageErrors, `the page threw: ${pageErrors.join(' · ')}`).toEqual([]);
+  }, 180_000);
+
+  it('A PRESS ON ONE MARK OF STAGE 5’S CHART NARROWS EVERY OTHER PANE TO ONE RESIDUE — counted, before and after', async () => {
+    /*
+      THE GESTURE THE AUTHOR ASKED FOR, in a real browser: *each click each
+      residue highlights.* Six marks share the whole width of the focused pane,
+      so unlike the 185-bar chart beside it one of them can be pressed by hand —
+      and it is pressed by its ACCESSIBLE NAME (`VizBar` gives every bar
+      `role="button"` and `select <category> (<count>)`), never by a computed
+      coordinate.
+
+      A SCRIPT-DRIVEN CHECK IS WHAT PASSED WHILE THE PAGE FAILED, twice in this
+      project, so what is asserted is the MARK COUNTS in every other pane.
+    */
+    const five = page.getByRole('button', { name: /^move the desk to stage 5/ });
+    await five.first().click();
+    await page.waitForFunction(
+      (card) => [...document.querySelectorAll('button')].some((b) => (b.getAttribute('aria-label') ?? '').startsWith(`the full note for ${card}`)),
+      RANKING_CARD,
+      { timeout: 30_000 },
+    );
+    // clear whatever clause an earlier test left, so the counts below are the desk at rest
+    for (const clear of await page.getByRole('button', { name: /^clear the / }).all()) await clear.click();
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length > 100, `[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 30_000 });
+    const before = await marks(page);
+    say(`before the press: ${Object.entries(before).map(([id, n]) => `${id} ${String(n)}`).join(' · ')}`);
+    expect(before[RANKING_VIEW], 'stage 5’s chart drew no marks, so there is nothing to press').toBeGreaterThan(0);
+    expect(before[RANKING_VIEW]).toBeLessThan(10);
+
+    const mark = page.locator(`[data-chart="${RANKING_VIEW}"] rect[role="button"]`).first();
+    const named = await mark.getAttribute('aria-label');
+    const residue = /select ([A-Za-z]:\d+)/.exec(named ?? '')?.[1];
+    expect(residue, `the marks of stage 5’s chart are not named after a residue: ${String(named)}`).toBeDefined();
+    const started = Date.now();
+    await mark.click();
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length < 100, `[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 30_000 });
+    const roundTrip = Date.now() - started;
+    const after = await marks(page);
+    const dimmed = await bright(page, RAMA_VIEW);
+    say(`after pressing the mark for ${String(residue)}: ${Object.entries(after).map(([id, n]) => `${id} ${String(n)}`).join(' · ')} · ${String(dimmed)} dots bright in the Ramachandran · round trip ${String(roundTrip)} ms`);
+    // ONE RESIDUE, and the whole desk narrows to it
+    expect(after[SURFACE_VIEW]!).toBe(1);
+    expect(after[CONSERVATION_VIEW]!).toBe(1);
+    expect(after[INTERFACE_VIEW]!).toBe(1);
+    expect(dimmed).toBe(1);
+    /*
+      AND THIS VIEW ITSELF DOES NOT NARROW, which is correct and is the library's
+      own law: the fold excludes a view's SELF clause by contract, so a press on
+      a mark never collapses its own chart to that one mark (the same thing the
+      `interface` bar is pinned for one test above).
+    */
+    expect(after[RANKING_VIEW]!).toBe(before[RANKING_VIEW]!);
+    /*
+      AND EVERY OTHER PANE SAYS IT WAS NARROWED, each counting the marks it drew
+      against the marks it has at rest. None of them NAMES this picture, and
+      that is the desk's own rule rather than a gap: only the FOCUSED card is
+      given room for the source's declared name (`narrowingSaid(…, 'focus')`),
+      and the focused card here is the source itself — which says nothing,
+      because a source telling itself it was narrowed would be the one sentence
+      on this desk that is about nothing.
+    */
+    const sentences = await page.evaluate(() => [...document.querySelectorAll('[data-narrowed="true"]')].map((el) => (el.textContent ?? '').replace(/\s+/g, ' ')));
+    say(`what the panes said: ${sentences.join(' || ')}`);
+    expect(sentences.length).toBeGreaterThan(2);
+    expect(sentences.filter((one) => /^1 of [\d,]+ /.test(one)).length).toBeGreaterThanOrEqual(4);
+    expect(sentences.every((one) => one.includes('in force') || one.includes('still drawn'))).toBe(true);
+    // the bar chart of every residue went to ONE bar, which is the crossfilter
+    // arriving from a picture of six marks
+    expect(sentences.some((one) => /^1 of [\d,]+ bars in force/.test(one))).toBe(true);
     expect(pageErrors, `the page threw: ${pageErrors.join(' · ')}`).toEqual([]);
   }, 180_000);
 
@@ -517,8 +622,18 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the served desk bo
     // THE BYTES and the measured gzip sentence that cost a packet to learn
     expect(said).toMatch(/[\d,]+ bytes read, no total/);
     expect(said).toContain('content-length is the size of what came over the wire');
-    // THE PROBES' OWN COUNTS, and why a refusal is the answer that step wanted
-    expect(said).toContain('gestures made, 3 refused by the library');
+    /*
+      THE PROBES' OWN COUNTS, and why a refusal is the answer that step wanted.
+
+      FOUR on THIS build and three on the published one, and that is the count
+      moving with a fact rather than a pin going stale: stage 5's own chart is
+      declared only where its act is (`src/prot/def.ts` · `RANKING_VIEW`), so a
+      page that can ask a model has a fourth chart whose column no act has
+      landed yet and makes a fourth gesture at it
+      (`src/prot/session.ts` · `probeTheUnlandedColumns`). The published page
+      still makes three, which `tests/prot-boot.test.tsx` holds.
+    */
+    expect(said).toContain('4 gestures made, 4 refused by the library');
     /*
       AND THE STATES IN WORDS, for a reader who cannot see a mark. They are
       lower-case in the DOM and upper-cased by the stylesheet, which is the

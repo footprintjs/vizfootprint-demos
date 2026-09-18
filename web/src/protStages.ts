@@ -429,9 +429,41 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
  * A view that binds nothing and is nobody's receipt belongs to no stage, which is
  * the true answer for the 3D structure and the scatter: they draw the FILE's own
  * columns, and no act on this desk landed those.
+ *
+ * ── AND A PICTURE DRAWN FROM TWO STAGES BELONGS TO THE LATER ONE ────────────
+ * Every picture on this desk used to bind at most ONE act's columns, so this
+ * question never arose and the answer was *whichever stage matched first*
+ * (`./workbench/charts.ts` · `stageOfChart` reads this fold and takes the first
+ * hit). Stage 5's own chart is the first picture that binds two: its HEIGHT is
+ * `interface_contacts`, which stage 4 landed, and its COLOUR is `hotspot_rank`,
+ * which stage 5 did (`src/prot/def.ts` · `RANKING_ENCODING` argues both). Left
+ * alone, stage 4 would have owned it — its name on the card, its column in the
+ * rail's order, and the stepper's bar moving to STAGE 4 when a reader pressed
+ * 5, which is the misattribution this whole fold exists to prevent.
+ *
+ * So ownership is EXCLUSIVE and it belongs to the last contributor: a stage
+ * owns a picture when it landed a column that picture binds AND no stage after
+ * it did. That is a fact rather than a tie-break — **a picture is produced when
+ * its last ingredient lands**, and at stage 4's cursor this chart has no rank
+ * column and therefore no marks at all. `stages` is what makes "after"
+ * answerable, and it is the whole list in the PLAN's order because that is the
+ * order `stepperStages` returns and the order the screen reads.
+ *
+ * Every picture that had one owner keeps it, byte for byte: with no overlap
+ * there is no later stage to lose to.
  */
-export function chartsOfStage(stage: StepperStage, shown: Readonly<Record<string, Readonly<Record<string, string>>>>, actColumns: ReadonlySet<string>): readonly string[] {
+export function chartsOfStage(stage: StepperStage, shown: Readonly<Record<string, Readonly<Record<string, string>>>>, actColumns: ReadonlySet<string>, stages: readonly StepperStage[]): readonly string[] {
   const landed = new Set(stage.materialized);
+  /**
+   * EVERY COLUMN A STAGE AFTER THIS ONE LANDED — the half that makes ownership
+   * exclusive.
+   *
+   * A stage the list does not hold has nothing after it: the answer is then the
+   * intersection this fold always computed, which is what keeps a caller
+   * reasoning about one stage (a test, a card) from being told it owns nothing.
+   */
+  const at = stages.findIndex((s) => s.stage === stage.stage);
+  const after = new Set(at < 0 ? [] : stages.slice(at + 1).flatMap((s) => s.materialized));
   /**
    * THE PARSE'S OWN PICTURES — and they are an intersection like every other
    * stage's, not a special case.
@@ -460,7 +492,12 @@ export function chartsOfStage(stage: StepperStage, shown: Readonly<Record<string
       .map(([address]) => address);
   }
   const byColumn = Object.entries(shown)
-    .filter(([, channels]) => Object.values(channels).some((field) => landed.has(field)))
+    .filter(([, channels]) => {
+      const fields = Object.values(channels);
+      // this stage landed one of them — AND no stage after it did, which is
+      // what hands a two-stage picture to the stage it could not draw without
+      return fields.some((field) => landed.has(field)) && !fields.some((field) => after.has(field));
+    })
     .map(([address]) => address);
   const receipts = stage.acts.flatMap((a) => {
     const view = PROT_RECEIPTS[a.act];

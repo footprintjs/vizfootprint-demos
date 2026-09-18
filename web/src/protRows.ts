@@ -89,8 +89,9 @@ export function useResiduesAtCursor(view: SessionView, session: InteractionSessi
   // hands out `emptyState()` until its first read resolves, and its `cursor` is
   // null for the same reason its `views` are empty — not because the session is
   // at the root. Reading on that state would throw away the boot's own answer
-  // and fetch it again. This def declares seven views, so an empty list is the
-  // placeholder and nothing else (`src/prot/def.ts` · `PROT_VIEWS`).
+  // and fetch it again. This def declares seven views — eight on a build that
+  // can perform stage 5 (`src/prot/def.ts` · `PROT_VIEWS` and `RANKING_VIEW`)
+  // — so an empty list is the placeholder and nothing else.
   const snapshot = state.views.length > 0;
 
   useEffect(() => {

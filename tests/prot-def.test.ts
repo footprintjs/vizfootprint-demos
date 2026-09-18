@@ -126,7 +126,7 @@ describe('the def the desk ships', () => {
   });
 
   it('declares the grain where the marks are: one mark per ROW — at every address but the receipt, which has nothing to declare one against', () => {
-    expect(protGrains()).toEqual([
+    expect(protGrains(false)).toEqual([
       { viewId: STRUCTURE_VIEW, keys: [] },
       { viewId: RAMA_VIEW, keys: [] },
       { viewId: CONSERVATION_VIEW, keys: [] },
@@ -138,10 +138,10 @@ describe('the def the desk ships', () => {
     // names group keys, and a key is a column of the table the address reads — a
     // table this def cannot name. `keys: []` would say "one mark per row of
     // `residues`", which is false.
-    expect(protGrains().some((g) => g.viewId === PAIRS_VIEW)).toBe(false);
+    expect(protGrains(false).some((g) => g.viewId === PAIRS_VIEW)).toBe(false);
     // …and NO layer addresses anywhere: one table, so every view binds at its own level
     expect(DEF.encodings?.some((e) => e.layers !== undefined)).toBe(false);
-    expect(protGrains().some((g) => g.viewId.includes('~'))).toBe(false);
+    expect(protGrains(false).some((g) => g.viewId.includes('~'))).toBe(false);
   });
 
   it('declares NO links — the crossfilter default already carries a residue from either picture to the other', () => {

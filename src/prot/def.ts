@@ -80,7 +80,7 @@ import type { ConservationEvidence } from './conservationEvidence.js';
 // The dependency runs one way only (`./hotspots.ts` has never heard of this
 // file), which is why it is an import and not the second constant the act's own
 // name needs.
-import { HOTSPOT_RANK_COLUMN } from './hotspots.js';
+import { HOTSPOT_RANK_COLUMN, HOTSPOT_TAG, HOTSPOT_WANT } from './hotspots.js';
 
 // ── the views, named once ────────────────────────────────────────────────────
 
@@ -131,8 +131,35 @@ export const PAIRS_VIEW = 'pairs';
 /** The residue table. */
 export const SHEET_VIEW = 'sheet';
 
-/** Every view this def declares, in the order a reader meets them. */
+/** Every view this def declares ON EVERY BUILD, in the order a reader meets them. Stage 5's is the eighth and is not here — see {@link RANKING_VIEW}. */
 export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW] as const;
+
+/**
+ * STAGE 5'S OWN CHART — six marks, one per ranked residue, each one pressable.
+ *
+ * ── WHY IT EXISTS ──────────────────────────────────────────────────────────
+ * Every other stage on this desk has a picture; stage 5 had none, so a press on
+ * its stepper column promoted nothing and the page explained WHY instead of
+ * simply having one (`web/src/workbench/panel.ts` · `emptyFocusSaid`, which
+ * stays: stage 6 will need it the day it lands). Stage 5's other picture is
+ * BORROWED — binding the rank to the 3D view's colour makes that viewer stage
+ * 5's chart and takes it from step 1 — so it is a hero only while a reader has
+ * bound something. This one is the stage's own.
+ *
+ * ── AND WHY IT IS DECLARED ONLY WHERE THE ACT IS ───────────────────────────
+ * A view over `hotspot_rank` on a build where stage 5 can never run would be
+ * refused FOREVER — honest in its words and clutter on the page — and it would
+ * make the PUBLISHED definition differ. So the view, its actor, its encoding
+ * surface, its capability, its grain and its words are all gated on the same
+ * slot the act is ({@link protDef}'s `hotspots`), exactly as
+ * {@link RANK_DECLARED} is. `tests/prot-def.test.ts` pins both directions.
+ *
+ * NOT SPELLED `hotspots`, which is the STAGE's id: the desk's focus slot holds
+ * either a picture or a blocked step's card and finds each by id
+ * (`web/src/protDesk.tsx` · `promotedCard` / `promotedCell`), so a view sharing
+ * a stage's name would make one promotion match two things.
+ */
+export const RANKING_VIEW = 'ranking';
 
 /**
  * THE RECEIPT VIEWS — which view draws WHICH ACT'S OWN ANSWER, by the act that
@@ -217,6 +244,20 @@ const CONSERVATION: ActorMeta = {
   label: 'How conserved each residue’s column is in its family’s alignment',
   does:
     'drag across the run to keep a range of sequence positions — and only once the stage that places the residues has landed. The two chains’ lines are scored against two DIFFERENT curated alignments, so they share an axis and are not one scale',
+};
+/**
+ * STAGE 5'S CHART, DECLARED AS AN ACTOR — and the `does` says the one thing a
+ * reader has to know about the gesture: a press is ONE residue.
+ *
+ * The rail's other stage-5 control keeps the whole short list at once
+ * (`web/src/protServed.tsx` · `onSelectPicks`, a `match`). Two gestures, two
+ * meanings, both honest — so both are named where the desk names what a
+ * picture can do.
+ */
+const RANKING: ActorMeta = {
+  actor: 'user',
+  label: 'The residues a model ranked as hot spots',
+  does: 'press a mark to select that one residue — the 3D view lights it, the backbone-angle scatter keeps its dot, both runs narrow and the sheet drops to its row. The height is a COUNT the interactions stage landed; the rank is the order and the colour, never the height',
 };
 const PAIRS: ActorMeta = {
   actor: 'user',
@@ -535,6 +576,91 @@ export const PROT_ENCODINGS: readonly ViewEncodingDecl[] = [
 ];
 
 /**
+ * STAGE 5'S SURFACE — three channels, and the middle one is the packet's ONE
+ * LAW.
+ *
+ * ── THE HEIGHT IS NOT THE RANK ─────────────────────────────────────────────
+ * Rank 1 is the strongest pick and would be the SHORTEST bar. That is not
+ * taste: this def already rules that `hotspot_rank` is
+ * `role: 'dimension', scale: 'discrete'` ({@link RANK_DECLARED}) because *rank
+ * 6 is not six times rank 1*, which is the identical argument that keeps
+ * `resnum` off a magnitude channel. A dimension is an ORDER and a LABEL; it is
+ * not a bar's length. So the rank rides `color` — where a discrete column is
+ * exactly what belongs — and the ORDER of the bars is the rank because a band
+ * takes its slot order from the order the marks arrive in
+ * (`web/src/protCells.tsx` · `rankedBars` sorts them).
+ *
+ * `y` IS `interface_contacts`, for three reasons: it is what this stage is
+ * ABOUT (every pick's reason leads with the interface — *makes 5 cross-chain
+ * contacts of 8 total*); it is a COUNT, so a length is the honest shape and
+ * taller genuinely means more interface involvement; and ALL SIX PICKS CARRY
+ * IT, because the picks come from the residues that carry an
+ * `interface_separation` (measured: absent on 0 of the 18-residue cover, so the
+ * bar has no holes).
+ *
+ * ── AND THE TWO ALTERNATIVES ARE RULED OUT BY A MEASUREMENT, which CORRECTED
+ * the reason this comment nearly carried ─────────────────────────────────────
+ * The argument offered for dropping `relative_sasa` was that it *leaves gaps a
+ * reader cannot account for*, being absent where a residue's type has no
+ * published maximum. That is true OF THE COLUMN and FALSE OF THIS ENTRY:
+ * `relative_sasa` is absent on 0 of `1AY7`'s 185 residues, so a bar of it would
+ * have no holes at all (`tests/prot-ranking.test.ts` asserts the zero, so the
+ * day an entry with a non-standard residue arrives the claim is re-measured
+ * rather than believed).
+ *
+ * WHAT ACTUALLY RULES BOTH OUT IS DIRECTION: `interface_separation` is a
+ * DISTANCE where smaller is tighter, and `relative_sasa` at an interface is an
+ * EXPOSURE where smaller means more buried by the partner chain (`./analyses.ts`
+ * rolls the probe with the neighbouring chain in place, which is what makes the
+ * two pictures one story). So on EITHER of them the residue making the most
+ * contacts across the interface — the most involved one on this desk's own
+ * subject — is drawn BELOW THE MIDDLE, which is the rank-as-height error in
+ * another costume. That is the measurement, and it is what the test pins.
+ *
+ * `category` IS THE RESIDUE KEY, because that is the channel `VizBar` emits on
+ * and a press has to be one residue (the `interface` bar's own argument, one
+ * chart along).
+ *
+ * ── WHAT BINDING THE RANK BUYS, and it is three things at once ─────────────
+ *   1. the view binds a STAGE-5 column, so the focus intersection is non-empty
+ *      and the stepper's press has this picture to promote
+ *      (`web/src/protStages.ts` · `chartsOfStage`);
+ *   2. the read refuses a gesture here BY NAME before stage 5 runs — *no column
+ *      "hotspot_rank" in table "residues"* — exactly as the three act-fed
+ *      charts refuse (`./session.ts` · `probeTheUnlandedColumns`);
+ *   3. the marks carry the rank VISIBLY, in the same palette and at the same
+ *      index the 3D view paints a bound value with.
+ *
+ * ── AND IT IS THE FIRST PICTURE ON THIS DESK DRAWN FROM TWO STAGES ─────────
+ * `interface_contacts` is stage 4's and `hotspot_rank` is stage 5's, so this
+ * view is in BOTH stages' column intersections — which the ownership fold had
+ * never met and answered *the first stage that matches*. That would have put
+ * stage 4's name on stage 5's picture and moved the stepper's bar to stage 4
+ * when a reader pressed 5. The law is written down where the fold is
+ * (`web/src/protStages.ts` · `chartsOfStage`): a picture drawn from two stages'
+ * columns belongs to the LATER one, because that is the stage it could not draw
+ * without.
+ */
+export const RANKING_ENCODING: ViewEncodingDecl = {
+  viewId: RANKING_VIEW,
+  chartKind: 'bar',
+  channels: ['category', 'y', 'color'],
+  initial: { category: RESIDUE_KEY, y: INTERFACE_CONTACTS_COLUMN, color: HOTSPOT_RANK_COLUMN },
+};
+
+/**
+ * EVERY SURFACE THIS DEF CAN DECLARE — the six it always does and stage 5's.
+ *
+ * Read by the LAYOUT, which needs a chart KIND per view whether the act is on
+ * this build or not (`web/src/workbench/charts.ts` · `shapeOfView`; the served
+ * `ViewView` carries `chartKind` only for a layer, which is the finding that
+ * makes the layout import a list at all). {@link PROT_ENCODINGS} stays the
+ * always-declared six, byte for byte, because that is what the published def
+ * carries.
+ */
+export const PROT_ENCODINGS_ALL: readonly ViewEncodingDecl[] = [...PROT_ENCODINGS, RANKING_ENCODING];
+
+/**
  * EXPORTED, because the LAYOUT reads `chartKind` and the wire does not serve it.
  *
  * A host laying a dashboard out by the shape of what each view draws needs to
@@ -545,8 +671,8 @@ export const PROT_ENCODINGS: readonly ViewEncodingDecl[] = [
  * `web/src/workbench/charts.ts` · `shapeOfView` imports this list rather than
  * asking the session. Reported as a finding; one declaration either way.
  */
-function protEncodings(): readonly ViewEncodingDecl[] {
-  return PROT_ENCODINGS;
+function protEncodings(rank: boolean): readonly ViewEncodingDecl[] {
+  return rank ? PROT_ENCODINGS_ALL : PROT_ENCODINGS;
 }
 
 // ── the words ────────────────────────────────────────────────────────────────
@@ -576,7 +702,7 @@ function numberedRanges(tables: ProtTables): string {
     .join(' and ');
 }
 
-function protProse(tables: ProtTables): readonly ProseDecl[] {
+function protProse(tables: ProtTables, rank: boolean): readonly ProseDecl[] {
   const { counts } = tables;
   const chains = counts.chains.map((c) => `${c.chain} (${String(c.residues)})`).join(' and ');
   return [
@@ -684,6 +810,41 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
         howToRead: { author: { kind: 'derived' } },
       },
     },
+    /*
+      STAGE 5'S WORDS — declared with the view, and they COUNT NOTHING ABOUT THE
+      ANSWER, which is a fact about when they are written rather than a lapse.
+
+      This def is built at boot and stage 5's answer cannot exist then: it is a
+      reading of what stages 1 to 4 landed (`./hotspots.ts` · `HotspotSlot` says
+      why the declaration and the answer arrive at different moments). So every
+      other view's long words fold this entry's own counts and this one cannot
+      fold the one number a reader wants — *how many were ranked* — and it says
+      the ceiling instead. The picture's own caption counts the marks it drew
+      against the residues in the table (`web/src/protCells.tsx`, where every
+      count on this desk lives), which is the only place that number is true.
+    */
+    ...(!rank
+      ? []
+      : [
+          {
+            viewId: RANKING_VIEW,
+            slots: {
+              title: { text: 'The residues a model ranked as hot spots', author: { kind: 'human' as const, by: 'the dashboard author' }, levels: ['construction' as const] },
+              altShort: { text: 'A bar chart of the residues a model ranked as hot spots, ordered by rank, each bar as tall as that residue’s count of contacts across the interface. Press a bar to select that residue.', author: { kind: 'human' as const }, levels: ['construction' as const] },
+              altLong: {
+                text:
+                  `One mark per residue a model RANKED, out of the ${String(counts.residues)} in this entry — at most ${String(HOTSPOT_WANT)} of them, because that is the ceiling the stage asks under, and NONE until the stage has an answer that survived every refusal. ` +
+                  `THE HEIGHT IS NOT THE RANK. It is the number of contacts that residue makes with another chain — a count the interactions stage landed, so taller means more interface involvement. Rank 1 is the strongest pick and would be the SHORTEST bar, and a picture that gets its own direction backwards is worse than no picture: a rank is a PLACE (rank 6 is not six times rank 1), so it is the ORDER the marks stand in and the COLOUR they are drawn in, never a length. ` +
+                  `THE ABSENCE IS THE FILTER, and it is most of the entry: a residue the model did not name carries no rank and therefore has no mark, which is why the caption counts the marks against the whole table rather than printing a bare six. ` +
+                  `AND IT IS ${HOTSPOT_TAG.toUpperCase()}: the height and the interface are measured, the SHORT LIST is a model's reading of the evidence stages 1 to 4 established, and every rank cites the fact ids its reason rests on.`,
+                author: { kind: 'human' as const },
+                levels: ['construction' as const],
+                basis: { columns: [RESIDUE_KEY, INTERFACE_CONTACTS_COLUMN, HOTSPOT_RANK_COLUMN] },
+              },
+              howToRead: { author: { kind: 'derived' as const } },
+            },
+          },
+        ]),
     {
       viewId: PAIRS_VIEW,
       // NO `howToRead`, for the same reason the sheet has none: it declares no
@@ -758,8 +919,14 @@ function protLinks(): readonly LinkDecl[] {
  * paragraph is the declaration — the same shape `./http.ts` uses for the
  * version no carrier will vouch for.
  */
-export function protGrains(): readonly { readonly viewId: string; readonly keys: readonly string[] }[] {
-  return PROT_VIEWS.filter((viewId) => viewId !== PAIRS_VIEW).map((viewId) => ({ viewId, keys: [] }));
+export function protGrains(rank: boolean): readonly { readonly viewId: string; readonly keys: readonly string[] }[] {
+  // STAGE 5'S CHART IS ONE MARK PER ROW LIKE EVERY OTHER PICTURE HERE — a mark
+  // stands for the residue it names, so `[]` is the true statement for it too.
+  // It is in the list only where its view is (`rank`), for the reason
+  // {@link RANKING_VIEW} gives: a grain at an address the def does not declare
+  // is a name no reader can resolve.
+  const views: readonly string[] = rank ? [...PROT_VIEWS, RANKING_VIEW] : PROT_VIEWS;
+  return views.filter((viewId) => viewId !== PAIRS_VIEW).map((viewId) => ({ viewId, keys: [] }));
 }
 
 // ── the def ──────────────────────────────────────────────────────────────────
@@ -805,13 +972,20 @@ export function protGrains(): readonly { readonly viewId: string; readonly keys:
  * it always did, byte for byte — see `./analyses.ts` · `protAnalyses`.
  */
 export function protDef(tables: ProtTables, structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null): DashboardDef {
+  /**
+   * CAN THIS BUILD PERFORM STAGE 5 — the ONE condition, asked once and read by
+   * everything the stage declares: its column, its view, its actor, its
+   * encoding surface, its grain, its capability and its words.
+   *
+   * A def built without the slot is byte-identical to the def before this
+   * packet and before the one that landed the rank — a build that cannot ask a
+   * model declares nothing about the answer it cannot have (`./plan.ts` · step
+   * 5, whose sentence is therefore still true of what this function returns).
+   */
+  const rank = hotspots !== null;
   return {
     meta: { title: 'A protein complex — vizfootprint on one PDB entry' },
-    // THE RANK IS DECLARED EXACTLY WHERE ITS ACT IS — one condition, and the
-    // published def is byte-identical to what it was before this packet: a
-    // build that cannot ask a model declares no column for the answer it
-    // cannot have (`./plan.ts` · step 5).
-    data: protSources(tables.residues, hotspots !== null),
+    data: protSources(tables.residues, rank),
     actors: {
       [STRUCTURE_VIEW]: STRUCTURE,
       [RAMA_VIEW]: RAMA,
@@ -821,6 +995,10 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
       [CONSERVATION_VIEW]: CONSERVATION,
       [INTERFACE_VIEW]: INTERFACE,
       [SURFACE_VIEW]: SURFACE,
+      // STAGE 5'S CHART, at the place the plan puts its step: after the three
+      // stages whose evidence it reads. A spread of `{}` adds no key, which is
+      // what keeps the published registry the seven it always was.
+      ...(rank ? { [RANKING_VIEW]: RANKING } : {}),
       [PAIRS_VIEW]: PAIRS,
       [SHEET_VIEW]: SHEET,
     },
@@ -829,8 +1007,8 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
     // is the one list that says which act belongs to which stage, so the
     // captions and the chart cannot disagree about it.
     analyses: protAnalyses(structureText, evidence, hotspots),
-    encodings: protEncodings(),
-    grains: protGrains(),
+    encodings: protEncodings(rank),
+    grains: protGrains(rank),
     // THE HONEST CAPABILITY ENVELOPE, one view at a time.
     //
     // `structure` emits a POINT and nothing else: a click in the viewer is one
@@ -899,12 +1077,18 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
       // over the same band, so a voice that differed between them would be a
       // claim about `residue_key` that changes with which picture you press.
       { viewId: CONSERVATION_VIEW, canProbe: true, encodings: ['point'] },
+      // STAGE 5'S CHART emits a POINT and nothing else — `VizBar`'s gesture is
+      // a press on one bar, and one bar IS one residue here. Not an interval: a
+      // bar chart has no brush. The declaration is the same as the `interface`
+      // bar's for the same reason, and by the library's own SET-1 law it also
+      // ACCEPTS the match the rail's other stage-5 control lands.
+      ...(rank ? [{ viewId: RANKING_VIEW, canProbe: true, encodings: ['point' as const] }] : []),
       { viewId: PAIRS_VIEW, canProbe: false },
       { viewId: SHEET_VIEW, canProbe: false },
     ],
     links: protLinks(),
     encodingRules: PROT_ENCODING_RULES,
-    prose: protProse(tables),
+    prose: protProse(tables, rank),
     defaultTable: RESIDUES_TABLE,
   };
 }

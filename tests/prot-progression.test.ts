@@ -160,7 +160,7 @@ describe('before either stage: two declared charts, and the library’s own refu
 
   it('and the two cells PRINT that sentence, verbatim, instead of drawing an empty axis', async () => {
     const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
-    const refusals = await probeTheUnlandedColumns(surface.session);
+    const refusals = await probeTheUnlandedColumns(surface.session, false);
     const collected: ProtSurface = { ...surface, refusals };
     for (const [viewId, column] of [
       [INTERFACE_VIEW, INTERFACE_CONTACTS_COLUMN],
@@ -179,7 +179,7 @@ describe('before either stage: two declared charts, and the library’s own refu
 
   it('a gesture ACCEPTED here would be a fault, and the surface says so rather than swallowing it', async () => {
     const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
-    const refusals = await probeTheUnlandedColumns(surface.session);
+    const refusals = await probeTheUnlandedColumns(surface.session, false);
     // both refused, so both sentences are kept
     expect(Object.values(refusals).every((s) => s !== null)).toBe(true);
     // AND THE READING IS TWO-WAY: on a surface whose stages have run, a gesture
@@ -197,7 +197,7 @@ describe('the two stages, landing one at a time', () => {
     // the boot's own order: collect the two refusals, THEN run the stages — so
     // `protSurfaceProblems` can judge both halves (an act refused is a fault, and
     // a gesture accepted before its act is also a fault)
-    const refusals = await probeTheUnlandedColumns(surface.session);
+    const refusals = await probeTheUnlandedColumns(surface.session, false);
     const run = await runProtStages(surface.session);
     expect(protSurfaceProblems({ ...surface, refusals, run })).toEqual([]);
     // ONE COMMIT PER ACT, in the order the three stages dispatch them —

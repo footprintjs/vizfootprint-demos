@@ -332,9 +332,9 @@ describe('THE STEP THAT LANDED BEFORE THE RECORD STARTED is a fourth kind of pre
     expect([...actColumns].sort()).toEqual([CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN, SASA_COLUMN, 'contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation', 'relative_sasa'].sort());
     // …so the parse owns the two pictures whose every bound column it read off
     // the file, and neither of the two an act landed a column for
-    expect([...chartsOfStage(search, shown, actColumns)].sort()).toEqual([RAMA_VIEW, STRUCTURE_VIEW].sort());
-    expect(chartsOfStage(search, shown, actColumns)).not.toContain(SURFACE_VIEW);
-    expect(chartsOfStage(search, shown, actColumns)).not.toContain(INTERFACE_VIEW);
+    expect([...chartsOfStage(search, shown, actColumns, stages)].sort()).toEqual([RAMA_VIEW, STRUCTURE_VIEW].sort());
+    expect(chartsOfStage(search, shown, actColumns, stages)).not.toContain(SURFACE_VIEW);
+    expect(chartsOfStage(search, shown, actColumns, stages)).not.toContain(INTERFACE_VIEW);
   });
 
   it('follows a RE-ENCODE, because it is an intersection and not a list', () => {
@@ -342,8 +342,8 @@ describe('THE STEP THAT LANDED BEFORE THE RECORD STARTED is a fourth kind of pre
     // a reader moves the run's y onto a file column: the picture stops being the
     // surface stage's and becomes the parse's, with nobody editing a table
     const reencoded = { [SURFACE_VIEW]: { x: 'resnum', y: 'phi', color: 'chain' } };
-    expect(chartsOfStage(search, reencoded, actColumns)).toEqual([SURFACE_VIEW]);
-    expect(chartsOfStage(stages.find((s) => s.stage === 'surface')!, reencoded, actColumns)).toEqual([]);
+    expect(chartsOfStage(search, reencoded, actColumns, stages)).toEqual([SURFACE_VIEW]);
+    expect(chartsOfStage(stages.find((s) => s.stage === 'surface')!, reencoded, actColumns, stages)).toEqual([]);
   });
 });
 
@@ -535,21 +535,21 @@ describe('the two folds are DERIVED, never a table anybody typed', () => {
     const surface = stages.find((s) => s.stage === 'surface')!;
     // the interactions stage landed `interface_contacts` (the bar's y) and cut
     // the pair table (its RECEIPT, which binds no column at all)
-    expect([...chartsOfStage(interactions, SHOWN, columns)].sort()).toEqual([INTERFACE_VIEW, PAIRS_VIEW].sort());
-    expect(chartsOfStage(surface, SHOWN, columns)).toEqual([SURFACE_VIEW]);
+    expect([...chartsOfStage(interactions, SHOWN, columns, stages)].sort()).toEqual([INTERFACE_VIEW, PAIRS_VIEW].sort());
+    expect(chartsOfStage(surface, SHOWN, columns, stages)).toEqual([SURFACE_VIEW]);
   });
 
   it('gives a stage NO chart when nothing on screen binds what it landed', () => {
     const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
     const surface = stages.find((s) => s.stage === 'surface')!;
-    expect(chartsOfStage(surface, { ...SHOWN, [SURFACE_VIEW]: { x: 'resnum', y: 'phi', color: 'chain' } }, actColumnsOf(stages))).toEqual([]);
+    expect(chartsOfStage(surface, { ...SHOWN, [SURFACE_VIEW]: { x: 'resnum', y: 'phi', color: 'chain' } }, actColumnsOf(stages), stages)).toEqual([]);
   });
 
   it('gives a BLOCKED stage no chart at all — it landed nothing to bind', () => {
     const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
     for (const blocked of PROT_BLOCKED) {
       const stage = stages.find((s) => s.stage === blocked.stage)!;
-      expect(chartsOfStage(stage, SHOWN, actColumnsOf(stages))).toEqual([]);
+      expect(chartsOfStage(stage, SHOWN, actColumnsOf(stages), stages)).toEqual([]);
     }
   });
 

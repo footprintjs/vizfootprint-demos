@@ -612,7 +612,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    * (`./protStages.ts` · `chartsOfStage`).
    */
   const actColumns = useMemo(() => actColumnsOf(stages), [stages]);
-  const focus = useMemo(() => new Set(here === null ? [] : chartsOfStage(here, desk.shown, actColumns)), [here, desk.shown, actColumns]);
+  const focus = useMemo(() => new Set(here === null ? [] : chartsOfStage(here, desk.shown, actColumns, stages)), [here, desk.shown, actColumns, stages]);
   /**
    * WHAT THE READER PROMOTED, and the stage they promoted it in.
    *
@@ -714,7 +714,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         structure"; the backbone angles wait in the rail). Its card's own quiet
         line is where the page says the cursor did not move, and why.
       */
-      const mine = chartsOfStage(stage, desk.shown, actColumns);
+      const mine = chartsOfStage(stage, desk.shown, actColumns, stages);
       const picture = pictures.find((c) => mine.includes(c.id)) ?? null;
       setPromoted({ stage: here?.stage ?? null, id: picture?.id ?? key });
       setSaid(null);
@@ -750,7 +750,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
      * one moved the cursor and could not move the focus. Two different facts,
      * two different answers.
      */
-    const owns = chartsOfStage(stage, desk.shown, actColumns);
+    const owns = chartsOfStage(stage, desk.shown, actColumns, stages);
     void seek(stage.commit).then(
       (refused) => setSaid(refused ?? emptyFocusSaid(stage, owns)),
       (e: unknown) => setSaid(`that seek threw: ${e instanceof Error ? e.message : String(e)}`),

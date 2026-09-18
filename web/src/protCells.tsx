@@ -80,7 +80,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { VizBar, VizLine, VizScatter, VizTable, bindRenderer, brightPredicate, keepPredicate, type BarDatum, type BoundRenderer, type ChartEmission, type ContractGap, type DeclinedEdgeView, type LinePoint, type RenderRow, type RenderSelection, type ScatterDatum, type SelectionClauseView } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection } from 'vizfootprint-studio/desk';
 import { PAINT_COLOR, PAINT_MEANING, PAINT_WORDS, VALUE_PALETTE, molstarRenderer, type PaintWord } from './molstarRenderer.js';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RANKING_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
 import { CONSERVATION_COLUMN, INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from '../../src/prot/analyses.js';
 // STAGE 5's COLUMN AND ITS REGISTER — the column name so the caption can ask
 // what the channel is bound to, and the words so no literal about a
@@ -96,7 +96,7 @@ import { emitIntent, type Row } from './derive.js';
 import { chainColorOf, zeroGuideOf, type Narrowing } from './workbench/charts.js';
 import type { WorkbenchInk } from './workbench/tokens.js';
 
-export { STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
+export { STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, RANKING_VIEW, PAIRS_VIEW };
 
 /*
  * THERE WAS A `PROT_STORY_FIGURE` HERE — the four cells the Story tab's figure
@@ -322,6 +322,66 @@ export function interfaceBars(residues: readonly Row[], categoryField: string, v
     totals.set(category, (totals.get(category) ?? 0) + value);
   }
   return [...totals.entries()].map(([category, count]) => ({ category, count }));
+}
+
+/**
+ * THE ROWS STAGE 5'S CHART DRAWS — the ones carrying a rank, in rank order.
+ *
+ * **THE ABSENCE IS THE FILTER**, which is already this desk's idiom rather than
+ * a new capability: {@link ramaDots} plots 181 of 185 because four residues have
+ * no angle, {@link surfaceRun} drops a y that is not a magnitude, and here a
+ * residue the model did not name carries no rank and so has no mark. 179 of the
+ * committed entry's 185 are in that group, which is why the caption counts the
+ * marks against the whole table and never prints a bare six.
+ *
+ * SORTED, because a band takes its slot ORDER from the order the marks arrive
+ * in ({@link surfaceRun} learnt the same thing about residue numbers). The rank
+ * is the order and the label; it is never the height.
+ */
+export function rankedResidues(residues: readonly Row[], rankField: string): readonly Row[] {
+  return residues.filter((row) => placed(row[rankField])).sort((a, b) => Number(a[rankField]) - Number(b[rankField]));
+}
+
+/**
+ * THE MARKS OF STAGE 5'S CHART: one per ranked residue, as tall as the contacts
+ * that residue makes across the interface.
+ *
+ * {@link interfaceBars} OVER {@link rankedResidues}, and reusing it rather than
+ * writing a second copy is the choice the conservation run already made about
+ * {@link surfaceRun}: the fold takes the bound category and the bound value and
+ * drops a row whose value is not a magnitude, which is exactly what this
+ * picture needs. It inherits the sum for the same reason the interface bar has
+ * one — bound to the residue key each bar is one residue and the sum is a sum
+ * of one, and a reader who re-encodes the category to `chain` gets two honest
+ * bands instead of a pile.
+ *
+ * EMPTY WHERE NOTHING IS RANKED, which is the point: a chart of nothing
+ * pretending to be a chart of something is what the cell's own refusal state
+ * exists to prevent.
+ */
+export function rankedBars(residues: readonly Row[], categoryField: string, valueField: string, rankField: string): readonly BarDatum[] {
+  return interfaceBars(rankedResidues(residues, rankField), categoryField, valueField);
+}
+
+/**
+ * WHAT COLOUR A MARK OF STAGE 5'S CHART IS — the rank, through the SAME palette
+ * and the SAME index the 3D view paints a bound value with
+ * (`./molstarRenderer.ts` · `paintOf` sorts the distinct values and takes
+ * `VALUE_PALETTE[i]`). So rank 1 is one hue in both pictures while the viewer's
+ * colour channel carries the rank, and the legend beside the molecule reads for
+ * both.
+ *
+ * It is handed to the library through the one door a categorical scale has
+ * (`VizBar`'s `colorOf`), never through a selector into its SVG — the same rule
+ * the chain colours travel under (`./workbench/charts.ts` · `chainColorOf`).
+ * A category this fold has no row for comes back in the `kept` grey rather than
+ * in some rank's own colour.
+ */
+export function rankPaint(residues: readonly Row[], categoryField: string, rankField: string): (category: string) => string {
+  const ranked = rankedResidues(residues, rankField);
+  const order = [...new Set(ranked.map((row) => String(row[rankField])))].sort();
+  const byCategory = new Map(ranked.map((row) => [String(row[categoryField]), hex(VALUE_PALETTE[order.indexOf(String(row[rankField])) % VALUE_PALETTE.length] ?? PAINT_COLOR.kept)]));
+  return (category: string): string => byCategory.get(category) ?? hex(PAINT_COLOR.kept);
 }
 
 /**
@@ -625,6 +685,33 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   const consX = desk.bound(CONSERVATION_VIEW, 'x', 'resnum');
   const consY = desk.bound(CONSERVATION_VIEW, 'y', CONSERVATION_COLUMN);
   const consSeries = desk.bound(CONSERVATION_VIEW, 'color', 'chain');
+  /*
+    STAGE 5'S THREE CHANNELS, read the same way as every other picture's: the
+    session's answer at the cursor, never a constant written here. The fallbacks
+    are the declaration's own (`src/prot/def.ts` · `RANKING_ENCODING`) — the
+    height is the interface COUNT and the rank is the colour, never the other
+    way round.
+  */
+  const rankCategory = desk.bound(RANKING_VIEW, 'category', RESIDUE_KEY);
+  const rankValue = desk.bound(RANKING_VIEW, 'y', INTERFACE_CONTACTS_COLUMN);
+  const rankColumn = desk.bound(RANKING_VIEW, 'color', HOTSPOT_RANK_COLUMN);
+  /**
+   * IS STAGE 5'S CHART DECLARED ON THIS BUILD AT ALL — asked of the RECORD, and
+   * that is the whole point of asking it this way.
+   *
+   * The view is declared only where the act is (`src/prot/def.ts` ·
+   * `RANKING_VIEW`), so a published page has seven addresses and this one has
+   * eight, and the session's own view list is what says which. A flag this file
+   * kept would be a second statement of it — and a cell drawn at an address the
+   * def never declared would have no words, no verdicts and no clause, and its
+   * press would be refused for the ADDRESS.
+   *
+   * `state.views` is EMPTY for the first paint of a fresh session view
+   * (`createSessionView` hands out `emptyState()` until its first read resolves
+   * — the same placeholder `./protRows.ts` waits on), so this cell arrives with
+   * the first snapshot rather than with the first frame.
+   */
+  const rankingDeclared = useMemo(() => state.views.some((v) => v.viewId === RANKING_VIEW), [state.views]);
 
   const sel = [state.selections, state.links, state.cleared] as const;
 
@@ -651,6 +738,15 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   const interfaceLanded = useMemo(() => residues.some((r) => placed(r[barValue])), [residues, barValue]);
   const surfaceLanded = useMemo(() => residues.some((r) => placed(r[runY])), [residues, runY]);
   const conservationLanded = useMemo(() => residues.some((r) => placed(r[consY])), [residues, consY]);
+  /**
+   * HAS STAGE 5 LANDED? — asked of the RANK, off the unfiltered rows, exactly
+   * as the three above are asked of their own columns.
+   *
+   * It is the rank and not the height: the height is stage 4's column and is
+   * already on the rows long before this chart can draw, so a flag folded from
+   * it would report the wrong stage and print the wrong refusal.
+   */
+  const rankingLanded = useMemo(() => residues.some((r) => placed(r[rankColumn])), [residues, rankColumn]);
   /**
    * The contact rows the act handed back, exactly as it handed them back.
    *
@@ -688,6 +784,11 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   );
   const conservationSelection = useMemo(
     () => selFor(CONSERVATION_VIEW),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+    [...sel],
+  );
+  const rankingSelection = useMemo(
+    () => selFor(RANKING_VIEW),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
     [...sel],
   );
@@ -798,6 +899,26 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
     [residues, consX, consY, consSeries, conservationSelection],
   );
   const conservationAtRest = useMemo(() => surfaceRun(residues, consX, consY, consSeries).length, [residues, consX, consY, consSeries]);
+  /**
+   * STAGE 5'S MARKS, OVER THE ROWS IN FORCE — the same treatment the interface
+   * bar gets, and for the same library reason: `VizBar` outlines the category
+   * its OWN clause picked and has no dim arm, so a host that handed it the
+   * whole table would have a pane that cannot show a clause from anywhere else.
+   * `keepPredicate` excludes this view's own clause by contract, which is why a
+   * press on one mark never collapses this chart to that one mark.
+   */
+  const rankRows = useMemo(
+    () => residues.filter(keepPredicate(rankingSelection) as (row: Row) => boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rankingSelection is memoised on the same slices
+    [residues, rankingSelection],
+  );
+  const rankBars = useMemo(() => rankedBars(rankRows, rankCategory, rankValue, rankColumn), [rankRows, rankCategory, rankValue, rankColumn]);
+  /** The marks this picture has AT REST — the total its narrowing sentence counts out of, folded off the same rows by the same function. */
+  const rankBarsAtRest = useMemo(() => rankedBars(residues, rankCategory, rankValue, rankColumn).length, [residues, rankCategory, rankValue, rankColumn]);
+  /** How many residues carry a rank at all, in force — the number the caption counts against the whole table, so it cannot outrun the picture. */
+  const rankedHere = useMemo(() => rankedResidues(rankRows, rankColumn).length, [rankRows, rankColumn]);
+  /** The hue per mark — the rank, in the palette the 3D view paints a bound value with ({@link rankPaint}). */
+  const rankColorOf = useMemo(() => rankPaint(rankRows, rankCategory, rankColumn), [rankRows, rankCategory, rankColumn]);
 
   /**
    * WHICH VIEWS HOLD A LIVE CLAUSE RIGHT NOW — the desk-wide fact, and the one
@@ -1269,6 +1390,100 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
           />
         ),
     },
+    /*
+      ── STAGE 5'S OWN PICTURE, and it is declared only where its act is ──────
+      Six marks, one per ranked residue, each one pressable and each press one
+      residue. `src/prot/def.ts` · `RANKING_ENCODING` carries the argument for
+      the three channels; the two things this cell adds are the rows (the
+      absence is the filter) and the counts (the cell is what knows how many
+      marks it drew).
+    */
+    ...(!rankingDeclared
+      ? []
+      : [
+          {
+            id: RANKING_VIEW,
+            weight: 4,
+            // NEVER A BARE SIX: a reader has to be able to see that 179
+            // residues were not named, because that is most of them.
+            foot: !rankingLanded ? null : `${count(rankBars.length)} of ${count(counts.residues)} residues ranked`,
+            // the marks ARE the rows in force (see `rankRows`), so this pane's
+            // sentence counts the marks it drew against the marks it has at rest
+            narrowing: !rankingLanded ? null : narrowingAt(rankingSelection, structureRows, rankBarsAtRest, rankBars.length, 'marks'),
+            // HOW MANY MARKS STAND IN THE BAND — what the page folds the reach
+            // of a press from ({@link ProtCell.marks}). Six marks share the
+            // whole width, which is the one thing this picture has that the
+            // 185-bar chart beside it does not.
+            ...(!rankingLanded ? {} : { marks: rankBars.length }),
+            caption: (
+              <>
+                {[
+                  !rankingLanded
+                    ? // THE REFUSAL, VERBATIM — the library's own sentence, collected by a real
+                      // gesture on this session before the stage ran (`src/prot/session.ts` ·
+                      // probeTheUnlandedColumns). Not a paraphrase and not a spinner.
+                      `nothing to draw yet — the library refused a press on this chart in its own words: “${refusals[RANKING_VIEW] ?? `no column "${rankColumn}" in table "residues"`}”. The column arrives when stage 5 has an answer that survived every refusal, and steps back out of the table the moment the time cursor moves behind that commit`
+                    : `${count(rankBars.length)} of ${count(counts.residues)} residues ranked — one mark each, in the order the model ranked them`,
+                  // THE ABSENCE, WHICH IS MOST OF THE ENTRY — counted off the
+                  // rows this picture is drawn from, never a literal.
+                  !rankingLanded ? null : `the other ${count(counts.residues - rankedHere)} residues carry NO rank at all and so have no mark: the model did not name them, which is not a low rank and not a last place`,
+                  // AND THE DIRECTION OF THE ONE AXIS, said where a reader
+                  // could otherwise read it backwards.
+                  !rankingLanded
+                    ? null
+                    : `THE HEIGHT IS NOT THE RANK: each mark is as tall as the number of contacts that residue makes with ANOTHER CHAIN of this entry — ${rankValue}, the count the interactions stage landed — because rank 1 is the strongest pick and would be the SHORTEST bar. A rank is a place, not an amount (rank 6 is not six times rank 1), so it is the ORDER these marks stand in and the COLOUR they are drawn in, which is the same palette the 3D view paints the rank in`,
+                  // A RANKED RESIDUE WITH NO HEIGHT would be a mark this
+                  // picture cannot draw, so it is counted rather than lost.
+                  !rankingLanded || rankedHere === rankBars.length
+                    ? null
+                    : `${count(rankedHere - rankBars.length)} of the ranked residues carry no ${rankValue} and so have no mark either — the height is a column of another stage, and a mark with no height is left off rather than drawn at zero`,
+                  // THE REGISTER — the same words the card and the viewer carry,
+                  // from the one module that owns them.
+                  !rankingLanded
+                    ? null
+                    : `THE SHORT LIST IS ${HOTSPOT_TAG.toUpperCase()}: the height and the interface are measured, and WHICH residues are here is a model's reading of the facts stages 1 to 4 established, every rank citing the ids its reason rests on`,
+                  !rankingLanded
+                    ? null
+                    : 'a mark IS the control: press one and that residue is selected — the 3D view lights it, the backbone-angle scatter keeps its dot, both runs narrow and the sheet drops to its row. Each mark carries its own name, so Tab moves between them and Enter presses the one you are on',
+                  // AND THE OTHER STAGE-5 GESTURE, named here so the two are not
+                  // taken for one: the card's control keeps the whole short list
+                  // at once, a press here keeps one residue.
+                  !rankingLanded ? null : 'the control on this stage’s card selects all of them at once; a press here is one residue — two gestures, two meanings',
+                ]
+                  .filter((s): s is string => s !== null)
+                  .join(' · ')}
+                {desk.words(RANKING_VIEW)}
+              </>
+            ),
+            render: ({ width, height }: { readonly width: number; readonly height: number }) =>
+              !rankingLanded ? (
+                <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+                  {refusals[RANKING_VIEW] ?? `no column "${rankColumn}" in table "residues"`}
+                </div>
+              ) : (
+                <VizBar
+                  viewId={RANKING_VIEW}
+                  data={rankBars}
+                  // THE RANK ON ITS OWN CHANNEL, drawn: the colour a mark takes
+                  // comes from the column the view binds on `color`, through the
+                  // one door a categorical scale has.
+                  colorOf={rankColorOf}
+                  field={rankCategory}
+                  label={`contacts across the interface, per ${rankCategory}, in the order a model ranked them`}
+                  ariaLabel={desk.altShort(RANKING_VIEW)}
+                  selection={rankingSelection}
+                  columns={columns}
+                  fits={desk.fitsOf(RANKING_VIEW)}
+                  encoding={shown[RANKING_VIEW] ?? {}}
+                  axes={height >= AXIS_ROOM}
+                  width={width}
+                  height={height}
+                  onEmit={emit(RANKING_VIEW, 'select')}
+                  onReencode={reencode}
+                />
+              ),
+          },
+        ]),
     {
       id: PAIRS_VIEW,
       weight: 3,

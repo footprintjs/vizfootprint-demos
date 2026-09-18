@@ -84,11 +84,11 @@ import type { InteractionSession } from 'vizfootprint/agent';
 import { buildDashboardAsync } from 'vizfootprint/def';
 import type { Dashboard } from 'vizfootprint/def';
 import type { Row } from 'vizfootprint/data';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, PROT_VIEWS, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, RANKING_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
 import { CONSERVATION_COLUMN, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from './analyses.js';
 import type { ConservationEvidence } from './conservationEvidence.js';
 import { landAct, runProtStages, type ActOutcome, type ProtRun, type ProtRunWatch } from './orchestrator.js';
-import { HOTSPOTS_ACT, HOTSPOTS_INTENT, HOTSPOTS_STAGE, type HotspotAnswered, type HotspotSlot } from './hotspots.js';
+import { HOTSPOTS_ACT, HOTSPOTS_INTENT, HOTSPOTS_STAGE, HOTSPOT_RANK_COLUMN, type HotspotAnswered, type HotspotSlot } from './hotspots.js';
 import { protTables, type ProtTables } from './etl.js';
 
 /**
@@ -206,8 +206,9 @@ export function structureArtifact(at: string, text: string): StructureArtifact {
 }
 
 /**
- * THE TWO GESTURES THE BOOT MAKES BEFORE ITS STAGES — one at each chart whose
- * column no act has landed yet.
+ * THE GESTURES THE BOOT MAKES BEFORE ITS STAGES — one at each chart whose
+ * column no act has landed yet: three on every build, and a FOURTH at stage 5's
+ * own chart on a build that can perform stage 5 (`rank`).
  *
  * WHY A SURFACE DOES THIS ON PURPOSE. Both charts are DECLARED over columns an
  * act lands (`./def.ts` · `protEncodings`), so the def door accepts them and
@@ -230,7 +231,7 @@ export function structureArtifact(at: string, text: string): StructureArtifact {
  * thing: it hid the missing column these gestures exist to name. Probing with
  * the declared kind puts the column back in the refusal.
  *
- * All three land NOTHING by construction — a refused dispatch makes no commit —
+ * All of them land NOTHING by construction — a refused dispatch makes no commit —
  * so the log a reader walks is unchanged and the only trace is the gap row,
  * which is exactly the trace a refusal should leave.
  *
@@ -238,7 +239,7 @@ export function structureArtifact(at: string, text: string): StructureArtifact {
  * failure the caller reports rather than swallows: it would mean the column was
  * already there and this desk's claim about its own pipeline is wrong.
  */
-export async function probeTheUnlandedColumns(session: InteractionSession): Promise<UnlandedRefusals> {
+export async function probeTheUnlandedColumns(session: InteractionSession, rank: boolean): Promise<UnlandedRefusals> {
   const bar = await session.dispatch({
     verb: 'select',
     viewId: INTERFACE_VIEW,
@@ -265,10 +266,35 @@ export async function probeTheUnlandedColumns(session: InteractionSession): Prom
     value: 1,
     cause: { requestedBy: 'system', computedBy: 'system', intent: 'pick the residues their family never varies, before the stage that places them in it has run' },
   });
+  /*
+    AND THE FOURTH, at stage 5's own chart — made only where that chart EXISTS.
+
+    `rank` is the one condition the whole stage is declared under
+    (`./def.ts` · `protDef`): on a build that cannot ask a model there is no
+    `ranking` view to gesture at, and a probe at an address the def does not
+    declare would be refused for the ADDRESS rather than for the column — a
+    true sentence about the wrong thing, which is the exact mistake the two runs
+    made when they probed with an interval.
+
+    The gesture is a POINT, because that is the voice this chart declares, and
+    the field is `hotspot_rank` rather than the bar's HEIGHT: the height is
+    stage 4's column and the refusal a reader of this cell is owed names the
+    column its own stage lands.
+  */
+  const ranked = !rank
+    ? null
+    : await session.dispatch({
+        verb: 'select',
+        viewId: RANKING_VIEW,
+        field: HOTSPOT_RANK_COLUMN,
+        value: 1,
+        cause: { requestedBy: 'system', computedBy: 'system', intent: 'pick the residue a model ranked first among the hot spots, before the stage that asks one has run' },
+      });
   return {
     [INTERFACE_VIEW]: bar.ok ? null : bar.rejection.detail,
     [SURFACE_VIEW]: run.ok ? null : run.rejection.detail,
     [CONSERVATION_VIEW]: conserved.ok ? null : conserved.rejection.detail,
+    ...(ranked === null ? {} : { [RANKING_VIEW]: ranked.ok ? null : ranked.rejection.detail }),
   };
 }
 
@@ -393,8 +419,14 @@ export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: 
   const unrun = await openProtSurfaceUnrun(artifact, evidence, hotspots);
   // THE BUILD, REPORTED — counted off the def the builder was handed rather than
   // off anything this function believes about it
-  watch?.onBuilt?.({ views: PROT_VIEWS.length, acts: Object.keys(unrun.dashboard.def.analyses ?? {}).length, rows: unrun.tables.residues.length });
-  const refusals = await probeTheUnlandedColumns(unrun.session);
+  //
+  // THE VIEW COUNT IS THE DEF'S OWN ACTOR REGISTRY and no longer a constant's
+  // length: stage 5's chart is declared only where its act is
+  // (`./def.ts` · `RANKING_VIEW`), so a page that performs the stage really
+  // draws eight addresses and the published one really draws seven. The
+  // comment above always claimed the count came off the def; now it does.
+  watch?.onBuilt?.({ views: Object.keys(unrun.dashboard.def.actors ?? {}).length, acts: Object.keys(unrun.dashboard.def.analyses ?? {}).length, rows: unrun.tables.residues.length });
+  const refusals = await probeTheUnlandedColumns(unrun.session, hotspots !== null);
   const asked = Object.keys(refusals);
   watch?.onProbed?.({ asked: asked.length, refused: asked.filter((viewId) => refusals[viewId] !== null).length });
   // `watch` is the SCREEN's copy of the acts, act by act, and it changes nothing
