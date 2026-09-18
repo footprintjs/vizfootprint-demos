@@ -30,9 +30,15 @@ import type { ReactElement } from 'react';
 import { buildDashboard } from 'vizfootprint/agent';
 import { createSessionView, selectionForView, sessionSource, type RenderSelection, type SessionView, type SessionViewState } from 'vizfootprint-ui';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
-import { INTERFACE_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW, protDef } from '../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW, protDef } from '../src/prot/def.js';
+import { CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, type ConservationOutput } from '../src/prot/analyses.js';
+import { SCORE_IS, SCORE_IS_NOT } from '../src/prot/conservation.js';
+import { CONSENSUS } from '../src/prot/placement.js';
+import { evidenceFromCommitted } from '../src/prot/conservationEvidence.js';
+import { foldConservation } from '../src/prot/conservationFold.js';
+import type { ProtRun } from '../src/prot/orchestrator.js';
 import { protTables, skippedTotal } from '../src/prot/etl.js';
-import { loadStructure, loadStructureText } from '../src/prot/snapshot.js';
+import { loadStructure, loadStructureText, readCommittedFile } from '../src/prot/snapshot.js';
 import { paintOf } from '../web/src/molstarRenderer.js';
 import { interfaceBars, ramaDots, surfaceRun, useProtCells, type ProtDeskData } from '../web/src/protCells.js';
 import type { Row } from '../web/src/derive.js';
@@ -56,7 +62,7 @@ const DATA: ProtDeskData = {
   skipped: TABLES.skipped,
   structure: loadStructure(),
   run: null,
-  refusals: { [INTERFACE_VIEW]: 'no column "interface_contacts" in table "residues"', [SURFACE_VIEW]: 'no column "sasa" in table "residues"' },
+  refusals: { [INTERFACE_VIEW]: 'no column "interface_contacts" in table "residues"', [SURFACE_VIEW]: 'no column "sasa" in table "residues"', [CONSERVATION_VIEW]: 'no column "conservation" in table "residues"' },
   // NOTHING TO REPORT about this entry, and that is the true answer for it: one
   // model, two protein chains, no insertion code (`src/prot/entryNotes.ts` ·
   // `entryNotes` answers an empty list, which `tests/prot-notes.test.ts`
@@ -232,6 +238,89 @@ describe('the two cells the desk draws', () => {
     const scatter = propsOf<ReactElement<{ xField: string; yField: string; xLabel: string; data: readonly unknown[] }>>(RAMA_VIEW, rebound);
     expect([scatter.props.xField, scatter.props.yField]).toEqual(['psi', 'phi']);
     expect(scatter.props.xLabel).toBe('psi (degrees)');
+  });
+});
+
+// ── the conservation cell, and the fact its face may not drop ──────────────
+
+/**
+ * THE CONSERVATION STAGE'S ANSWER AND ITS TWO COLUMNS — folded from the
+ * committed evidence, exactly as the act folds them.
+ *
+ * The FOLD is used rather than a run of the orchestrator because the act's
+ * whole computation is this fold: running the chart would add three headless
+ * Mol* parses to a suite that is about words on a card. What the cell reads is
+ * the rows and `run.conservation`, and both are the fold's own output here — so
+ * no number in the assertions below was typed.
+ */
+const FOLD = foldConservation(await evidenceFromCommitted('1AY7', readCommittedFile), TABLES.residues.map((r) => r.residue_key));
+
+/** The desk's data WITH the conservation stage landed — the rows carrying its two columns. */
+const CONSERVED: ProtDeskData = {
+  ...DATA,
+  residues: TABLES.residues.map((row, at) => ({ ...row, [CONSERVATION_COLUMN]: FOLD.conservation[at], [CONSERVATION_BASIS_COLUMN]: FOLD.conservation_basis[at] })) as readonly Row[],
+  run: { outcomes: [], narrative: [], pairs: null, contacts: null, surface: null, conservation: { as: 'columns', table: 'residues', columns: {}, counts: FOLD.counts, refusals: FOLD.refusals } as unknown as ConservationOutput } as unknown as ProtRun,
+};
+
+/** The cells over the landed data — the same door `cellsOf` uses, with the other run. */
+function conservedCells(): ReturnType<typeof useProtCells> {
+  let built: ReturnType<typeof useProtCells> = [];
+  function Probe(): null {
+    built = useProtCells(QUIET, CONSERVED);
+    return null;
+  }
+  renderToStaticMarkup(<Probe />);
+  return built;
+}
+
+const conservedCell = () => conservedCells().find((c) => c.id === CONSERVATION_VIEW)!;
+
+describe('the conservation cell says WHOSE data it is and WHICH METHOD placed it', () => {
+  it('prints the library’s own refusal, verbatim, before its stage has landed', () => {
+    const cell = cellsOf().find((c) => c.id === CONSERVATION_VIEW)!;
+    expect(cell.foot).toBeNull();
+    expect(cell.narrowing).toBeNull();
+    expect(textOf(cell.caption)).toContain('no column "conservation" in table "residues"');
+    expect(textOf(cell.render({ width: 400, height: 300 }))).toContain('no column "conservation" in table "residues"');
+  });
+
+  it('CARRIES THE METHOD ON ITS FACE, after the counts and the citation — never only behind the note', () => {
+    /*
+      THE ONE ASSERTION THIS CELL EXISTS FOR. The face law on this desk is a
+      title, a picture and one line of figures, and the figures' left half is
+      the only surviving copy of itself — so a reader who reads nothing else
+      still learns that these numbers were placed by the WEAKER of the two
+      methods. A fact that lived only behind `Full note` is a fact most readers
+      would not have.
+    */
+    expect(conservedCell().foot).toBe('162 of 185 residues scored · PF00545.26 + PF01337.25 · consensus-placed — the weaker method');
+  });
+
+  it('says in its note what the score IS, what it is NOT, and the whole argument about the placement', () => {
+    const said = textOf(conservedCell().caption);
+    expect(said).toContain('THE ALIGNMENT IS CITED, NOT BUILT');
+    expect(said).toContain('chain A against PF00545.26 (ribonuclease), 283 curated sequences, 100 family positions');
+    expect(said).toContain('chain B against PF01337.25 (Barstar (barnase inhibitor)), 69 curated sequences, 97 family positions');
+    expect(said).toContain('THESE LINES ARE NOT ONE SCALE');
+    expect(said).toContain(SCORE_IS);
+    expect(said).toContain(SCORE_IS_NOT);
+    expect(said).toContain(CONSENSUS.said);
+    expect(said).toContain(CONSENSUS.why);
+    // the four hops, and the one that is NOT the identity on this entry
+    expect(said).toContain('THE FOUR HOPS, each READ rather than assumed');
+    expect(said).toContain('chain B begins at UniProt position 2');
+    // ABSENT AND COUNTED — the 23 residues with no column, and where they are
+    expect(said).toContain('23 of the 185 residues have NO score — absent, never zero');
+    expect(said).toContain('the family covers positions 5–92 of chain A');
+    expect(said).toContain('the placement put 82 of those on a family position');
+  });
+
+  it('hands the chart the bound column and names the method on its own axis label', () => {
+    const run = conservedCell().render({ width: 800, height: 600 }) as ReactElement<{ valueField: string; dateField: string; yLabel: string; data: readonly unknown[] }>;
+    expect([run.props.dateField, run.props.valueField]).toEqual(['resnum', CONSERVATION_COLUMN]);
+    expect(run.props.yLabel).toBe('conservation (0…1, entropy over the cited alignment — consensus-placed)');
+    // one point per SCORED residue, and none for a residue with no column
+    expect(run.props.data).toHaveLength(FOLD.counts.scored);
   });
 });
 

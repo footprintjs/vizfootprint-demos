@@ -50,8 +50,15 @@
  *                   re-worded, not summarised, not re-ordered.
  *   the refusal     `StepperStage.detail`, which is `ActOutcome.refusal` as
  *                   `src/prot/orchestrator.ts` · `landAct` wrote it.
- *   the facts       `InteractionCounts` / `SurfaceCounts` — the acts' own
- *                   answers, read field by field (see {@link stageFacts}).
+ *   the facts       `InteractionCounts` / `SurfaceCounts` /
+ *                   `ConservationCounts` — the acts' own answers, read field by
+ *                   field (see {@link stageFacts}).
+ *   which method
+ *   placed a score   `src/prot/placement.ts` · `PlacementStrategy.said`, for
+ *                   the one stage whose numbers depend on a choice between two
+ *                   methods (see {@link placementSaid}). It rides the quiet
+ *                   line as well as the note, because a reader must not be able
+ *                   to take a consensus-placed score for an HMM-placed one.
  *   the blocked
  *   cards           `src/prot/plan.ts` · `PROT_BLOCKED` · `why`, one owner per
  *                   stage (the def's own unavailable list for the stage
@@ -72,7 +79,9 @@
  * (`web/src/protTrace.tsx` · `RunNarrative`). The card is a place to stand, not
  * the record.
  */
-import { CONTACTS_ACT, PAIRS_ACT, SURFACE_ACT } from '../../../src/prot/analyses.js';
+import { CONSERVATION_ACT, CONTACTS_ACT, PAIRS_ACT, SURFACE_ACT } from '../../../src/prot/analyses.js';
+import { SCORE_IS, SCORE_IS_NOT } from '../../../src/prot/conservation.js';
+import { PLACEMENT_HERE, PLACEMENT_STRATEGIES } from '../../../src/prot/placement.js';
 import { PROT_BLOCKED, type Blocker } from '../../../src/prot/plan.js';
 import type { ProtCounts } from '../../../src/prot/etl.js';
 import type { ProtRun } from '../../../src/prot/orchestrator.js';
@@ -106,13 +115,16 @@ const WORD: Readonly<Record<StageState, string | null>> = {
  * THE FOUR FACTS OF ONE STAGE — read off that stage's acts' own answers, field
  * by field, and NEVER recomputed here.
  *
- * Which four depends on which stage, because the two stages answer different
+ * Which four depends on which stage, because the three stages answer different
  * questions: the interactions stage reports on CONTACTS (what the engine found,
  * what became a row, what crosses a chain boundary, what runs through an atom
- * the table never saw) and the surface stage on AREAS (what it measured, what
- * came out at exactly zero, what it could not compute at all, what has no
- * published maximum to divide by). Each label names one field of
- * `InteractionCounts` or `SurfaceCounts`; each value is that field.
+ * the table never saw), the surface stage on AREAS (what it measured, what came
+ * out at exactly zero, what it could not compute at all, what has no published
+ * maximum to divide by), and the conservation stage on a CITATION and a
+ * PLACEMENT (which alignments, over how many curated sequences, how many
+ * residues got a column — and which of two methods placed them). Each label
+ * names one field of `InteractionCounts`, `SurfaceCounts` or
+ * `ConservationCounts`; each value is that field.
  *
  * An empty answer is honest: a stage whose act has not landed has no counts,
  * and the card says so rather than showing four dashes.
@@ -120,6 +132,7 @@ const WORD: Readonly<Record<StageState, string | null>> = {
 export function stageFacts(stage: StepperStage, run: ProtRun | null, counts: ProtCounts): readonly CardFact[] {
   const pairs = run?.pairs?.counts ?? null;
   const surface = run?.surface?.counts ?? null;
+  const conservation = run?.conservation?.counts ?? null;
   /**
    * WHICH STAGE THIS IS, asked of the ACTS rather than of the stage id: the act
    * ids are the declaration (`src/prot/analyses.ts`), and a stage renamed there
@@ -140,6 +153,24 @@ export function stageFacts(stage: StepperStage, run: ProtRun | null, counts: Pro
       { id: 'buried', label: 'Buried at exactly 0 Å²', value: num(surface.buried) },
       { id: 'novalue', label: 'No area computed at all', value: num(surface.noValue) },
       { id: 'noref', label: 'No relative value to divide by', value: num(surface.noReference) },
+    ];
+  }
+  /*
+    AND THE CONSERVATION STAGE'S FOUR, which answer a third question again: it
+    reports on a CITATION and a PLACEMENT rather than on anything measured off
+    this file. So the facts are which alignments were cited (with their
+    versions), how many curated sequences the score was taken over, how many
+    residues ended with a column — and, the one a reader most needs, WHICH
+    METHOD placed them, which is a fact and not a caption.
+  */
+  if (conservation !== null && landed(CONSERVATION_ACT)) {
+    const cited = conservation.chains.flatMap((chain) => (chain.cited === null ? [] : [chain.cited]));
+    const sequences = conservation.chains.reduce((total, chain) => total + (chain.sequences ?? 0), 0);
+    return [
+      { id: 'scored', label: 'Residues scored', value: `${num(conservation.scored)} / ${num(conservation.residues)}` },
+      { id: 'absent', label: 'No column, so no score', value: num(conservation.absent) },
+      { id: 'cited', label: cited.length === 1 ? 'Alignment cited' : 'Alignments cited', value: cited.length === 0 ? '—' : `${cited.join(' + ')} · ${num(sequences)} sequences` },
+      { id: 'placed', label: 'Placed by', value: `${conservation.method}${conservation.weaker ? ' — the weaker method' : ''}` },
     ];
   }
   return [];
@@ -278,6 +309,44 @@ export interface StageWords {
   readonly where: string | null;
 }
 
+/**
+ * THE ONE STAGE THAT HAS TO SAY WHICH METHOD PLACED ITS NUMBERS — the clause
+ * for its panel line and the sentences for its note.
+ *
+ * ── WHY THIS STAGE AND NOT THE OTHERS ──────────────────────────────────────
+ * The other three stages MEASURE something off the entry's own coordinates:
+ * there is one way to count a contact and one way to roll a probe, so a
+ * reader cannot mistake one implementation's number for another's. This one
+ * cites a curated alignment somebody else published and computes only WHERE
+ * OUR RESIDUES SIT IN IT — and that placement has a better method (the
+ * family's own profile HMM) and a worse one (pairwise alignment to a consensus
+ * folded from the columns). This build ships the worse one.
+ *
+ * So the method rides the stage's own quiet line, where a reader who reads
+ * nothing else still meets it, AND leads its note. The card's face carries it
+ * too (`web/src/protCells.tsx`, the conservation cell's `foot`) — three places
+ * because the fact is load-bearing, and ONE OWNER for the words
+ * (`src/prot/placement.ts` · `PlacementStrategy.said`), so the three cannot
+ * spell it differently.
+ *
+ * `null` for every other stage — an absence is absent.
+ */
+export function placementSaid(here: StepperStage, run: ProtRun | null): { readonly clause: string; readonly note: readonly string[] } | null {
+  if (!here.acts.some((a) => a.act === CONSERVATION_ACT)) return null;
+  const strategy = PLACEMENT_STRATEGIES[PLACEMENT_HERE];
+  const counts = run?.conservation?.counts ?? null;
+  const cited = (counts?.chains ?? []).flatMap((chain) => (chain.cited === null ? [] : [chain.cited]));
+  return {
+    clause: `${strategy.said}${cited.length === 0 ? '' : `, over ${cited.join(' and ')}`}`,
+    note: [
+      `THE ALIGNMENT IS CITED, NOT BUILT${cited.length === 0 ? '' : `: ${cited.join(' and ')}`} — somebody else's published, versioned work, named by the accession AND the version read out of the alignment's own header.`,
+      `WHAT THE SCORE IS: ${SCORE_IS} ${SCORE_IS_NOT}`,
+      strategy.why,
+      ...(run?.conservation?.refusals ?? []),
+    ],
+  };
+}
+
 /** What the fold is told about where the cursor is standing. */
 export interface PanelInput {
   /** The stage the cursor is standing in — `web/src/protStages.ts` · `stageAtCursor`. */
@@ -353,14 +422,19 @@ export function stageWords(input: PanelInput): StageWords {
   }
   const word = WORD[here.state];
   const narrative = (run?.narrative ?? []).filter((line) => line.includes(here.label)).slice(0, NARRATIVE_LINES);
+  const placed = placementSaid(here, run);
   return {
     eyebrow: `Stage ${num(here.number)} · ${here.label}${word === null ? '' : ` · ${word}`}`,
     mark: `stage ${num(here.number)}`,
     // the fold's own line; then the recorder's, verbatim; then the one derived
     // clause about the arrangement, which is about the SCREEN and not about the
     // protein
-    line: here.subtitle,
-    sentences: [...narrative, arrangement],
+    //
+    // AND, FOR THE ONE STAGE WHOSE NUMBERS COULD BE MISTAKEN FOR SOMEBODY
+    // ELSE'S, which method placed them — on the LINE and not only in the note.
+    // See {@link placementSaid}.
+    line: placed === null ? here.subtitle : `${here.subtitle} — ${placed.clause}`,
+    sentences: [...(placed === null ? [] : placed.note), ...narrative, arrangement],
     // A REFUSED ACT'S SENTENCE and a step's own ACCOUNT of itself are both
     // `detail`, and they are not the same kind of thing: one is rust and
     // visible, the other is prose for the note. Only a refused stage has a

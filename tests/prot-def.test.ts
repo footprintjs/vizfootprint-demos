@@ -26,8 +26,8 @@ import { describe, expect, it } from 'vitest';
 import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import { buildDashboard } from 'vizfootprint/agent';
 import type { DashboardDef } from 'vizfootprint/agent';
-import { INTERFACE_VIEW, PAIRS_VIEW, PROT_VIEWS, PROT_WORDS, RAMA_VIEW, RESIDUES_TABLE, RESIDUE_KEY, SHEET_VIEW, STRUCTURE_VIEW, SURFACE_VIEW, protCaption, protDef, protGrains } from '../src/prot/def.js';
-import { ACT_KEY_COLUMN, ACT_TABLE, INTERACTION_COLUMNS, INTERACTION_SCHEMA, INTERACTIONS_TABLE, INTERFACE_CONTACTS_COLUMN, PROT_ACT_ORDER, PROT_STAGES, SASA_COLUMN } from '../src/prot/analyses.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, PROT_VIEWS, PROT_WORDS, RAMA_VIEW, RESIDUES_TABLE, RESIDUE_KEY, SHEET_VIEW, STRUCTURE_VIEW, SURFACE_VIEW, protCaption, protDef, protGrains } from '../src/prot/def.js';
+import { ACT_KEY_COLUMN, ACT_TABLE, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, INTERACTION_COLUMNS, INTERACTION_SCHEMA, INTERACTIONS_TABLE, INTERFACE_CONTACTS_COLUMN, PROT_ACT_ORDER, PROT_STAGES, SASA_COLUMN } from '../src/prot/analyses.js';
 import { protTables } from '../src/prot/etl.js';
 import { zeroGuideOf } from '../web/src/workbench/charts.js';
 import { loadStructureText } from '../src/prot/snapshot.js';
@@ -45,14 +45,14 @@ async function overviewOf(def: DashboardDef) {
 const cause = (intent: string) => ({ requestedBy: 'user' as const, computedBy: 'user' as const, intent });
 
 describe('the def the desk ships', () => {
-  it('declares one table, keyed by the minted residue key, and six views', () => {
+  it('declares one table, keyed by the minted residue key, and seven views', () => {
     expect(Object.keys(DEF.data)).toEqual([RESIDUES_TABLE]);
     expect(DEF.defaultTable).toBe(RESIDUES_TABLE);
     expect(DEF.data[RESIDUES_TABLE]?.key).toBe(RESIDUE_KEY);
     // the rows are declared as an inline SOURCE, so a carrier vouches for a version
     expect(DEF.data[RESIDUES_TABLE]?.source).toMatchObject({ format: 'rows', via: 'inline' });
     expect(Object.keys(DEF.actors)).toEqual([...PROT_VIEWS]);
-    expect(PROT_VIEWS).toEqual([STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW]);
+    expect(PROT_VIEWS).toEqual([STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW]);
     // ONE TABLE STILL, and that is the packet's finding in one assertion: the
     // `interactionPairs` act cuts a second table and the def cannot name it, so
     // `data` has exactly the one the file was parsed into (src/prot/analyses.ts)
@@ -66,7 +66,7 @@ describe('the def the desk ships', () => {
     expect([ACT_TABLE, ACT_KEY_COLUMN]).toEqual([RESIDUES_TABLE, RESIDUE_KEY]);
   });
 
-  it('declares the three acts the two stages dispatch, and every one of them as CODE rather than a builtin record', () => {
+  it('declares the four acts the three stages dispatch, and every one of them as CODE rather than a builtin record', () => {
     expect(Object.keys(DEF.analyses ?? {})).toEqual([...PROT_ACT_ORDER]);
     // every act is a `defineAnalysis` shape — a `build` function, never a
     // `builtin` name — because what they compute is a third party's engine over a
@@ -79,22 +79,29 @@ describe('the def the desk ships', () => {
       expect(slot['builtin']).toBeUndefined();
       expect(slot['kind']).toBe('transform');
     }
-    // …and the two stages name them in the order a reader meets the pictures
-    expect(PROT_STAGES.map((s) => s.stage)).toEqual(['interactions', 'surface']);
+    // …and the three stages name them in the order a reader meets the pictures.
+    // CONSERVATION IS FIRST: the plan publishes it as step 2, and it is the one
+    // act that parses no headless structure, so the first picture to arrive is
+    // the one that costs the least to land.
+    expect(PROT_STAGES.map((s) => s.stage)).toEqual(['conservation', 'interactions', 'surface']);
     expect(PROT_STAGES.flatMap((s) => s.acts.map((a) => a.id))).toEqual([...PROT_ACT_ORDER]);
     // every act's declared intent is what the ledger will carry — never empty
     for (const stage of PROT_STAGES) for (const act of stage.acts) expect(act.intent.length).toBeGreaterThan(40);
   });
 
-  it('declares the two act-fed charts over columns NOTHING has landed — which is what the read then refuses', () => {
+  it('declares the three act-fed charts over columns NOTHING has landed — which is what the read then refuses', () => {
     const bar = DEF.encodings?.find((e) => e.viewId === INTERFACE_VIEW);
     const run = DEF.encodings?.find((e) => e.viewId === SURFACE_VIEW);
+    const conserved = DEF.encodings?.find((e) => e.viewId === CONSERVATION_VIEW);
     expect(bar).toMatchObject({ chartKind: 'bar', channels: ['category', 'y'], initial: { category: RESIDUE_KEY, y: INTERFACE_CONTACTS_COLUMN } });
     expect(run).toMatchObject({ chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } });
-    // the columns those two bind are NOT declared on the table: they arrive with
-    // their acts, which is the whole progression this desk exists to show
+    expect(conserved).toMatchObject({ chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: CONSERVATION_COLUMN, color: 'chain' } });
+    // the columns those three bind are NOT declared on the table: they arrive
+    // with their acts, which is the whole progression this desk exists to show
     const columns = Object.keys(DEF.data[RESIDUES_TABLE]?.columns ?? {});
-    for (const landed of [INTERFACE_CONTACTS_COLUMN, SASA_COLUMN]) expect(columns).not.toContain(landed);
+    for (const landed of [INTERFACE_CONTACTS_COLUMN, SASA_COLUMN, CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN]) expect(columns).not.toContain(landed);
+    // AND THE CONSERVATION RUN'S X IS THE NUMBER TOO, for the same library law
+    expect(conserved?.initial?.['x']).not.toBe(RESIDUE_KEY);
     // A LINE'S X MAY NOT BE AN IDENTIFIER — the library refuses that by name, so
     // the run's axis is the residue NUMBER and the two chains share it. Pinned
     // because the honest caption on that cell depends on it.
@@ -122,6 +129,7 @@ describe('the def the desk ships', () => {
     expect(protGrains()).toEqual([
       { viewId: STRUCTURE_VIEW, keys: [] },
       { viewId: RAMA_VIEW, keys: [] },
+      { viewId: CONSERVATION_VIEW, keys: [] },
       { viewId: INTERFACE_VIEW, keys: [] },
       { viewId: SURFACE_VIEW, keys: [] },
       { viewId: SHEET_VIEW, keys: [] },
@@ -146,6 +154,7 @@ describe('the def the desk ships', () => {
       { viewId: RAMA_VIEW, canProbe: true, encodings: ['interval'] },
       { viewId: INTERFACE_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] },
+      { viewId: CONSERVATION_VIEW, canProbe: true, encodings: ['interval'] },
       { viewId: PAIRS_VIEW, canProbe: false },
       { viewId: SHEET_VIEW, canProbe: false },
     ]);

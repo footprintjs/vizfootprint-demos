@@ -3,19 +3,20 @@
  * entry, plus the one thing the session cannot hold.
  *
  *   tables    = protTables(text)        layer 1 — the file's atom records, shaped
- *   def       = protDef(tables, text)   layers 2–4 — one table, six views, three acts
+ *   def       = protDef(tables, text, evidence)
+ *                                       layers 2–4 — one table, seven views, four acts
  *   session   = buildDashboard(def)     validated (the firewall throws on a lie)
  *                 .createSession()
- *   …then ONE GESTURE at each unlanded chart, kept; then the ORCHESTRATOR, two
- *   stages, each landing its own evidence
+ *   …then ONE GESTURE at each unlanded chart, kept; then the ORCHESTRATOR, one
+ *   stage per declared stage, each landing its own evidence
  *
  * ── THE BOOT IS A STORY, AND ITS FIRST STEP IS A REFUSAL ────────────────────
  * This desk used to land nothing: every column it drew was read off the file,
  * and the log a reader walked started empty. It now runs a PIPELINE, and the
  * order of {@link openProtSurfaceAsync} is the story:
  *
- *   1. build the session. Two of the six views are declared over columns that do
- *      not exist yet, so two of the pictures cannot draw.
+ *   1. build the session. THREE of the seven views are declared over columns
+ *      that do not exist yet, so three of the pictures cannot draw.
  *   2. MAKE A GESTURE AT EACH OF THEM ({@link probeTheUnlandedColumns}) and keep
  *      the sentence the library refuses it with. A visitor always arrives after
  *      the acts, so a page that did not make the gesture could only QUOTE that
@@ -23,9 +24,20 @@
  *      library's own, on this session, in this session's gap ledger.
  *   3. run the orchestrator (`./orchestrator.ts`): stage one finds every
  *      non-covalent contact and lands it twice — as a pair table in its own
- *      answer and as three columns on `residues` — and stage two rolls a
- *      solvent probe and lands two more columns. Each stage's chart can draw
- *      the moment its stage ends, and not before.
+ *      answer and as three columns on `residues` — stage two rolls a solvent
+ *      probe and lands two more columns, and stage three places each residue in
+ *      its family's curated alignment and lands its score beside the alignment
+ *      it was cited against. Each stage's chart can draw the moment its stage
+ *      ends, and not before.
+ *
+ * ── AND ONE PIECE OF EVIDENCE THIS SURFACE CANNOT READ FOR ITSELF ──────────
+ * The conservation stage's data is somebody else's published alignment, so it
+ * is gathered BEFORE the dashboard is built and handed in
+ * (`./conservationEvidence.ts` · `conservationEvidenceFor`) — the committed
+ * fixtures for the example, the three services for any other entry. A surface
+ * opened without it declares the act anyway and lands its refusal, which is
+ * the honest shape: a stage that is declared and said nothing would read as a
+ * stage nobody ran.
  *
  * The exoplanet surface does exactly this with its histogram
  * (`../exo/session.ts` · `probeTheMintedTable`); this is that pattern with two
@@ -72,8 +84,9 @@ import type { InteractionSession } from 'vizfootprint/agent';
 import { buildDashboardAsync } from 'vizfootprint/def';
 import type { Dashboard } from 'vizfootprint/def';
 import type { Row } from 'vizfootprint/data';
-import { INTERFACE_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
-import { INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from './analyses.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
+import { CONSERVATION_COLUMN, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from './analyses.js';
+import type { ConservationEvidence } from './conservationEvidence.js';
 import { runProtStages, type ProtRun, type ProtRunWatch } from './orchestrator.js';
 import { protTables, type ProtTables } from './etl.js';
 
@@ -109,7 +122,7 @@ export interface UnlandedRefusals {
 
 /**
  * THE RESIDUE ROWS AT THE CURSOR — the file's own columns AND every column the
- * two stages landed on them.
+ * three stages landed on them.
  *
  * WHY the session and not the ETL: three of the five columns the new charts draw
  * do not exist in the data. They are acts' outputs, resolved at the cursor's
@@ -164,7 +177,7 @@ export interface ProtSurface {
   /** The rows every picture on this desk draws — read once, at the cursor, after the stages. */
   readonly residues: ResiduesAtCursor;
   /**
-   * What the two stages did, and the pair table they cut. `null` on a surface
+   * What the three stages did, and the pair table they cut. `null` on a surface
    * whose stages were never run (the synchronous door).
    */
   readonly run: ProtRun | null;
@@ -218,7 +231,23 @@ export async function probeTheUnlandedColumns(session: InteractionSession): Prom
     range: [0, 1],
     cause: { requestedBy: 'system', computedBy: 'system', intent: 'keep the residues the solvent barely reaches, before the stage that measures them has run' },
   });
-  return { [INTERFACE_VIEW]: bar.ok ? null : bar.rejection.detail, [SURFACE_VIEW]: run.ok ? null : run.rejection.detail };
+  // THE THIRD GESTURE, at the third chart declared over a column no act has
+  // landed. It is the same claim as the other two, at a chart whose evidence is
+  // somebody else's published alignment rather than this file's coordinates:
+  // the read is what judges a binding, so the picture cannot draw and the
+  // LIBRARY is what says why.
+  const conserved = await session.dispatch({
+    verb: 'filter',
+    viewId: CONSERVATION_VIEW,
+    field: CONSERVATION_COLUMN,
+    range: [0.9, 1],
+    cause: { requestedBy: 'system', computedBy: 'system', intent: 'keep the residues whose column the family agrees on most, before the stage that places them in it has run' },
+  });
+  return {
+    [INTERFACE_VIEW]: bar.ok ? null : bar.rejection.detail,
+    [SURFACE_VIEW]: run.ok ? null : run.rejection.detail,
+    [CONSERVATION_VIEW]: conserved.ok ? null : conserved.rejection.detail,
+  };
 }
 
 /**
@@ -245,18 +274,30 @@ export async function residuesAt(session: InteractionSession, tables: ProtTables
  * nothing else. The only table is an INLINE source, which the synchronous
  * builder is allowed to read (the library's law is about non-inline sources).
  *
- * The three acts are DECLARED and not dispatched, because dispatching is async
+ * The four acts are DECLARED and not dispatched, because dispatching is async
  * — the same split the exoplanet surface has, and for the same reason: a
  * builder that quietly returned before its own stages ran would be a surface
  * whose two new pictures have no columns and no sign of why. Call
  * {@link probeTheUnlandedColumns} and then `runProtStages`, or use the async
  * door, which does both in that order.
  */
-export function openProtSurface(artifact: StructureArtifact): ProtSurface {
+export function openProtSurface(artifact: StructureArtifact, evidence: ConservationEvidence | null = null): ProtSurface {
   const tables = protTables(artifact.text);
-  const dashboard = buildDashboard(protDef(tables, artifact.text));
-  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: { [INTERFACE_VIEW]: null, [SURFACE_VIEW]: null } };
+  const dashboard = buildDashboard(protDef(tables, artifact.text, evidence));
+  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET };
 }
+
+/**
+ * THE THREE UNLANDED CHARTS' SENTENCES ON A SURFACE THAT MADE NO GESTURE —
+ * `null` each, and `null` is not a refusal here.
+ *
+ * It means *nobody asked yet*: the synchronous door does not dispatch, so
+ * nothing has changed for a refusal to be about. A surface that had made the
+ * gestures and been refused carries the library's own words instead
+ * ({@link probeTheUnlandedColumns}), and a surface that made them and was
+ * ACCEPTED is a real failure the caller reports (`protSurfaceProblems`).
+ */
+const NO_GESTURES_YET: UnlandedRefusals = { [INTERFACE_VIEW]: null, [SURFACE_VIEW]: null, [CONSERVATION_VIEW]: null };
 
 /**
  * The rows of a session no stage has run on — the ETL's own, and NOT a stand-in
@@ -280,10 +321,10 @@ const unrunResidues = (tables: ProtTables): ResiduesAtCursor => ({ rows: tables.
  * caller does with it, and `tests/prot-progression.test.ts` holds this cursor
  * still.
  */
-export async function openProtSurfaceUnrun(artifact: StructureArtifact): Promise<ProtSurface> {
+export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence: ConservationEvidence | null = null): Promise<ProtSurface> {
   const tables = protTables(artifact.text);
-  const dashboard = await buildDashboardAsync(protDef(tables, artifact.text));
-  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: { [INTERFACE_VIEW]: null, [SURFACE_VIEW]: null } };
+  const dashboard = await buildDashboardAsync(protDef(tables, artifact.text, evidence));
+  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET };
 }
 
 /**
@@ -297,8 +338,8 @@ export async function openProtSurfaceUnrun(artifact: StructureArtifact): Promise
  * stages) and the sentences from step two are kept, because a visitor arrives
  * at the end of it.
  */
-export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtRunWatch): Promise<ProtSurface> {
-  const unrun = await openProtSurfaceUnrun(artifact);
+export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtRunWatch, evidence: ConservationEvidence | null = null): Promise<ProtSurface> {
+  const unrun = await openProtSurfaceUnrun(artifact, evidence);
   const refusals = await probeTheUnlandedColumns(unrun.session);
   // `watch` is the SCREEN's copy of the acts, act by act, and it changes nothing
   // about the run (`./orchestrator.ts` · ProtRunWatch): a host that passes none

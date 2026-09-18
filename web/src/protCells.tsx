@@ -80,8 +80,10 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { VizBar, VizLine, VizScatter, VizTable, bindRenderer, brightPredicate, keepPredicate, type BarDatum, type BoundRenderer, type ChartEmission, type ContractGap, type DeclinedEdgeView, type LinePoint, type RenderRow, type RenderSelection, type ScatterDatum, type SelectionClauseView } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection } from 'vizfootprint-studio/desk';
 import { PAINT_COLOR, PAINT_MEANING, PAINT_WORDS, VALUE_PALETTE, molstarRenderer, type PaintWord } from './molstarRenderer.js';
-import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
-import { INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from '../../src/prot/analyses.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
+import { CONSERVATION_COLUMN, INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from '../../src/prot/analyses.js';
+import { SCORE_IS, SCORE_IS_NOT } from '../../src/prot/conservation.js';
+import { PLACEMENT_HERE, PLACEMENT_STRATEGIES } from '../../src/prot/placement.js';
 import type { ProtCounts, SkippedRecords } from '../../src/prot/etl.js';
 import type { EntryNote } from '../../src/prot/entryNotes.js';
 import type { ProtRun } from '../../src/prot/orchestrator.js';
@@ -90,7 +92,7 @@ import { emitIntent, type Row } from './derive.js';
 import { chainColorOf, zeroGuideOf, type Narrowing } from './workbench/charts.js';
 import type { WorkbenchInk } from './workbench/tokens.js';
 
-export { STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
+export { STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
 
 /*
  * THERE WAS A `PROT_STORY_FIGURE` HERE — the four cells the Story tab's figure
@@ -114,7 +116,7 @@ export interface ProtDeskData {
   /** The file the 3D view draws, as the host holds it (no version — see `src/prot/session.ts`). */
   readonly structure: StructureArtifact;
   /**
-   * What the two stages landed, and the pair table they cut — `null` on a
+   * What the three stages landed, and the pair table they cut — `null` on a
    * surface whose stages were never run. The two act-fed cells read their
    * counts from here and RECOMPUTE none of them.
    */
@@ -610,6 +612,9 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   const runX = desk.bound(SURFACE_VIEW, 'x', 'resnum');
   const runY = desk.bound(SURFACE_VIEW, 'y', SASA_COLUMN);
   const runSeries = desk.bound(SURFACE_VIEW, 'color', 'chain');
+  const consX = desk.bound(CONSERVATION_VIEW, 'x', 'resnum');
+  const consY = desk.bound(CONSERVATION_VIEW, 'y', CONSERVATION_COLUMN);
+  const consSeries = desk.bound(CONSERVATION_VIEW, 'color', 'chain');
 
   const sel = [state.selections, state.links, state.cleared] as const;
 
@@ -635,6 +640,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
    */
   const interfaceLanded = useMemo(() => residues.some((r) => placed(r[barValue])), [residues, barValue]);
   const surfaceLanded = useMemo(() => residues.some((r) => placed(r[runY])), [residues, runY]);
+  const conservationLanded = useMemo(() => residues.some((r) => placed(r[consY])), [residues, consY]);
   /**
    * The contact rows the act handed back, exactly as it handed them back.
    *
@@ -667,6 +673,11 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   );
   const surfaceSelection = useMemo(
     () => selFor(SURFACE_VIEW),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+    [...sel],
+  );
+  const conservationSelection = useMemo(
+    () => selFor(CONSERVATION_VIEW),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
     [...sel],
   );
@@ -763,6 +774,20 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
     return dots.filter((d) => (d.row === undefined ? true : bright(d.row))).length;
   }, [dots, ramaSelection]);
   const runAtRest = useMemo(() => surfaceRun(residues, runX, runY, runSeries).length, [residues, runX, runY, runSeries]);
+  /**
+   * THE CONSERVATION RUN — the SAME FOLD as the surface run, over a different
+   * column, and reusing {@link surfaceRun} rather than writing a second copy of
+   * it: the function takes the three bound fields and drops a row with no
+   * value, which is exactly what this picture needs. A residue outside its
+   * family's domain region has no score, so its point is simply not there —
+   * which is why the line stops rather than dipping to zero.
+   */
+  const conservationPoints = useMemo(
+    () => surfaceRun(residues.filter(keepPredicate(conservationSelection) as (row: Row) => boolean), consX, consY, consSeries),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- conservationSelection is memoised on the same slices
+    [residues, consX, consY, consSeries, conservationSelection],
+  );
+  const conservationAtRest = useMemo(() => surfaceRun(residues, consX, consY, consSeries).length, [residues, consX, consY, consSeries]);
 
   /**
    * WHICH VIEWS HOLD A LIVE CLAUSE RIGHT NOW — the desk-wide fact, and the one
@@ -776,6 +801,17 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   /** One pane's narrowing, asked the same way for all five — the cell hands its own counts and its own word for a mark. */
   const narrowingAt = (selection: RenderSelection, rows: readonly RenderRow[], total: number, inForce: number, unit: string): Narrowing | null =>
     narrowingOf({ selection, live, rows, total, inForce, unit, label: desk.label, declined });
+
+  /**
+   * WHICH ARM OF THE PLACEMENT PORT RAN — read off the port, never spelled
+   * here, so the card's face, the stage's panel line and the act's own honesty
+   * note cannot disagree about which method placed a number.
+   */
+  const placement = PLACEMENT_STRATEGIES[PLACEMENT_HERE];
+  /** What the conservation act counted — its own answer, recomputed nowhere. */
+  const conservationCounts = run?.conservation?.counts ?? null;
+  /** Every alignment this entry's scores were cited against, accession AND version, in chain order. */
+  const cited = (conservationCounts?.chains ?? []).flatMap((chain) => (chain.cited === null ? [] : [chain.cited]));
 
   const emit = (viewId: string, verb: string) => (e: ChartEmission) => void view.emit(viewId, e, emitIntent(verb, e));
   const reencode = (v: string, c: string, f: string): void => void view.reencode(v, c, f);
@@ -1062,6 +1098,104 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
             width={width}
             height={height}
             onEmit={emit(SURFACE_VIEW, 'filter')}
+            onReencode={reencode}
+          />
+        ),
+    },
+    {
+      id: CONSERVATION_VIEW,
+      weight: 4,
+      /*
+        THE FACE CARRIES WHICH METHOD PLACED THESE NUMBERS, and that is not a
+        stylistic choice.
+
+        The face law on this desk is *a title, a picture, one line of figures*
+        (`./workbench/README.md`), and the figures' left half is the only
+        surviving copy of itself. So the METHOD goes in that half, after the
+        counts and the citation: a reader comparing this desk's score with a
+        published per-residue figure must not be able to mistake a
+        consensus-placed score for an HMM-placed one, and a fact that only
+        exists behind a disclosure is a fact most readers will not have. The
+        word comes from `src/prot/placement.ts` — one owner for it, so the card,
+        the panel line and the act's own honesty note cannot spell it three
+        ways.
+      */
+      foot: !conservationLanded
+        ? null
+        : [
+            `${count(conservationPoints.length)} of ${count(counts.residues)} residues scored`,
+            ...(cited.length === 0 ? [] : [cited.join(' + ')]),
+            `${placement.method}-placed — ${placement.weaker ? 'the weaker method' : 'the better method'}`,
+          ].join(' · '),
+      // this pane DROPS the marks a clause excludes, exactly as the surface run
+      // does and for the same reason: `VizLine` takes no selection
+      narrowing: !conservationLanded ? null : narrowingAt(conservationSelection, structureRows, conservationAtRest, conservationPoints.length, 'residues'),
+      caption: (
+        <>
+          {[
+            !conservationLanded
+              ? `nothing to draw yet — the library refused a drag across this chart in its own words: “${refusals[CONSERVATION_VIEW] ?? `no column "${consY}" in table "residues"`}”. The column arrives when the sequence-analysis stage places each residue in its family's curated alignment`
+              : `${count(conservationPoints.length)} residues, each one scored by how well its column is agreed on across a curated alignment of its family, against the number the depositors gave it, one line per chain`,
+            // WHOSE DATA THIS IS — first, because it is the thing a reader of a
+            // conservation figure most needs to know and the thing this desk did
+            // not compute.
+            conservationCounts === null
+              ? null
+              : `THE ALIGNMENT IS CITED, NOT BUILT: ${conservationCounts.chains
+                  .flatMap((c) => (c.cited === null ? [] : [`chain ${c.chain} against ${c.cited}${c.familyName === null ? '' : ` (${c.familyName})`}, ${count(c.sequences ?? 0)} curated sequences, ${count(c.positions ?? 0)} family positions`]))
+                  .join('; ')} — somebody else's published, versioned work, named by the accession AND the version read out of the alignment's own header rather than typed here`,
+            // AND THE TWO LINES ARE NOT ONE SCALE.
+            conservationCounts === null || conservationCounts.chains.filter((c) => c.cited !== null).length < 2
+              ? null
+              : 'THESE LINES ARE NOT ONE SCALE. The chains belong to different families, so they are scored against different alignments over different numbers of sequences — the `conservation_basis` column beside every score is what says which, and a value on one line is not comparable with a value on the other',
+            `WHAT THE SCORE IS: ${SCORE_IS} ${SCORE_IS_NOT}`,
+            `WHICH METHOD PLACED IT — ${placement.said}. ${placement.why}`,
+            // THE FOUR HOPS, each named with what it was read from: this is
+            // where the stage would lie if it lied.
+            'THE FOUR HOPS, each READ rather than assumed: the alignment\'s own columns give the family positions; the placement above puts our sequence on them; the archive\'s `aligned_regions` carry a UniProt position to an entity position; and `auth_to_entity_poly_seq_mapping` carries that to the author residue number this desk keys its rows by. Two of the four are the identity on this entry and one is not — chain B begins at UniProt position 2 — which is exactly why none of them is assumed',
+            conservationCounts === null
+              ? null
+              : `${count(conservationCounts.absent)} of the ${count(conservationCounts.residues)} residues have NO score — absent, never zero: ${conservationCounts.chains
+                  .flatMap((c) => (c.domain === null ? [] : [`the family covers positions ${String(c.domain[0])}–${String(c.domain[1])} of chain ${c.chain}'s reference sequence, which reaches ${count(c.domainResidues ?? 0)} of its ${count(c.residues)} residues, and the placement put ${count(c.placed)} of those on a family position`]))
+                  .join('; ')}`,
+            conservationCounts === null
+              ? null
+              : conservationCounts.chains
+                  .flatMap((c) => (c.score === null ? [] : [`chain ${c.chain}'s placement scored ${String(c.score)} with ${count(c.identities ?? 0)} of ${count(c.placed)} placed positions holding the consensus letter itself`]))
+                  .join('; '),
+            // EVERY REFUSAL, VERBATIM — including the ones that leave the other
+            // chain's score standing, which is the state that would otherwise be
+            // silent.
+            ...(run?.conservation?.refusals ?? []),
+            !conservationLanded ? null : `drag across the axis to keep a range of residue numbers — every other picture narrows with it, and this one narrows too: ${count(conservationPoints.length)} of the ${count(conservationAtRest)} scored residues are drawn under the selections in force`,
+          ]
+            .filter((s): s is string => s !== null && s !== '')
+            .join(' · ')}
+          {desk.words(CONSERVATION_VIEW)}
+        </>
+      ),
+      render: ({ width, height }) =>
+        !conservationLanded ? (
+          <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+            {refusals[CONSERVATION_VIEW] ?? `no column "${consY}" in table "residues"`}
+          </div>
+        ) : (
+          <VizLine
+            viewId={CONSERVATION_VIEW}
+            data={conservationPoints}
+            colorOf={colorOf}
+            dateField={consX}
+            valueField={consY}
+            xLabel={`${consX} (residue number, every chain)`}
+            yLabel={`${consY} (0…1, entropy over the cited alignment — ${placement.method}-placed)`}
+            ariaLabel={desk.altShort(CONSERVATION_VIEW)}
+            columns={columns}
+            fits={desk.fitsOf(CONSERVATION_VIEW)}
+            encoding={shown[CONSERVATION_VIEW] ?? {}}
+            axes={height >= AXIS_ROOM}
+            width={width}
+            height={height}
+            onEmit={emit(CONSERVATION_VIEW, 'filter')}
             onReencode={reencode}
           />
         ),

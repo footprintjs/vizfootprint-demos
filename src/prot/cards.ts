@@ -29,7 +29,7 @@ export const PROT_DEMO = 'A protein complex, in two pictures';
 export interface ProtCardsInput {
   readonly tables: ProtTables;
   /**
-   * The entry's own text — what the three declared acts read
+   * The entry's own text — what three of the four declared acts read (the fourth reads a curated alignment instead)
    * (`./analyses.ts`). A card lists what a def DECLARES and runs nothing, but
    * the def cannot be built without the bytes its acts are declared over, so
    * the caller that already has them hands them in (`../site/cards.ts` reads

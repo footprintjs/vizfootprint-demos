@@ -18,9 +18,10 @@
  *      plus the 3px bar land on the column that was pressed, every time.
  *   2. THE DISAGREEMENT LINE: on the focused card after a blocked press and
  *      after a stage-1 press, absent after a landed one.
- *   3. AND IT IS DERIVED, proved by reaching the same state a SECOND WAY — a
- *      seek from the record drawer, which is not a stepper press at all — and
- *      finding the same sentence.
+ *   3. AND IT IS DERIVED, proved through two doors that are not the stepper: a
+ *      seek from the record drawer (which moves BOTH facts, so the page says
+ *      nothing — worth asserting) and then a rail tile's own promotion, which
+ *      parts them and finds the same sentence.
  *   4. A MARK IN A RAIL TILE, PRESSED BY HAND, lands a selection. This is the
  *      assertion the suite could not make, and the reason the tile now says in
  *      its own voice how hard that press is.
@@ -43,7 +44,7 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { buildSiteIfMissing, startProtSite, type SiteHandle } from './protSiteServer.js';
 import { EXAMPLE_ENTRY } from '../src/prot/archive.js';
-import { INTERFACE_VIEW, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { PAIRS_ACT } from '../src/prot/analyses.js';
 import { PROT_PLAN } from '../src/prot/plan.js';
 
@@ -206,16 +207,26 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the stepper respon
       ── AND IT IS DERIVED, WHICH IS THE CLAIM THAT MATTERS ──────────────────
       The line must come from the two facts disagreeing and never from which
       button was pressed, so that it is right after a resize, a reload or a seek
-      somebody made somewhere else. This proves it by reaching the same state
-      through a door the stepper has nothing to do with: an act's own seek
-      control, inside the record drawer.
+      somebody made somewhere else. This proves it through TWO doors the stepper
+      has nothing to do with: an act's own seek control inside the record
+      drawer, and a rail tile's own promote control.
 
-      Seeking to the FIRST act's commit puts the cursor behind every stage's own
-      commit — a stage's commit is its LAST act's — so the cursor stands in no
-      stage at all, while the focus still holds a picture that belongs to one.
-      Two facts, disagreeing, with no press on the stepper.
+      ── AND THE ROUTE CHANGED WHEN THE CONSERVATION STAGE LANDED ───────────
+      It used to seek to the FIRST act's commit, which put the cursor behind
+      every stage's own commit — a stage's commit is its LAST act's — so the
+      cursor stood in no stage at all while the focus still held a picture that
+      belonged to one. That state is not reachable by a drawer seek any more:
+      the first commit on the log is the conservation stage's, and that stage
+      has exactly one act, so its commit IS its stage's. A seek to the pairs
+      act now leaves the cursor standing in stage 2 and the focus follows it
+      there — which is the page being RIGHT, and is worth asserting on the way
+      past: a seek that moves both facts together has nothing to say.
+
+      So the disagreement is reached by PROMOTING a tile whose stage is not the
+      one the cursor is standing in. Still no press on the stepper, and still
+      derived from the two facts.
     */
-    it('is DERIVED: a seek from the record drawer reaches the same state and finds the same line', async () => {
+    it('is DERIVED: a seek from the record drawer moves BOTH facts, and a promotion parts them', async () => {
       const target = page.getByLabel(seekLabel(PAIRS_ACT), { exact: true });
       for (let tries = 0; tries < 6; tries += 1) {
         if ((await target.count()) > 0) break;
@@ -228,18 +239,32 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the stepper respon
       // the re-read is a promise: the surface column steps back out of the table
       await page.waitForFunction((selector) => document.querySelectorAll(selector).length === 0, `[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 30_000 });
       await page.waitForTimeout(900);
+      const seeked = await whereAmI(page);
+      say(`  after a seek from the drawer: aria-current ${seeked.current.join(',')} · focus ${String(seeked.focus)} · “${seeked.elsewhere[0] ?? '(nothing)'}”`);
+      // BOTH FACTS MOVED TOGETHER, so there is nothing to say: the cursor
+      // stands in the conservation stage and the focus holds its picture
+      expect(seeked.current).toEqual([2]);
+      expect(seeked.current).toEqual(seeked.bars);
+      expect(seeked.focus).toBe(CONSERVATION_VIEW);
+      expect(seeked.elsewhere).toEqual([]);
+
+      // …and now a door that is not the stepper parts them: promote the
+      // backbone-angle tile, which belongs to the step that landed at the ROOT
+      await closeTheRecord(page);
+      const promote = page.locator(`[data-tile="true"][data-chart="${RAMA_VIEW}"] button[aria-label^="bring "]`);
+      expect(await promote.count(), 'no promote control on the backbone-angle tile').toBeGreaterThan(0);
+      await promote.first().click();
+      await page.waitForTimeout(600);
       const now = await whereAmI(page);
-      say(`  after a seek from the drawer: aria-current ${now.current.join(',')} · focus ${String(now.focus)} · “${now.elsewhere[0] ?? '(nothing)'}”`);
+      say(`  after promoting the backbone-angle tile: aria-current ${now.current.join(',')} · focus ${String(now.focus)} · “${now.elsewhere[0] ?? '(nothing)'}”`);
+      expect(now.focus).toBe(RAMA_VIEW);
       expect(now.elsewhere).toHaveLength(1);
       expect(now.elsewhere[0]).toContain(ELSEWHERE);
-      // NOBODY PRESSED THE STEPPER, and the page still says the two parted
-      // company — the cursor is behind every stage's own commit
-      expect(now.elsewhere[0]).toContain('the cursor is not standing in any stage');
+      // NOBODY PRESSED THE STEPPER, and the page says which two parted company
+      expect(now.elsewhere[0]).toContain('the cursor is standing in stage 2');
       // and the bar is under the column the FOCUS belongs to, which is the law
       expect(now.current).toEqual(now.bars);
-      expect(now.current).toHaveLength(1);
-      // the drawer opened over the charts to reach that control; shut it again
-      await closeTheRecord(page);
+      expect(now.current).toEqual([1]);
     }, 120_000);
   });
 

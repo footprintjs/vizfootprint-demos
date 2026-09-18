@@ -48,6 +48,17 @@ import { entryId } from './etl.js';
 /** The three public endpoints, in one place, so no call site spells one. */
 export const ARCHIVE_URLS = {
   search: 'https://search.rcsb.org/rcsbsearch/v2/query',
+  /**
+   * THE ARCHIVE'S OWN GRAPHQL DOOR — how `src/prot/entities.ts` asks for the
+   * four mapping fields and nothing else.
+   *
+   * It is here beside the other three because a URL of this service belongs to
+   * one owner. The REST record for one polymer entity is 13,827 bytes, most of
+   * it a taxonomy lineage nothing on this desk reads; GraphQL is the archive's
+   * own way of asking for a shape, so one request answers for every chain and
+   * the committed fixture is small enough to read by eye.
+   */
+  graphql: 'https://data.rcsb.org/graphql',
   entry: 'https://data.rcsb.org/rest/v1/core/entry/',
   file: 'https://files.rcsb.org/download/',
 } as const;
@@ -104,22 +115,22 @@ export const entryIdRefusal = (words: string): string =>
 // ── reading JSON without trusting it ────────────────────────────────────────
 
 /** An object, or `null` — never a cast that assumes the service answered the shape it documents. */
-const objectOf = (value: unknown): Readonly<Record<string, unknown>> | null => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null);
+export const objectOf = (value: unknown): Readonly<Record<string, unknown>> | null => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null);
 
 /** A finite number at a key, or `null` — an absent count is never read as zero. */
-const numberAt = (record: Readonly<Record<string, unknown>> | null, key: string): number | null => {
+export const numberAt = (record: Readonly<Record<string, unknown>> | null, key: string): number | null => {
   const value = record?.[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 };
 
 /** A non-empty string at a key, or `null`. */
-const textAt = (record: Readonly<Record<string, unknown>> | null, key: string): string | null => {
+export const textAt = (record: Readonly<Record<string, unknown>> | null, key: string): string | null => {
   const value = record?.[key];
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 };
 
 /** The parsed body, or `null` when the answer was not JSON at all. */
-const jsonOf = (body: string): Readonly<Record<string, unknown>> | null => {
+export const jsonOf = (body: string): Readonly<Record<string, unknown>> | null => {
   try {
     return objectOf(JSON.parse(body));
   } catch {
@@ -128,10 +139,10 @@ const jsonOf = (body: string): Readonly<Record<string, unknown>> | null => {
 };
 
 /** The first characters of an answer nobody could parse — quoted, so a refusal names what really arrived. */
-const quoted = (body: string, howMany = 120): string => `${body.slice(0, howMany).replace(/\s+/g, ' ').trim()}${body.length > howMany ? '…' : ''}`;
+export const quoted = (body: string, howMany = 120): string => `${body.slice(0, howMany).replace(/\s+/g, ' ').trim()}${body.length > howMany ? '…' : ''}`;
 
 /** What one knock came back with: the status, and the body as text. */
-interface Knocked {
+export interface Knocked {
   readonly ok: boolean;
   readonly status: number;
   readonly body: string;
@@ -152,7 +163,7 @@ interface Knocked {
  * from their browser to the archive, so an offline browser, a blocked request
  * and a DNS failure all look exactly like this.
  */
-async function knock(doors: ArchiveFetch, at: string, init?: { readonly method: string; readonly headers: Readonly<Record<string, string>>; readonly body: string }): Promise<FromArchive<Knocked>> {
+export async function knock(doors: ArchiveFetch, at: string, init?: { readonly method: string; readonly headers: Readonly<Record<string, string>>; readonly body: string }): Promise<FromArchive<Knocked>> {
   try {
     const answer = await doors(at, init);
     return { ok: true, value: { ok: answer.ok, status: answer.status, body: await answer.text() } };

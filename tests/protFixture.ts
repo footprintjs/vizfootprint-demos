@@ -117,3 +117,50 @@ export function withNucleicChain(text: string, howMany = 12): string {
   const end = lines.findIndex((line) => line.startsWith('CONECT') || line.startsWith('MASTER') || line === 'END');
   return [...lines.slice(0, end), ...nucleic, ...lines.slice(end)].join('\n');
 }
+
+// ── the mapping records, and the ENTRY THAT IS NOT THE IDENTITY ─────────────
+
+/**
+ * THE ARCHIVE'S ENTITY RECORDS FOR A SECOND ENTRY, whose author numbering
+ * starts at 94 — the fixture that stops hops 3 and 4 from being assumed.
+ *
+ * On the committed example hop 4 is the identity for both chains (author 1…96
+ * IS entity 1…96) and hop 3 is the identity for chain A. An implementation that
+ * simply assumed both would pass every assertion this desk can make about its
+ * own example and mislabel residues across most of the archive
+ * (`src/prot/mapping.ts` says the same thing where the arithmetic lives).
+ *
+ * So this is `1TUP`'s p53 core domain, probed once against the live GraphQL
+ * door exactly as the other shapes in this file were: `aligned_regions` says
+ * `entity_beg_seq_id 1 ↔ ref_beg_seq_id 94`, and
+ * `auth_to_entity_poly_seq_mapping` starts at `"94"` — so both hops are off by
+ * ninety-three and an off-by-93 error cannot hide.
+ *
+ * The mapping is written from its own first value rather than pasted, because
+ * 219 quoted numbers cannot be checked by eye and a generated run of them can:
+ * the entity is 219 residues numbered contiguously from 94, which is what the
+ * archive really answered.
+ */
+export const P53_AUTH_FROM = 94;
+export const P53_LENGTH = 219;
+
+/** `auth_to_entity_poly_seq_mapping` for that entity: 219 author numbers, 94…312, in entity order. */
+export const P53_AUTH_MAPPING: readonly string[] = Array.from({ length: P53_LENGTH }, (_, at) => String(P53_AUTH_FROM + at));
+
+/** The archive's GraphQL answer for that entity, in the shape `src/prot/entities.ts` reads — one chain, one region, no identity anywhere. */
+export const ENTITIES_1TUP = JSON.stringify({
+  data: {
+    entry: {
+      rcsb_id: '1TUP',
+      polymer_entities: [
+        {
+          rcsb_id: '1TUP_3',
+          entity_poly: { pdbx_seq_one_letter_code_can: 'X'.repeat(P53_LENGTH), rcsb_entity_polymer_type: 'Protein' },
+          rcsb_polymer_entity_container_identifiers: { entity_id: '3', auth_asym_ids: ['A'] },
+          rcsb_polymer_entity_align: [{ reference_database_name: 'UniProt', reference_database_accession: 'P04637', provenance_source: 'SIFTS', aligned_regions: [{ entity_beg_seq_id: 1, ref_beg_seq_id: P53_AUTH_FROM, length: P53_LENGTH }] }],
+          polymer_entity_instances: [{ rcsb_polymer_entity_instance_container_identifiers: { auth_asym_id: 'A', asym_id: 'A', entity_id: '3', auth_to_entity_poly_seq_mapping: P53_AUTH_MAPPING } }],
+        },
+      ],
+    },
+  },
+});

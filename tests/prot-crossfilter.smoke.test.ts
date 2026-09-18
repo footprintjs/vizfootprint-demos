@@ -31,23 +31,36 @@
  * chart in the focus slot is not the one that can start a selection on this
  * entry, which is exactly why every other pane has to be on screen and live.
  *
- * ── AND A DECLARED CAPABILITY THE RENDERER DOES NOT DELIVER (recorded here so
- * it is not lost; its fix is its own packet on both sides) ─────────────────
+ * ── AND A DECLARED CAPABILITY NOTHING DELIVERS, MEASURED MORE SHARPLY ─────
  * `src/prot/def.ts` · `capabilities` declares
- * `{ viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] }`, and the
- * renderer draws no brush for that view's band x — so the page DECLARES a
- * gesture it cannot perform, and the surface caption faithfully repeats the
- * claim (*drag across the axis to keep a range of residue numbers*). That is
- * capability law 1 broken at the declaration, not at the caption: a true
- * caption over a false declaration is still a false declaration. Fixing the
- * caption alone is expressly not the answer.
+ * `{ viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] }` — and the
+ * same for the conservation run beside it — so the page DECLARES a gesture, and
+ * both captions faithfully repeat the claim (*drag across the axis to keep a
+ * range of residue numbers*). It does not work, and this file used to record
+ * the cause as *the renderer draws no brush for that view's band x*. **That was
+ * wrong, and the test below is where the sharper measurement now lives:** the
+ * brush IS drawn (the live rectangle appears under a real pointer drag) and the
+ * gesture IS emitted; what happens is that the SESSION REFUSES THE CLAUSE, and
+ * the refusal lands as one more gap on the ledger.
+ *
+ * The reason is in the library's own line: `VizLine` positions a run through
+ * `epochOf` and snaps a drag to *the nearest distinct data date per endpoint*,
+ * so the interval it emits carries the STRING KEYS of its own x positions.
+ * These two runs' x is `resnum` — a number — and a string interval on that
+ * column is not a clause this table can answer.
+ *
+ * It is capability law 1 broken at the DECLARATION rather than at the caption:
+ * a true caption over a false declaration is still a false declaration, and
+ * fixing the caption alone is expressly not the answer. Its fix is its own
+ * packet on both sides. What this file owes it meanwhile is a MEASUREMENT that
+ * cannot rot, which is the last test here.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { chromium, type Browser, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { buildSiteIfMissing, startProtSite, type SiteHandle } from './protSiteServer.js';
 import { EXAMPLE_ENTRY } from '../src/prot/archive.js';
-import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 
 const CHROME = process.env['VZF_CHROME'];
 
@@ -121,6 +134,11 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     expect(before[SURFACE_VIEW]).toBeGreaterThan(100);
     expect(before[INTERFACE_VIEW]).toBeGreaterThan(100);
     expect(before[RAMA_VIEW]).toBeGreaterThan(100);
+    // THE CONSERVATION RUN IS ON THE GRAMMAR TOO, and its count is the honest
+    // one: 162 of the entry's 185 residues have a column in their family's
+    // alignment, and the other 23 have none, so the line stops rather than
+    // dipping to zero
+    expect(before[CONSERVATION_VIEW]).toBe(162);
     // and none of it needed a scroll to be there
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800);
   });
@@ -216,7 +234,7 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     say(`with the clause in force:${Object.entries(said).map(([id, line]) => `\n    ${id}: ${line === null ? '(silent — it is the source)' : `"${line}"`}`).join('')}`);
     // the pane the clause came FROM is the only silent one; it already shows its own selection
     expect(said[INTERFACE_VIEW]).toBe(null);
-    for (const address of [RAMA_VIEW, SURFACE_VIEW, STRUCTURE_VIEW]) expect(said[address], address).not.toBe(null);
+    for (const address of [RAMA_VIEW, SURFACE_VIEW, STRUCTURE_VIEW, CONSERVATION_VIEW]) expect(said[address], address).not.toBe(null);
 
     // …and the words agree with the pictures, pane by pane, in the way each chart shows a clause
     const drawn = await marks(page);
@@ -224,6 +242,9 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     say(`  the scatter draws ${String(drawn[RAMA_VIEW] ?? 0)} dots of which ${String(brightDots)} are bright; the run draws ${String(drawn[SURFACE_VIEW] ?? 0)} marks`);
     expect(claimed(said[RAMA_VIEW] ?? null)).toBe(brightDots);
     expect(claimed(said[SURFACE_VIEW] ?? null)).toBe(drawn[SURFACE_VIEW]);
+    // the conservation run drops its marks the same way the surface run does,
+    // so its sentence counts the marks it really drew
+    expect(claimed(said[CONSERVATION_VIEW] ?? null)).toBe(drawn[CONSERVATION_VIEW]);
     // the receipt is the one pane no clause can be judged on, and it says that rather than nothing
     expect(said[PAIRS_VIEW] ?? '').toContain('cannot be judged here');
     // nothing scrolled to say any of it
@@ -261,6 +282,91 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     say(`  after the clear:${Object.entries(said).map(([id, line]) => ` ${id} ${line === null ? '(silent)' : `"${line}"`}`).join(' ·')}`);
     expect(Object.values(said).filter((line) => line !== null)).toEqual([]);
   });
+
+  /*
+    ── AND THE ONE GESTURE NEITHER RUN CAN COMPLETE, MEASURED ────────────────
+    Both line panes declare an INTERVAL and both captions invite the drag. The
+    drag is TAKEN — a real pointer at the marks' own coordinates draws the
+    library's own live brush rectangle — and the release lands NOTHING: the
+    session refuses the clause and files one more gap.
+
+    The file header has the cause (the library's line snaps a run's interval to
+    the string KEYS of its own x positions, and these runs' x is a residue
+    NUMBER). The fix is a packet on both sides. What this test buys is that the
+    state cannot rot in either direction: if the library starts delivering it,
+    this fails and the finding comes out of the header; if somebody "fixes" the
+    caption instead of the declaration, the declaration is still here.
+
+    IT IS ASSERTED ON BOTH RUNS, because the finding is about the CHART KIND and
+    not about the new column: the conservation run inherited it by being a line
+    over a number, exactly as the surface run has been since it landed.
+  */
+  it('AND NEITHER RUN’S DRAG LANDS A CLAUSE — the brush is drawn, the session refuses it, and the ledger says so', async () => {
+    /** How many requests the session has refused, read off the record drawer's own count. */
+    const gapsSoFar = async (): Promise<number> => {
+      for (let tries = 0; tries < 5; tries += 1) {
+        const closed = page.locator('[aria-expanded="false"]');
+        if ((await closed.count()) === 0) break;
+        await closed.first().click();
+        await page.waitForTimeout(250);
+      }
+      const said = (await page.locator('body').innerText()).replace(/\s+/g, ' ');
+      const found = /Every request the session refused (\d+)/.exec(said);
+      return found === null ? -1 : Number(found[1]);
+    };
+    const shut = async (): Promise<void> => {
+      const bar = page.locator('button[aria-label^="open the record"], button[aria-label^="shut the record"]');
+      if ((await bar.count()) > 0) await bar.first().click();
+      await page.waitForTimeout(400);
+    };
+
+    const atBoot = await gapsSoFar();
+    await shut();
+    // THREE AT BOOT: the desk makes one refused gesture at each of the three
+    // charts declared over a column no act has landed yet
+    // (`src/prot/session.ts` · `probeTheUnlandedColumns`)
+    say(`  the session has refused ${String(atBoot)} requests at boot`);
+    expect(atBoot).toBe(3);
+
+    let refused = atBoot;
+    for (const view of [CONSERVATION_VIEW, SURFACE_VIEW]) {
+      const before = await marks(page);
+      const drag = await page.evaluate((id) => {
+        // SORTED BY X, because the run draws one series per chain and the DOM
+        // order is the series' — dot number twenty is not twenty per cent of
+        // the way across the axis, and a backwards drag is a gesture nobody
+        // makes
+        const dots = [...document.querySelectorAll(`[data-chart="${id}"] circle.vzf-line-dot`)].map((el) => el.getBoundingClientRect()).sort((a, b) => a.x - b.x);
+        if (dots.length < 10) return null;
+        const from = dots[Math.floor(dots.length * 0.1)]!;
+        const to = dots[Math.floor(dots.length * 0.7)]!;
+        return { x1: from.x + from.width / 2, x2: to.x + to.width / 2, y: from.y + from.height / 2, dots: dots.length };
+      }, view);
+      expect(drag, `${view} drew too few marks to drag between`).not.toBeNull();
+      await page.mouse.move(drag!.x1, drag!.y);
+      await page.mouse.down();
+      await page.mouse.move(drag!.x1 + 12, drag!.y);
+      await page.mouse.move(drag!.x2, drag!.y, { steps: 20 });
+      // THE GESTURE IS TAKEN: the library's own live rectangle is on screen
+      // mid-drag, which is what says the refusal below is not a lost pointer
+      const drawn = await page.evaluate((id) => document.querySelectorAll(`[data-chart="${id}"] rect.vzf-brush`).length, view);
+      expect(drawn, `${view} drew no brush rectangle under the drag`).toBeGreaterThan(0);
+      await page.mouse.up();
+      await page.waitForTimeout(1200);
+
+      // …AND NOTHING WAS KEPT: no clause to clear, and every pane's marks stand
+      expect(await page.locator('button[aria-label^="clear the"]').count(), `${view} landed a clause`).toBe(0);
+      const after = await marks(page);
+      expect(after[INTERFACE_VIEW]).toBe(before[INTERFACE_VIEW]);
+      expect(after[view]).toBe(before[view]);
+      // the session says why, on its own ledger, once per drag
+      const now = await gapsSoFar();
+      say(`  the drag across ${view} (${String(drag!.dots)} marks, ${String(Math.round(drag!.x1))}→${String(Math.round(drag!.x2))}) drew its brush and was REFUSED — the ledger is at ${String(now)}`);
+      expect(now).toBe(refused + 1);
+      refused = now;
+      await shut();
+    }
+  }, 180_000);
 
   it('threw nothing while doing it', () => {
     expect(pageErrors).toEqual([]);

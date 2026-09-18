@@ -44,3 +44,28 @@ export function digestOf(at: URL = ENTRY_PDB): string {
 export function entryProvenance(at: URL = ENTRY_PROVENANCE): Record<string, unknown> {
   return JSON.parse(readFileSync(at, 'utf8')) as Record<string, unknown>;
 }
+
+/** Where the cited family alignments live, and what the fetch recorded about them. */
+export const CONSERVATION_DIR = new URL('conservation/', ENTRY_DIR);
+export const CONSERVATION_PROVENANCE = new URL('PROVENANCE.json', CONSERVATION_DIR);
+
+/**
+ * THE COMMITTED FILES, OFF DISK — the node adapter for
+ * `./conservationEvidence.ts` · `ReadCommitted`.
+ *
+ * The paths that port takes are repo-relative AND site-relative
+ * (`src/data/files.ts` says why), so the node door resolves one against the
+ * repository root and the browser door against the site's base. One shape, two
+ * adapters, and neither module knows about the other's runtime.
+ */
+export const REPO_ROOT = new URL('../../', import.meta.url);
+
+/** One committed file's text, by the path `src/data/files.ts` names it with. */
+export function readCommittedFile(file: string): Promise<string> {
+  return Promise.resolve(readFileSync(new URL(file, REPO_ROOT), 'utf8'));
+}
+
+/** What the conservation fetch recorded — read from the file it wrote, never retyped. */
+export function conservationProvenance(at: URL = CONSERVATION_PROVENANCE): Record<string, unknown> {
+  return JSON.parse(readFileSync(at, 'utf8')) as Record<string, unknown>;
+}

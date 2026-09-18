@@ -208,8 +208,11 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the protein desk f
       });
 
       it('runs EIGHT LIVE PANES — one focus, seven support — and every one that binds data draws its marks', () => {
-        // four pictures beside the focus, plus a card for each of the three
-        // declared steps that will not run here
+        // SEVEN support panes, and the split between them moved: FIVE pictures
+        // now (the conservation run arrived with its stage) and a card for each
+        // of the TWO declared steps that will not run here. It was four
+        // pictures and three cards, and nothing about the count changed —
+        // the conservation step crossed from one half to the other.
         expect(m.tiles).toHaveLength(7);
         const drawing = m.tiles.filter((t) => t.drawn > 0);
         const said = m.tiles.filter((t) => t.drawn === 0);
@@ -225,10 +228,14 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the protein desk f
           Everything else DRAWS, because a pane that shows no marks cannot show
           a crossfilter and that is what this layout is bought for.
         */
-        expect(said.map((t) => t.id).sort()).toEqual([STRUCTURE_VIEW, 'stage:annotation', 'stage:conservation', 'stage:hotspots'].sort());
-        expect(drawing).toHaveLength(3);
+        expect(said.map((t) => t.id).sort()).toEqual([STRUCTURE_VIEW, 'stage:annotation', 'stage:hotspots'].sort());
+        expect(drawing).toHaveLength(4);
         expect(m.tiles.find((t) => t.id === RAMA_VIEW)?.marks).toBeGreaterThan(100);
         expect(m.tiles.find((t) => t.id === 'interface')?.marks).toBeGreaterThan(100);
+        // AND THE NEW RUN DRAWS TOO, which is the whole point of landing a
+        // column rather than a caption: 162 of the 185 residues have a score
+        // and the other 23 have no column at all, so the line simply stops
+        expect(m.tiles.find((t) => t.id === 'conservation')?.marks).toBe(162);
         // no pane is too small to be a picture at the tighter budget
         for (const tile of drawing) expect(tile.drawn, `the ${tile.id ?? '?'} pane is ${String(tile.drawn)}px tall`).toBeGreaterThan(95);
       });

@@ -34,7 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ReactElement } from 'react';
-import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
+import { CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
 import { BLOCKED_TAG, PROT_BLOCKED, PROT_PLAN } from '../src/prot/plan.js';
 import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
@@ -95,15 +95,22 @@ const click = async (el: HTMLElement | null): Promise<void> => {
 
 const landedAct = (over: Partial<ActOutcome> = {}): ActOutcome => ({ stage: 'interactions', act: PAIRS_ACT, commit: 'c1', refusal: null, materialized: [], ...over });
 
-/** The three acts of a run that went as far as it could: two landed, one was refused. */
-const OUTCOMES: readonly ActOutcome[] = [
-  landedAct(),
-  landedAct({ act: CONTACTS_ACT, commit: 'c2', materialized: ['contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation'] }),
-  landedAct({ stage: 'surface', act: SURFACE_ACT, commit: null, refusal: 'act "residueSurface" threw: the solvent probe found no polymer atom to roll over' }),
-];
+/**
+ * THE FOUR ACTS OF A RUN THAT WENT AS FAR AS IT COULD — three landed, one was
+ * refused — each NAMED rather than reached for by index.
+ *
+ * They were indexed until the conservation stage landed and shifted every one
+ * of them by a position. A test that names the act it is about cannot be
+ * quietly re-pointed by a new act arriving at the front of the list.
+ */
+const CONSERVED_ACT = landedAct({ stage: 'conservation', act: CONSERVATION_ACT, commit: 'c0', materialized: [CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN] });
+const PAIRS_ROW = landedAct();
+const CONTACTS_ROW = landedAct({ act: CONTACTS_ACT, commit: 'c2', materialized: ['contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation'] });
+const SURFACE_REFUSED = landedAct({ stage: 'surface', act: SURFACE_ACT, commit: null, refusal: 'act "residueSurface" threw: the solvent probe found no polymer atom to roll over' });
+const OUTCOMES: readonly ActOutcome[] = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW, SURFACE_REFUSED];
 
 /** …and the same run with its last act landing instead, which is what the committed entry really does. */
-const ALL_LANDED: readonly ActOutcome[] = [OUTCOMES[0]!, OUTCOMES[1]!, landedAct({ stage: 'surface', act: SURFACE_ACT, commit: 'c3', materialized: [SASA_COLUMN, 'relative_sasa'] })];
+const ALL_LANDED: readonly ActOutcome[] = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW, landedAct({ stage: 'surface', act: SURFACE_ACT, commit: 'c3', materialized: [SASA_COLUMN, 'relative_sasa'] })];
 
 /**
  * A run shaped like one the orchestrator answers with — the fields the rows
@@ -115,6 +122,7 @@ const runWith = (over: Partial<ProtRun> = {}): ProtRun => ({
   pairs: { counts: { rows: 224, crossing: 21, byKind: [{ kind: 'hydrogen-bond', contacts: 120 }, { kind: 'hydrophobic', contacts: 104 }] } } as unknown as ProtRun['pairs'],
   contacts: null,
   surface: null,
+  conservation: null,
   ...over,
 });
 
@@ -191,12 +199,12 @@ describe('ALL SIX STEPS OF THE PLAN, and each one says what it is', () => {
     expect(panel.words()).toContain('refused');
     // the refusal itself is VERBATIM on the stage's own card and in its act
     // rows — never re-worded, and never on the stepper
-    expect(surface.detail).toBe(OUTCOMES[2]!.refusal);
+    expect(surface.detail).toBe(SURFACE_REFUSED.refusal);
     await panel.unmount();
   });
 
   it('NOT RUN: hollow and dashed, no word, no control, and no act it never dispatched is named', async () => {
-    const one = [OUTCOMES[0]!, OUTCOMES[1]!];
+    const one = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW];
     const panel = await stepper(one, runWith({ outcomes: one }));
     const surface = panel.at('surface');
     expect(surface.state).toBe('not-run');
@@ -206,12 +214,15 @@ describe('ALL SIX STEPS OF THE PLAN, and each one says what it is', () => {
     expect(panel.byLabel(showLabelOf(surface))).toBeNull();
     expect(panel.byLabel(focusLabelOf(surface))).toBeNull();
     const said = panel.words();
-    for (const id of PROT_ACT_ORDER.filter((a) => a !== PAIRS_ACT && a !== CONTACTS_ACT)) expect(said, `the stepper names "${id}", which this run never dispatched`).not.toContain(id);
+    for (const id of PROT_ACT_ORDER.filter((a) => a !== CONSERVATION_ACT && a !== PAIRS_ACT && a !== CONTACTS_ACT)) expect(said, `the stepper names "${id}", which this run never dispatched`).not.toContain(id);
     await panel.unmount();
   });
 
   it('RUNNING: the only state that moves, the only one with a progress hairline, and nothing clickable yet', async () => {
-    const panel = await stepper([OUTCOMES[0]!], null, [], { seekable: false });
+    // the FIRST stage has finished (its one act is back) and the second is the
+    // one in flight with one of its two acts back — which is what puts the
+    // hairline at half
+    const panel = await stepper([CONSERVED_ACT, PAIRS_ROW], null, [], { seekable: false });
     const interactions = panel.at('interactions');
     expect(interactions.state).toBe('running');
     const column = panel.column('interactions');
@@ -240,16 +251,21 @@ describe('THE THREE KINDS OF BLOCKED — one mark family, three sentences', () =
     await panel.unmount();
   });
 
-  it('says WHICH KIND under each one, in three different words', async () => {
+  it('says WHICH KIND under each one, in its own word — and no word for a kind nothing is', async () => {
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
     const said = panel.words();
-    // the world, this build, us — and the words are declared once
-    expect(said).toContain(BLOCKED_TAG['the world']);
+    // this build, us — the two kinds something really is on this desk now
     expect(said).toContain(BLOCKED_TAG['this build']);
     expect(said).toContain(BLOCKED_TAG.us);
-    expect(said).toContain('not available here');
     expect(said).toContain('not on this build');
     expect(said).toContain('not built yet');
+    /*
+      AND NOT `not available here`, which is the whole point: the conservation
+      stage wore that word for eight releases and LANDS now. A stepper that kept
+      printing it would be the screen being less honest than the def again,
+      which is the defect this suite was written for.
+    */
+    expect(said).not.toContain(BLOCKED_TAG['the world']);
     await panel.unmount();
   });
 
@@ -313,7 +329,7 @@ describe('THE STEP THAT LANDED BEFORE THE RECORD STARTED is a fourth kind of pre
     const shown = { [STRUCTURE_VIEW]: { color: 'chain' }, [RAMA_VIEW]: { x: 'phi', y: 'psi' }, [INTERFACE_VIEW]: { category: 'residue_key', y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } };
     const actColumns = actColumnsOf(stages);
     // every column the acts landed is on that side of the intersection
-    expect([...actColumns].sort()).toEqual([SASA_COLUMN, 'contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation', 'relative_sasa'].sort());
+    expect([...actColumns].sort()).toEqual([CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN, SASA_COLUMN, 'contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation', 'relative_sasa'].sort());
     // …so the parse owns the two pictures whose every bound column it read off
     // the file, and neither of the two an act landed a column for
     expect([...chartsOfStage(search, shown, actColumns)].sort()).toEqual([RAMA_VIEW, STRUCTURE_VIEW].sort());
@@ -349,21 +365,26 @@ describe('NOTHING BETWEEN THE STEPPER AND THE CHARTS', () => {
     expect(panel.host.querySelectorAll('[aria-expanded]')).toHaveLength(0);
     // ONE control per column, and that is all: six columns, six buttons
     expect(panel.host.querySelectorAll('button')).toHaveLength(6);
+    expect(panel.stages).toHaveLength(6);
     await panel.unmount();
   });
 
   it('keeps the plan’s accounting IN THE MARKS, which is what a reader counts', async () => {
     /*
       The note's counts went to the facts strip for one round and were dropped
-      with it: THE SIX MARKS ARE THE ACCOUNTING. Three solid circles, one
-      hatched with NOT AVAILABLE HERE under it, one with NOT ON THIS BUILD and
-      one with NOT BUILT YET — countable, and in a better register than prose.
+      with it: THE SIX MARKS ARE THE ACCOUNTING. FOUR solid circles now — the
+      parse's own step and three landed stages — one hatched with NOT ON THIS
+      BUILD under it and one with NOT BUILT YET, countable, and in a better
+      register than prose.
+
+      IT WAS THREE AND THREE. The conservation stage moved from the hatched half
+      to the solid half when it stopped being blocked, and this count is the
+      cheapest place a later edit that quietly un-lands it would be caught.
     */
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    expect(panel.stages.filter((s) => s.state === 'landed')).toHaveLength(3);
-    expect(panel.stages.filter((s) => s.blockedBy !== null)).toHaveLength(3);
+    expect(panel.stages.filter((s) => s.state === 'landed')).toHaveLength(4);
+    expect(panel.stages.filter((s) => s.blockedBy !== null)).toHaveLength(2);
     const said = panel.words();
-    expect(said).toContain('not available here');
     expect(said).toContain('not on this build');
     expect(said).toContain('not built yet');
     // and no count is re-stated as prose anywhere near the marks
@@ -390,9 +411,11 @@ describe('the connectors are a stated rule, not a guess', () => {
     // step 4 is the last that ran, so every boundary past it is FAR
     expect(views[at('interactions')]!.linkAfter).toBe('far');
     expect(views[at('hotspots')]!.linkBefore).toBe('far');
-    // step 1 ran (at the root) and step 2 never will: the run reached past it,
-    // so the boundary is NEAR rather than far
-    expect(views[at('search')]!.linkAfter).toBe('near');
+    // step 1 ran (at the root) and step 2 RUNS NOW TOO — it stopped being the
+    // stage the world blocked — so that boundary is solid, and the NEAR arm is
+    // asserted where the run really stops, at the first step past it
+    expect(views[at('search')]!.linkAfter).toBe('run');
+    expect(views[at('conservation')]!.linkBefore).toBe('run');
     // the two ends have no connector at all
     expect(views[0]!.linkBefore).toBeNull();
     expect(views[views.length - 1]!.linkAfter).toBeNull();
@@ -428,7 +451,11 @@ describe('the act rows moved to the record, and are unchanged', () => {
 
   it('carries no prose any more — the rows, and one Mono word for a stage that dispatched none', async () => {
     const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    const panel = await mount(detail(stages.find((s) => s.stage === 'conservation')!));
+    // A STEP THE DEF DISPATCHES NOTHING FOR. It used to be `conservation`,
+    // which is a landed stage with an act and a picture now, so the assertion
+    // moved to a step that really dispatches none — the one the plan declares
+    // and this build cannot perform.
+    const panel = await mount(detail(stages.find((s) => s.stage === 'hotspots')!));
     const said = panel.words();
     expect(said).toBe('no act dispatched');
     // the three sentences that used to sit above the rows are gone from here
@@ -443,17 +470,17 @@ describe('the act rows moved to the record, and are unchanged', () => {
     expect(panel.rows()).toHaveLength(1);
     expect(panel.rowButtons()).toHaveLength(0);
     expect(panel.words()).toContain('no commit, so there is nothing to seek to: this act landed none');
-    expect(panel.words()).toContain(OUTCOMES[2]!.refusal!);
+    expect(panel.words()).toContain(SURFACE_REFUSED.refusal!);
     await panel.unmount();
   });
 });
 
 describe('what a row says it landed', () => {
   it('names the columns an act wrote, and the table’s own counts for the act that writes none', () => {
-    expect(landedLine(OUTCOMES[1]!, runWith())).toBe('landed 3 columns on the residues table: contacts, interface_contacts, interface_separation');
-    expect(landedLine(OUTCOMES[0]!, runWith())).toBe('cut 224 contact rows, 21 of them between different chains (120 hydrogen-bond, 104 hydrophobic) — the act\'s own answer, which no clause in the data space reaches');
+    expect(landedLine(CONTACTS_ROW, runWith())).toBe('landed 3 columns on the residues table: contacts, interface_contacts, interface_separation');
+    expect(landedLine(PAIRS_ROW, runWith())).toBe('cut 224 contact rows, 21 of them between different chains (120 hydrogen-bond, 104 hydrophobic) — the act\'s own answer, which no clause in the data space reaches');
     // a landed act whose answer is not readable yet, while the run is still going
-    expect(landedLine(OUTCOMES[0]!, null)).toBe('landed a commit; what it answered is read when the run comes back');
+    expect(landedLine(PAIRS_ROW, null)).toBe('landed a commit; what it answered is read when the run comes back');
     // …and one that landed and wrote nothing, with the run in hand
     expect(landedLine(landedAct({ act: 'somethingElse' }), runWith())).toBe('landed a commit and wrote no column into the data space');
   });
@@ -461,7 +488,7 @@ describe('what a row says it landed', () => {
   it('is a button that seeks, and prints a throw from the seek door as a sentence', async () => {
     const panel = await mount(
       <ol aria-label="the acts this stage dispatched, in dispatch order">
-        <ActRow outcome={OUTCOMES[0]!} run={runWith()} say={() => undefined} onSeek={() => Promise.reject(new Error('the door fell over'))} />
+        <ActRow outcome={PAIRS_ROW} run={runWith()} say={() => undefined} onSeek={() => Promise.reject(new Error('the door fell over'))} />
       </ol>,
     );
     expect(panel.rowButtons()).toHaveLength(1);

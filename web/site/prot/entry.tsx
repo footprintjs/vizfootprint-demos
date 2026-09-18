@@ -32,7 +32,11 @@
  *   5. WHAT THIS DESK CANNOT SAY about this entry, read off those bytes
  *      (`entryNotes`) and printed beside the credit. One of them BLOCKS: an
  *      entry with no residue row draws nothing, and says that instead.
- *   6. the dashboard, the two stages, and a session view over an IN-PROCESS
+ *   5b. THE CURATED ALIGNMENTS the conservation stage CITES
+ *      (`src/prot/conservationEvidence.ts`). The committed example reads five
+ *      committed files and calls no service; every other entry costs three
+ *      small reads, each refusing in a sentence.
+ *   6. the dashboard, the three stages, and a session view over an IN-PROCESS
  *      session (`sessionSource`), not a poll.
  *
  * The one thing this page owns that the other three do not is the CREDIT line,
@@ -43,7 +47,8 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
-import { loadStructureOverHttp } from '../../../src/prot/http.js';
+import { loadStructureOverHttp, readCommittedOverHttp } from '../../../src/prot/http.js';
+import { conservationEvidenceFor } from '../../../src/prot/conservationEvidence.js';
 import { entryCredit, protTables, skippedTotal, type EntryCredit } from '../../../src/prot/etl.js';
 import { PROT_WORDS, RESIDUES_TABLE } from '../../../src/prot/def.js';
 import { openProtSurfaceAsync, protSurfaceProblems, type ProtSurface } from '../../../src/prot/session.js';
@@ -92,7 +97,25 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
   const notes = entryNotes(read, protTables(read.artifact.text));
   const blocked = blockingSentence(notes);
   if (blocked !== null) return { ok: false, sentence: blocked };
-  const surface = await openProtSurfaceAsync(read.artifact, { onOutcome });
+  /**
+   * STEP 5b — THE CURATED ALIGNMENTS THE CONSERVATION STAGE CITES, gathered
+   * BEFORE the dashboard is built.
+   *
+   * It is a fifth-and-a-half step rather than part of the ETL because the data
+   * is not this file's: it is somebody else's published, versioned work, and
+   * the stage's whole claim is that it cites it rather than computing it
+   * (`src/prot/conservationEvidence.ts`). The committed example reads the five
+   * files this repository committed and calls no service AT ALL — the same
+   * routing the bytes get, for the same two reasons — and every other entry
+   * costs three small reads from the archive and InterPro, each one of which
+   * refuses in a sentence rather than throwing.
+   *
+   * It is awaited rather than raced with the parse because the def needs it:
+   * an act declared with no evidence lands its own refusal, which is honest and
+   * is not what a reader of the example should get.
+   */
+  const evidence = await conservationEvidenceFor(entry, { committed: readCommittedOverHttp(siteBase()), archive: browserArchive });
+  const surface = await openProtSurfaceAsync(read.artifact, { onOutcome }, evidence);
   return {
     ok: true,
     booted: {
@@ -353,7 +376,7 @@ function Page(): JSX.Element {
   const opening = useRef<string | null>(null);
 
   const run = useCallback((entry: string): void => {
-    // ALREADY OPENING THIS ONE — do nothing. A boot runs two stages over Mol*'s
+    // ALREADY OPENING THIS ONE — do nothing. A boot runs three stages, two of them over Mol*'s
     // engines, so a double-click on a result row, or React's development-mode
     // double effect, would otherwise run the whole pipeline twice for the same
     // entry. Opening a DIFFERENT entry replaces this one, and the answer to the
@@ -414,7 +437,7 @@ function Page(): JSX.Element {
   if (phase.status === 'reading') {
     return (
       <Reading
-        what={`entry ${phase.entry}${phase.entry === EXAMPLE_ENTRY ? " from this repository's own committed bytes" : ' from the archive'}, the 3D viewer that draws it, and the two stages that find its contacts and measure its surface`}
+        what={`entry ${phase.entry}${phase.entry === EXAMPLE_ENTRY ? " from this repository's own committed bytes" : ' from the archive'}, the 3D viewer that draws it, and the three stages that place its residues in their families' alignments, find its contacts and measure its surface`}
         extra={
           // THE SAME STEPPER a reader will use on the desk, already on screen
           // and filling as each act lands. Nothing is seekable here and the note

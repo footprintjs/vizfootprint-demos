@@ -56,9 +56,9 @@
  * vouch for.
  */
 import { structureArtifact, type StructureArtifact } from './session.js';
-import { PROT_FILES } from '../data/files.js';
+import { PROT_CONSERVATION_FILES, PROT_FILES } from '../data/files.js';
 
-export { PROT_FILES };
+export { PROT_CONSERVATION_FILES, PROT_FILES };
 
 /**
  * The committed entry, fetched — the browser's `loadStructure`.
@@ -76,4 +76,35 @@ export async function loadStructureOverHttp(base: string | URL): Promise<Structu
   // record, so an error page served with a 200 is caught rather than parsed
   if (!text.startsWith('HEADER')) throw new Error(`the bytes at ${at} are not a PDB entry (no HEADER record on the first line) — nothing was parsed`);
   return structureArtifact(at, text);
+}
+
+/**
+ * ONE COMMITTED FILE, FETCHED — the browser adapter for
+ * `./conservationEvidence.ts` · `ReadCommitted`.
+ *
+ * The conservation stage's evidence for the example is five committed files
+ * (`src/data/files.ts` · `PROT_CONSERVATION_FILES`): the archive's entity
+ * records, two family matches and two curated alignments. They live under the
+ * site's own base exactly as the structure file does, and are read exactly as
+ * plainly — the alignment is Stockholm text and the records are JSON, so the
+ * source port has no carrier for the first of them either, and the digests
+ * that would have been versions are in
+ * `data/prot/conservation/PROVENANCE.json`.
+ *
+ * The one check this door makes is the one the CARRIER GUARD taught: a service
+ * or a mis-deployed site can answer 200 with an HTML error page, and an HTML
+ * document handed to a parser becomes rows nobody can read. So an answer that
+ * begins with `<` is refused here by name rather than parsed — and
+ * `./stockholm.ts` makes the same check again on the alignment's own text,
+ * because a guard at one door is a guard for one caller.
+ */
+export function readCommittedOverHttp(base: string | URL): (file: string) => Promise<string> {
+  return async (file) => {
+    const at = new URL(file, base).href;
+    const res = await fetch(at);
+    if (!res.ok) throw new Error(`the committed file at ${at} answered ${String(res.status)} ${res.statusText}`);
+    const text = await res.text();
+    if (text.trimStart().startsWith('<')) throw new Error(`the bytes at ${at} are an HTML document and not the committed file this desk asked for — nothing was parsed`);
+    return text;
+  };
 }

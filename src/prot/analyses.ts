@@ -1,17 +1,28 @@
 /**
- * THE THREE DECLARED ACTS — everything this desk computes beyond what the file
+ * THE FOUR DECLARED ACTS — everything this desk computes beyond what the file
  * says, as analyses the session performs and the log records.
  *
  * Before this module the protein desk landed NOTHING: every column it drew was
  * read off the entry's own coordinate records, and `./session.ts` said so. Now
- * two stages run, each one a declared analysis over the same committed bytes,
- * and the screen gains a picture when each one ends.
+ * three stages run and the screen gains a picture when each one ends — two of
+ * them declared analyses over the same committed bytes, and the third over a
+ * curated alignment somebody else published.
  *
  * | stage         | act                | channel   | what lands                                               |
  * |---------------|--------------------|-----------|----------------------------------------------------------|
  * | interactions  | {@link PAIRS_ACT}    | `table`   | `interactions` — one row per non-covalent contact         |
  * | interactions  | {@link CONTACTS_ACT} | `columns` | `contacts`, `interface_contacts`, `interface_separation`  |
  * | surface       | {@link SURFACE_ACT}  | `columns` | `sasa`, `relative_sasa`                                   |
+ * | conservation  | {@link CONSERVATION_ACT} | `columns` | `conservation`, `conservation_basis`                  |
+ *
+ * ── AND THE FOURTH ACT IS THE ONE WHOSE DATA IS NOT THIS FILE'S ────────────
+ * Three of them compute over the entry's own coordinates. The conservation act
+ * CITES a curated family alignment this project did not build — accession and
+ * version read out of the alignment's own header — and computes only where our
+ * residues sit in it, by the WEAKER of two methods, which the page says
+ * wherever it shows one of its numbers (`./placement.ts`). It is also the act
+ * that emptied `PROT_UNAVAILABLE_STAGES`, and that list's own note is where
+ * the reversal is written down.
  *
  * ── WHY STAGE A LANDS TWO ACTS, AND NOT ONE ─────────────────────────────────
  * This is the packet's finding, so it is written where the shape it forced
@@ -68,6 +79,10 @@ import type { RunnableFlowChart } from 'footprintjs';
 import type { AnalysisDef, AnalysisResult, ColumnsOutput, OutputColumnType, TableOutput } from 'vizfootprint/analysis';
 import type { AnalysisSlot } from 'vizfootprint/def';
 import { entryId } from './etl.js';
+import { SCORE_IS, SCORE_IS_NOT } from './conservation.js';
+import { ALIGNMENT_USED, type ConservationEvidence } from './conservationEvidence.js';
+import { foldConservation, type ConservationCounts } from './conservationFold.js';
+import { PLACEMENT_HERE, PLACEMENT_STRATEGIES } from './placement.js';
 import { headlessEntry } from './molstar.js';
 import { protInteractions, residueContactColumns, type DroppedContacts, type InteractionCounts, type InteractionRow } from './interactions.js';
 import { protSurface, type SurfaceCounts } from './surface.js';
@@ -78,6 +93,7 @@ import { protSurface, type SurfaceCounts } from './surface.js';
 export const PAIRS_ACT = 'interactionPairs';
 export const CONTACTS_ACT = 'residueContacts';
 export const SURFACE_ACT = 'residueSurface';
+export const CONSERVATION_ACT = 'residueConservation';
 
 /** The table {@link PAIRS_ACT} cuts. Never a declared table — see the file header. */
 export const INTERACTIONS_TABLE = 'interactions';
@@ -103,6 +119,19 @@ export const INTERFACE_SEPARATION_COLUMN = 'interface_separation';
 /** The columns {@link SURFACE_ACT} lands on `residues`. */
 export const SASA_COLUMN = 'sasa';
 export const RELATIVE_SASA_COLUMN = 'relative_sasa';
+/**
+ * The columns {@link CONSERVATION_ACT} lands on `residues`.
+ *
+ * `conservation_basis` is not decoration and is not a label: the two chains of
+ * this entry are scored against TWO DIFFERENT curated alignments, over
+ * different numbers of sequences, so a reader who read chain A's 0.8 and chain
+ * B's 0.8 as one scale would be comparing two different claims. The warning
+ * belongs in the DATA, beside the number, where a caption cannot be missed —
+ * and it carries the accession WITH ITS VERSION, read out of the alignment's
+ * own header (`./stockholm.ts`).
+ */
+export const CONSERVATION_COLUMN = 'conservation';
+export const CONSERVATION_BASIS_COLUMN = 'conservation_basis';
 
 /**
  * WHAT EACH COLUMN OF THE INTERACTION TABLE MEANS — declared here because
@@ -176,6 +205,26 @@ export interface SurfaceOutput extends ColumnsOutput {
 }
 
 /**
+ * The conservation act's answer — the two columns' counts, and every sentence
+ * a reader must see.
+ *
+ * `refusals` rides out on the output for the reason `PairsOutput.dropped` does:
+ * a chain with no family scores nothing while the OTHER chain's score stands,
+ * so the act LANDS and still has something to say. A refusal that only existed
+ * when the whole act failed would leave that state silent, which is the one
+ * failure this stage may not have.
+ */
+export interface ConservationOutput extends ColumnsOutput {
+  /** `null` only where no evidence was gathered at all — see {@link NO_CONSERVATION_EVIDENCE}. */
+  readonly counts: ConservationCounts | null;
+  readonly refusals: readonly string[];
+}
+
+/** What a def built with no family evidence says — the fifth refusal, and the one that is about this build rather than about the data. */
+export const NO_CONSERVATION_EVIDENCE =
+  'no family evidence was gathered for this entry, so nothing was placed and no residue is scored. The curated alignment this stage cites is read before the dashboard is built — from the files this repository committed for the example, or from the three services for any other entry — and this dashboard was built without it.';
+
+/**
  * THE ONE CAST IN THIS FILE, and the packaging fact behind it.
  *
  * `AnalysisDef.build()` is declared as returning `import('footprintjs').FlowChart`,
@@ -200,6 +249,22 @@ const libraryChart = (chart: RunnableFlowChart): LibraryChart => chart as unknow
 interface ActArgs {
   readonly residueKeys: readonly string[];
   readonly structureCharacters: number;
+}
+
+/**
+ * WHAT THE CONSERVATION ACT'S ARGS CARRY — the alignment, and the CITATION.
+ *
+ * Not the alignment's bytes: 158,134 characters on a commit log, for evidence
+ * that is somebody else's published file. What rides is what a reader of the
+ * log needs to check the claim — which family at which version, over how many
+ * sequences, and which of the two placement methods ran.
+ */
+interface ConservationArgs {
+  readonly residueKeys: readonly string[];
+  readonly entry: string | null;
+  readonly cites: readonly { readonly chain: string; readonly cited: string; readonly sequences: number; readonly which: string }[];
+  readonly method: string;
+  readonly weaker: boolean;
 }
 
 /** The rows the session reads at the cursor, narrowed to the one column these acts need. */
@@ -388,6 +453,101 @@ function surfaceAnalysis(structureText: string): AnalysisDef<readonly KeyedRow[]
 }
 
 /**
+ * STAGE C — HOW CONSERVED EACH RESIDUE IS, as two columns on `residues`.
+ *
+ * ── THE ONE ACT ON THIS DESK WHOSE DATA IS SOMEBODY ELSE'S ─────────────────
+ * The other three compute over the entry's own coordinates. This one CITES a
+ * curated alignment of a few hundred sequences that this project did not build
+ * — `PF00545.26`, accession and version, read out of the file's own Stockholm
+ * header rather than typed (`./stockholm.ts`) — and computes exactly one
+ * thing: where our residues sit in it. Four hops carry a column of that
+ * alignment to a row of this desk and each one is READ
+ * (`./conservationFold.ts` has the table; `./mapping.ts` owns the two the
+ * annotation stage will want too).
+ *
+ * ── AND IT IS PLACED BY THE WEAKER OF TWO METHODS, WHICH THE PAGE SAYS ─────
+ * `./placement.ts` is a port with two arms. The right one is the family's own
+ * profile HMM and it is declared here and refuses by name, because the HMM
+ * needs HMMER and a static page has nothing to run it on. What ran is a
+ * pairwise alignment to a consensus folded from the alignment's columns, and
+ * every number this act lands travels with the clause that says so — in the
+ * honesty note below, in the stage's own panel line and on the card.
+ *
+ * ── THE EVIDENCE IS CLOSED OVER, LIKE THE STRUCTURE TEXT ───────────────────
+ * The two alignments are 158,134 characters between them and they would ride
+ * on this act's commit log as arguments. So the evidence is closed over and the
+ * ARGS carry the citation instead: which alignment, with its version, how many
+ * sequences it holds and which method placed against it — the declarative facts
+ * a reader of the log needs, and the same choice the other three acts make
+ * about the structure file.
+ */
+function conservationAnalysis(evidence: ConservationEvidence | null): AnalysisDef<readonly KeyedRow[], ConservationOutput> {
+  const strategy = PLACEMENT_STRATEGIES[PLACEMENT_HERE];
+  return {
+    id: CONSERVATION_ACT,
+    kind: 'transform',
+    produces: 'columns',
+    inputs: RESIDUE_INPUTS,
+    honesty: {
+      notes:
+        `The alignment is CITED, not built: ${evidence === null ? 'no family alignment was read for this entry' : evidence.chains.flatMap((c) => c.families.map((f) => `${f.alignment.cited} (${String(f.alignment.rows.length)} sequences, the ${ALIGNMENT_USED} alignment)`)).join(' and ') || 'no family alignment was read for this entry'}. ` +
+        `WHAT THE SCORE IS: ${SCORE_IS} ${SCORE_IS_NOT} ` +
+        `WHICH METHOD PLACED IT: ${strategy.said}. ${strategy.why} ` +
+        'A residue outside the family\'s domain region, or one the placement gapped, has NO score — absent, never zero — and the count is on the card.',
+    },
+    build: () =>
+      libraryChart(
+        flowChart<{ readonly conservation: readonly (number | null)[]; readonly conservation_basis: readonly (string | null)[]; readonly counts: ConservationCounts | null; readonly refusals: readonly string[] }>(
+          'Place each residue in its family’s curated alignment and score its column',
+          (scope) => {
+            const args = scope.$getArgs() as unknown as ConservationArgs;
+            if (evidence === null) {
+              scope.$setValue('counts', null);
+              scope.$setValue('refusals', [NO_CONSERVATION_EVIDENCE]);
+              return;
+            }
+            const fold = foldConservation(evidence, args.residueKeys, PLACEMENT_HERE);
+            // NOTHING PLACED MEANS NO COLUMN, and the library is what says so:
+            // writing 185 nulls would put a column on the table that means
+            // nothing, while writing nothing at all leaves the session to
+            // refuse the read by name (*produced no values for column
+            // "conservation"*) exactly as it does for an act that threw.
+            if (fold.counts.scored > 0) {
+              scope.$setValue(CONSERVATION_COLUMN, fold.conservation);
+              scope.$setValue(CONSERVATION_BASIS_COLUMN, fold.conservation_basis);
+            }
+            scope.$setValue('counts', fold.counts);
+            scope.$setValue('refusals', fold.refusals);
+          },
+          'place-and-score',
+        ).build(),
+      ),
+    toRunInput: (rows): ConservationArgs => ({
+      residueKeys: keysOf(rows),
+      entry: evidence?.entry ?? null,
+      // THE CITATION, ON THE LOG: which alignment, at which version, over how
+      // many sequences, placed by which method. The bytes stay closed over.
+      cites: (evidence?.chains ?? []).flatMap((chain) => chain.families.map((family) => ({ chain: chain.chain, cited: family.alignment.cited, sequences: family.alignment.rows.length, which: ALIGNMENT_USED }))),
+      method: PLACEMENT_HERE,
+      weaker: strategy.weaker,
+    }),
+    readOutput: ({ snapshot }): AnalysisResult<ConservationOutput> => {
+      const state = snapshot.sharedState as Readonly<Record<string, unknown>>;
+      return {
+        ok: true,
+        output: {
+          as: 'columns',
+          table: ACT_TABLE,
+          columns: { [CONSERVATION_COLUMN]: { type: 'float' }, [CONSERVATION_BASIS_COLUMN]: { type: 'string' } },
+          counts: (state['counts'] as ConservationCounts | null) ?? null,
+          refusals: (valuesAt(state, 'refusals') as readonly string[]) ?? [],
+        },
+      };
+    },
+  };
+}
+
+/**
  * THE THREE ACTS, as the def declares them — over the bytes the def was built
  * on.
  *
@@ -396,8 +556,18 @@ function surfaceAnalysis(structureText: string): AnalysisDef<readonly KeyedRow[]
  * a file needs node, and this one runs in a browser (`./snapshot.ts` and
  * `./http.ts` are the two doors that fetch it).
  */
-export function protAnalyses(structureText: string): Readonly<Record<string, AnalysisSlot>> {
+export function protAnalyses(structureText: string, evidence: ConservationEvidence | null = null): Readonly<Record<string, AnalysisSlot>> {
+  // THE ORDER IS {@link PROT_ACT_ORDER}'S, and `tests/prot-def.test.ts` pins
+  // that: a registry in a different order from the list the orchestrator
+  // dispatches off would make the def's own key order a second, silent
+  // statement about which act lands first.
+  //
+  // THE FIRST ACT READS NO BYTES OF THE FILE. Its evidence is somebody else's
+  // published alignment, gathered before the dashboard was built, and a def
+  // built without it declares the act anyway — which lands a refusal rather
+  // than a missing stage. See {@link NO_CONSERVATION_EVIDENCE}.
   return {
+    [CONSERVATION_ACT]: conservationAnalysis(evidence) as unknown as AnalysisSlot,
     [PAIRS_ACT]: pairsAnalysis(structureText) as unknown as AnalysisSlot,
     [CONTACTS_ACT]: contactsAnalysis(structureText) as unknown as AnalysisSlot,
     [SURFACE_ACT]: surfaceAnalysis(structureText) as unknown as AnalysisSlot,
@@ -405,20 +575,41 @@ export function protAnalyses(structureText: string): Readonly<Record<string, Ana
 }
 
 /**
- * THE TWO STAGES AND THEIR ACTS, IN THE ORDER THEY MUST LAND — the list the
+ * THE THREE STAGES AND THEIR ACTS, IN THE ORDER THEY MUST LAND — the list the
  * orchestrator dispatches off and the captions name their stage from, so the
  * words on screen and the commits on the log cannot spell the acts differently.
  *
- * The order is not a dependency chain (all three read the same two things: the
- * entry's bytes and the residue keys) — it is the order a READER meets the
+ * The order is not a dependency chain — it is the order a READER meets the
  * pictures in, which is what the packet is about. Each act's `intent` is the
  * sentence the ledger carries, written down once here.
+ *
+ * CONSERVATION IS FIRST, for two reasons that agree: the PLAN publishes it as
+ * step 2, the earliest analysis stage of the pipeline (`./plan.ts`), and it is
+ * the one act that parses no headless structure — so the first picture to
+ * arrive is the one that costs the least to land. The two interaction acts and
+ * the surface act read the same two things after it (the entry's bytes and the
+ * residue keys) and still land in the order they always did, which is why the
+ * cursor comes to rest on the surface run exactly as it did before.
  */
 export const PROT_STAGES: readonly {
   readonly stage: string;
   readonly label: string;
   readonly acts: readonly { readonly id: string; readonly intent: string }[];
 }[] = [
+  {
+    stage: 'conservation',
+    // THE SAME LABEL THIS STAGE HAS CARRIED SINCE IT WAS FIRST DECLARED, when
+    // it was declared UNAVAILABLE. The stage changed; what it is called did not,
+    // so nothing on the screen has to be re-read.
+    label: 'How conserved each residue is across the family',
+    acts: [
+      {
+        id: CONSERVATION_ACT,
+        intent:
+          'cite the curated alignment of the family each chain belongs to — accession and version, read out of the alignment\'s own header — score every one of its family positions by the Shannon entropy of that column, and land the score on the residues this desk\'s own rows carry by PLACING our sequence in it: absent, never zero, for a residue outside the family\'s domain region or one the placement gapped, and placed by the weaker of the two methods, which the page says wherever it shows a number',
+      },
+    ],
+  },
   {
     stage: 'interactions',
     label: 'Every non-covalent contact in the entry',
@@ -438,40 +629,43 @@ export const PROT_STAGES: readonly {
 export const PROT_ACT_ORDER: readonly string[] = PROT_STAGES.flatMap((s) => s.acts.map((a) => a.id));
 
 /**
- * ONE MORE STAGE THIS DESK DECLARES AND CANNOT PERFORM — declared and
- * UNAVAILABLE, which is a different statement from pending.
+ * A STAGE THIS DESK DECLARED AND COULD NOT PERFORM — and the list is EMPTY
+ * NOW, which is the whole story of this packet.
  *
- * The stepper shows the plan, and a plan is a declared fact, so showing it is
- * honest. What is not honest is a circle that waits forever: a reader looking at
- * a pending stage is being told it is coming. So a stage this page cannot run at
- * all says so, with the reason, and the reason is MEASURED rather than assumed.
+ * ── WHAT IT SAID, AND WHY IT WAS WRONG ─────────────────────────────────────
+ * For eight releases `conservation` was declared here, with a measured reason:
+ * *"this stage needs a sequence-database search, and a static page cannot make
+ * one — both public services answer without an access-control-allow-origin
+ * header."* Every clause of that was true and the CONCLUSION was wrong,
+ * because the premise underneath it was never checked: that answering *how
+ * conserved is this residue* requires searching a database at all.
  *
- * ── WHY THE CONSERVATION TRACK CANNOT RUN HERE ──────────────────────────────
- * "How conserved is this residue across the protein's family" is a question
- * about OTHER SEQUENCES, so it needs a database search, and a static page has
- * only the browser's own fetch to make one with. Both public search services
- * answer WITHOUT `access-control-allow-origin` — `blast.ncbi.nlm.nih.gov` and
- * EBI's HMMER — so the browser discards the answer before this page can read a
- * byte of it. No amount of code on this side changes that: it is the other
- * side's header. A served build with a process behind it could make the same
- * request and hand the rows over; this build cannot, and it is the build the
- * reader is looking at.
+ * It does not, for a protein in a KNOWN FAMILY. Somebody else has already
+ * aligned that family's sequences, published the alignment, and versioned it —
+ * and three services hand the pieces to a browser with
+ * `access-control-allow-origin: *`: the archive's own entity records
+ * (`./entities.ts`), InterPro's family match and that family's curated
+ * alignment (`./family.ts`). So the stage runs here, as {@link PROT_STAGES}'s
+ * third entry, and the only thing it computes is where our residues sit in
+ * work it cites.
  *
- * It is a SEPARATE list from {@link PROT_STAGES} on purpose. That one is what
- * `./orchestrator.ts` dispatches, and a stage with no acts in it would either
- * dispatch nothing (a stage that lands nothing and says nothing) or fail the
- * orchestrator's own two-stage guard. One list is the work; this one is the
- * declaration that there is work this desk cannot do.
+ * ── THE LIST STAYS, AND THAT IS DELIBERATE ─────────────────────────────────
+ * It is the seam a stage measured impossible on THIS build is declared
+ * through: `./plan.ts` resolves a blocked step's reason from whichever list
+ * owns it, and the stepper has a state and a mark for it
+ * (`web/src/protStages.ts` · `'unavailable'`). Deleting the door because
+ * nothing is standing in it today would mean the next such stage arrives with
+ * nowhere honest to go — and the plan's own load-time judge already refuses a
+ * plan that disagrees with whatever is in here.
+ *
+ * ── AND THE LESSON, WRITTEN WHERE THE CLAIM WAS ────────────────────────────
+ * A measured refusal is worth more than a guess and is still only as good as
+ * the QUESTION it was measured against. Both services really do refuse a
+ * browser; nobody had asked whether the answer needed them.
  */
 export const PROT_UNAVAILABLE_STAGES: readonly {
   readonly stage: string;
   readonly label: string;
   /** Why this page cannot perform it — printed on the stepper verbatim. */
   readonly why: string;
-}[] = [
-  {
-    stage: 'conservation',
-    label: 'How conserved each residue is across the family',
-    why: 'this stage needs a sequence-database search, and a static page cannot make one: both public services — blast.ncbi.nlm.nih.gov and EBI HMMER — answer without an access-control-allow-origin header, so the browser throws the answer away before this page can read it. That is the other side\'s header, not a gap in this code. A build with a server behind it could run the search and hand the rows over; this build is not that build, so the stage is declared and unavailable rather than left pending.',
-  },
-];
+}[] = [];

@@ -1,6 +1,6 @@
 /**
- * THE PROTEIN DESK'S DEFINITION — one table, six views, three declared acts, and
- * the first third-party chart this repository has ever hosted.
+ * THE PROTEIN DESK'S DEFINITION — one table, seven views, four declared acts,
+ * and the first third-party chart this repository has ever hosted.
  *
  * ── The file, and whose it is ───────────────────────────────────────────────
  * This definition is built from WHATEVER ENTRY the host parsed — `protDef` takes
@@ -38,8 +38,10 @@
  * The third question the file does NOT answer, and two declared acts do
  * (`./analyses.ts`): a stage finds every non-covalent contact in the entry with
  * Mol*'s own interaction engine, and a second rolls a solvent probe over it.
- * Each lands its evidence as a commit with its own chart — so two of the six
- * views ARRIVE, and the read of either is refused in the library's own words
+ * A third cites a curated family alignment somebody else published and places
+ * this entry's residues in it. Each lands its evidence as a commit with its own
+ * chart — so three of the seven views ARRIVE, and the read of any of them is
+ * refused in the library's own words
  * until its stage has ended and again the moment a reader steps the cursor back
  * behind that commit. That progression is what this desk is now for; every
  * other statement below is about what makes it honest.
@@ -71,7 +73,8 @@ import type { EncodingRules } from 'vizfootprint/def';
 import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
 import type { ProtTables, ResidueRow } from './etl.js';
-import { ACT_KEY_COLUMN, ACT_TABLE, CONTACTS_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PAIRS_ACT, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, protAnalyses } from './analyses.js';
+import { ACT_KEY_COLUMN, ACT_TABLE, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PAIRS_ACT, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, protAnalyses } from './analyses.js';
+import type { ConservationEvidence } from './conservationEvidence.js';
 
 // ── the views, named once ────────────────────────────────────────────────────
 
@@ -92,6 +95,21 @@ export const INTERFACE_VIEW = 'interface';
 /** STAGE B'S CHART — accessible surface area over sequence position, one run per chain. */
 export const SURFACE_VIEW = 'surface';
 /**
+ * STAGE C'S CHART — how conserved each residue's column is in its family's
+ * curated alignment, over sequence position, one run per chain.
+ *
+ * A RUN and not a bar, for the reason the surface run is one: the quantity is
+ * a profile along the sequence and what a reader looks for is where it rises
+ * and falls, which a line says and 185 separate bars do not.
+ *
+ * TWO RUNS OVER TWO DIFFERENT SCALES, and that is the one thing about this
+ * picture a reader has to know: chain A's line is scored against `PF00545.26`
+ * and chain B's against `PF01337.25`, over 283 and 69 curated sequences. The
+ * lines share an axis and are NOT one measurement — which is why every score
+ * carries `conservation_basis` beside it and why the caption says so out loud.
+ */
+export const CONSERVATION_VIEW = 'conservation';
+/**
  * THE RECEIPT — the pair table, as rows.
  *
  * Not a chart and not on the grammar: it draws the rows the `interactionPairs`
@@ -108,7 +126,7 @@ export const PAIRS_VIEW = 'pairs';
 export const SHEET_VIEW = 'sheet';
 
 /** Every view this def declares, in the order a reader meets them. */
-export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW] as const;
+export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW] as const;
 
 /**
  * THE RECEIPT VIEWS — which view draws WHICH ACT'S OWN ANSWER, by the act that
@@ -188,6 +206,12 @@ const SURFACE: ActorMeta = {
   label: 'How much of each residue the solvent can reach',
   does: 'drag across the run to keep a range of sequence positions — and, as with the bars, only once the act that rolled the probe has landed',
 };
+const CONSERVATION: ActorMeta = {
+  actor: 'user',
+  label: 'How conserved each residue’s column is in its family’s alignment',
+  does:
+    'drag across the run to keep a range of sequence positions — and only once the stage that places the residues has landed. The two chains’ lines are scored against two DIFFERENT curated alignments, so they share an axis and are not one scale',
+};
 const PAIRS: ActorMeta = {
   actor: 'user',
   label: 'Every contact the engine found, as rows',
@@ -195,7 +219,7 @@ const PAIRS: ActorMeta = {
 };
 const SHEET: ActorMeta = {
   actor: 'user',
-  label: 'Every residue, as the file gives it — and everything the two stages landed on it',
+  label: 'Every residue, as the file gives it — and everything the three stages landed on it',
   does: 'read the rows behind every picture, oldest chain first, and export the receipt',
 };
 
@@ -211,7 +235,7 @@ const SHEET: ActorMeta = {
  * are about.
  */
 const CAPTION_TAIL =
-  'drawn in three dimensions by Mol* — code this project did not write — and again as the two angles that describe each residue’s backbone. Both of those are read straight off the file. The other two pictures are not there when the page opens: a stage finds every non-covalent contact in the entry, a second rolls a solvent probe over it, and each one lands its evidence as a commit. Until a stage ends its chart is refused at the read, in the library’s own words, and stepping the cursor back behind that commit refuses it again — the screen un-builds because the log does.';
+  'drawn in three dimensions by Mol* — code this project did not write — and again as the two angles that describe each residue’s backbone. Both of those are read straight off the file. The other three pictures are not there when the page opens: a stage places each residue in its family’s curated alignment and scores its column, a second finds every non-covalent contact in the entry, a third rolls a solvent probe over it, and each one lands its evidence as a commit. Until a stage ends its chart is refused at the read, in the library’s own words, and stepping the cursor back behind that commit refuses it again — the screen un-builds because the log does. One of those three cites somebody else’s published, versioned alignment rather than reading this file, and places our residues in it by the weaker of the two methods there are — which it says wherever it shows one of its numbers.';
 
 export const PROT_WORDS = {
   /**
@@ -230,7 +254,7 @@ export const PROT_WORDS = {
    * rather than in the slot where a name goes.
    */
   name: 'Protein Hot Spot Workbench',
-  title: 'One residue, four pictures — and two of them arrive',
+  title: 'One residue, five pictures — and three of them arrive',
   caption: `A protein structure as its depositors solved it, ${CAPTION_TAIL}`,
 } as const;
 
@@ -444,6 +468,18 @@ export const PROT_ENCODINGS: readonly ViewEncodingDecl[] = [
   { viewId: STRUCTURE_VIEW, chartKind: 'structure', channels: ['color'], initial: { color: 'chain' } },
   { viewId: INTERFACE_VIEW, chartKind: 'bar', channels: ['category', 'y'], initial: { category: RESIDUE_KEY, y: INTERFACE_CONTACTS_COLUMN } },
   { viewId: SURFACE_VIEW, chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } },
+  /*
+    STAGE C'S RUN — declared before its column exists, exactly like the two
+    above it, and for the same reason: the read is what judges a binding, at
+    every cursor, so a gesture here is refused in the library's own words
+    (*no column "conservation" in table "residues"*) until the act lands and
+    refused again the moment a reader steps behind that commit.
+
+    `x: 'resnum'` and not the residue key, for the law `CHART_REQUIREMENTS.line`
+    states by name — *an identifier along a run is a lie about order* — which is
+    why both chains are drawn over one numbering and told apart by colour.
+  */
+  { viewId: CONSERVATION_VIEW, chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: CONSERVATION_COLUMN, color: 'chain' } },
 ];
 
 /**
@@ -576,6 +612,27 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
       },
     },
     {
+      viewId: CONSERVATION_VIEW,
+      slots: {
+        title: { text: 'How conserved each residue is across its family', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        altShort: { text: 'One line per chain of how conserved each residue’s column is in its family’s curated alignment, against its residue number. Empty until the stage that places the residues has landed.', author: { kind: 'human' }, levels: ['construction'] },
+        altLong: {
+          text:
+            `How well the residue at each position is agreed on across a curated alignment of its family's sequences — a score between 0 and 1, drawn against the number the depositors gave the residue, with one line per chain. ` +
+            `THE DATA IS NOT THIS DESK'S AND IS NAMED AS SUCH: the alignment is somebody else's published, versioned work, cited on each score by the \`conservation_basis\` column beside it, and the only thing computed here is WHERE THIS ENTRY'S RESIDUES SIT IN IT. ` +
+            `THE TWO LINES ARE NOT ONE SCALE. The chains belong to two different families, so they are scored against two different alignments over two different numbers of sequences, and comparing a value on one line with a value on the other is comparing two claims. The basis column is what says which is which. ` +
+            `THE SCORE IS SHANNON ENTROPY over the alignment's own column, gaps counted as a state, normalised and subtracted from one — it is NOT a published conservation grade: those estimate the evolutionary rate at a site against a phylogenetic tree and a substitution model, and nothing here is reproducing them. ` +
+            `AND IT WAS PLACED BY THE WEAKER OF TWO METHODS. The right one is the family's own profile HMM, which this build cannot run; what ran is a pairwise alignment to a consensus folded from the alignment's columns, and the page says so wherever it shows one of these numbers. ` +
+            `A residue outside the region the family describes, or one the placement could not place, has NO score — absent, never zero — so its line simply stops. ` +
+            `LIKE THE TWO PICTURES BESIDE IT, this one arrives with its stage: the columns are landed by an act, refused at the read before it and refused again behind it.`,
+          author: { kind: 'human' },
+          levels: ['construction'],
+          basis: { columns: ['resnum', 'chain', CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN] },
+        },
+        howToRead: { author: { kind: 'derived' } },
+      },
+    },
+    {
       viewId: PAIRS_VIEW,
       // NO `howToRead`, for the same reason the sheet has none: it declares no
       // encoding surface, so there are no bindings to derive a line from.
@@ -593,7 +650,7 @@ function protProse(tables: ProtTables): readonly ProseDecl[] {
       // derive from*. The same sentence is what the structure view would earn if
       // it declared no surface either (see {@link PROT_ENCODING_RULES}).
       slots: {
-        title: { text: 'Every residue, as the file gives it — and every column the two stages landed on it', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        title: { text: 'Every residue, as the file gives it — and every column the three stages landed on it', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
       },
     },
   ];
@@ -662,13 +719,13 @@ export function protGrains(): readonly { readonly viewId: string; readonly keys:
  * const text = readFileSync('data/prot/1ay7.pdb', 'utf8');
  * const def = protDef(protTables(text), text);
  * def.defaultTable;                       // 'residues'
- * Object.keys(def.analyses ?? {});        // the three acts, declared
+ * Object.keys(def.analyses ?? {});        // the four acts, declared
  * buildDashboard(def).def.encodings;      // four surfaces, two of them over columns no act has landed
  * ```
  *
  * ── WHY THE TEXT IS A SECOND PARAMETER ─────────────────────────────────────
- * The three declared acts read the STRUCTURE, not the rows: they parse a
- * headless Mol* model of their own and compute over its atoms
+ * THREE of the four declared acts read the STRUCTURE, not the rows: they parse
+ * a headless Mol* model of their own and compute over its atoms
  * (`./analyses.ts`). So the def has to be built over the same bytes the ETL
  * read, and the honest way to say that is to ask for them — a def whose acts
  * read a file and whose signature does not mention one would be a def that
@@ -676,28 +733,40 @@ export function protGrains(): readonly { readonly viewId: string; readonly keys:
  * already has them: `./session.ts` from the artifact, `./cards.ts` from its
  * input.
  *
+ * ── AND WHY THE EVIDENCE IS A THIRD ─────────────────────────────────────────
+ * The fourth act reads no byte of this file. It CITES a curated family
+ * alignment somebody else published, and that is gathered before the dashboard
+ * is built (`./conservationEvidence.ts`) for the same reason the bytes are
+ * asked for: a def that fetched it behind its caller's back would be a def
+ * making a request nobody declared. `null` is a legal argument and lands the
+ * act's own refusal, which is what a def built for a card or a lint sees.
+ *
  * The text is NOT copied into the declaration. It is closed over by the acts,
  * and what rides on their commits is its character count — the one thing about
  * this file a host can vouch for (`./http.ts` and `./session.ts` say why no
  * carrier will vouch for more).
  */
-export function protDef(tables: ProtTables, structureText: string): DashboardDef {
+export function protDef(tables: ProtTables, structureText: string, evidence: ConservationEvidence | null = null): DashboardDef {
   return {
     meta: { title: 'A protein complex — vizfootprint on one PDB entry' },
     data: protSources(tables.residues),
     actors: {
       [STRUCTURE_VIEW]: STRUCTURE,
       [RAMA_VIEW]: RAMA,
+      // the order is {@link PROT_VIEWS}' — the order a reader meets them in,
+      // which `tests/prot-def.test.ts` pins so the registry cannot become a
+      // second, silent statement of it
+      [CONSERVATION_VIEW]: CONSERVATION,
       [INTERFACE_VIEW]: INTERFACE,
       [SURFACE_VIEW]: SURFACE,
       [PAIRS_VIEW]: PAIRS,
       [SHEET_VIEW]: SHEET,
     },
     // THE THREE ACTS, over the bytes this def was built on. Declared here and
-    // dispatched by `./orchestrator.ts`, two stages in order — and `PROT_STAGES`
+    // dispatched by `./orchestrator.ts`, three stages in order — and `PROT_STAGES`
     // is the one list that says which act belongs to which stage, so the
     // captions and the chart cannot disagree about it.
-    analyses: protAnalyses(structureText),
+    analyses: protAnalyses(structureText, evidence),
     encodings: protEncodings(),
     grains: protGrains(),
     // THE HONEST CAPABILITY ENVELOPE, one view at a time.
@@ -739,6 +808,10 @@ export function protDef(tables: ProtTables, structureText: string): DashboardDef
       { viewId: RAMA_VIEW, canProbe: true, encodings: ['interval'] },
       { viewId: INTERFACE_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: SURFACE_VIEW, canProbe: true, encodings: ['interval'] },
+      // `conservation` emits an INTERVAL and nothing else — `VizLine`'s only
+      // gesture is its horizontal brush, which here is a range of residue
+      // numbers. No point click, so a `point` would be a voice it lacks.
+      { viewId: CONSERVATION_VIEW, canProbe: true, encodings: ['interval'] },
       { viewId: PAIRS_VIEW, canProbe: false },
       { viewId: SHEET_VIEW, canProbe: false },
     ],

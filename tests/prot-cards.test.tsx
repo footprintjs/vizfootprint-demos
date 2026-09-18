@@ -29,7 +29,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
-import { INTERFACE_VIEW, PAIRS_VIEW, PROT_ENCODINGS, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, PROT_ENCODINGS, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { entryCredit, protTables } from '../src/prot/etl.js';
 import { ARCHIVE_LICENCE } from '../src/prot/archive.js';
 import { PROT_FILES } from '../src/data/files.js';
@@ -111,6 +111,10 @@ const OUTCOMES: readonly ActOutcome[] = [
 const RUN: ProtRun = {
   outcomes: OUTCOMES,
   narrative: [],
+  // this file is about the two interaction/surface stages' counts, so the
+  // conservation act's answer is absent — which is what a run with no family
+  // evidence really carries
+  conservation: null,
   pairs: {
     rows: [{ interaction_key: 'k1' }],
     counts: {
@@ -487,7 +491,10 @@ describe('THE L: a focus that fills its slot, a strip of wide tiles, a column of
     expect(shapeOfView(PAIRS_VIEW)).toBe('tall');
     // …and it is the DEF's own `chartKind` that decides it, which is why a view
     // the def gives no encoding surface falls to `tall` rather than to a guess
-    expect(PROT_ENCODINGS.map((e) => e.chartKind).sort()).toEqual(['bar', 'line', 'scatter', 'structure']);
+    // TWO LINES NOW: the surface run and the conservation run, both plotted
+    // against sequence position and both unreadable narrow
+    expect(shapeOfView(CONSERVATION_VIEW)).toBe('wide');
+    expect(PROT_ENCODINGS.map((e) => e.chartKind).sort()).toEqual(['bar', 'line', 'line', 'scatter', 'structure']);
   });
 
   it('orders what waits by the PLAN’s own steps, with a picture no step produced last', () => {

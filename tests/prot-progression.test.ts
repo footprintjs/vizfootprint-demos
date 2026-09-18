@@ -27,15 +27,28 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement, type ReactElement } from 'react';
 import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
-import { INTERFACE_VIEW, PAIRS_VIEW, RESIDUE_KEY, SURFACE_VIEW } from '../src/prot/def.js';
-import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RESIDUE_KEY, SURFACE_VIEW } from '../src/prot/def.js';
+import { CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
 import { openProtSurfaceAsync, openProtSurfaceUnrun, probeTheUnlandedColumns, protSurfaceProblems, residuesAt, type ProtSurface } from '../src/prot/session.js';
 import { runProtStages } from '../src/prot/orchestrator.js';
-import { loadStructure } from '../src/prot/snapshot.js';
+import { loadStructure, readCommittedFile } from '../src/prot/snapshot.js';
+import { evidenceFromCommitted } from '../src/prot/conservationEvidence.js';
 import { useProtCells, type ProtDeskData } from '../web/src/protCells.js';
 import type { Row } from '../web/src/derive.js';
 
 const ARTIFACT = loadStructure();
+
+/**
+ * THE CONSERVATION STAGE'S OWN EVIDENCE, off the files this repository
+ * committed — read ONCE for the whole suite.
+ *
+ * It is handed to every door below because a surface opened without it declares
+ * the act and lands its refusal, which is honest and is not what the committed
+ * example does. The read touches no service at all
+ * (`tests/prot-conservation.test.ts` counts the calls and asserts zero); it is
+ * five committed files, exactly as the structure file above is one.
+ */
+const EVIDENCE = await evidenceFromCommitted('1AY7', readCommittedFile);
 
 /** The gesture the bar chart's actor meta advertises: a click on one bar. */
 const pickOneContact = (surface: ProtSurface) =>
@@ -55,6 +68,16 @@ const keepTheBuried = (surface: ProtSurface) =>
     field: SASA_COLUMN,
     range: [0, 1],
     cause: { requestedBy: 'user', computedBy: 'user', intent: 'keep the residues the solvent barely reaches' },
+  });
+
+/** The gesture the conservation run's actor meta advertises: a drag across the axis, keeping the best-agreed columns. */
+const keepTheConserved = (surface: ProtSurface) =>
+  surface.session.dispatch({
+    verb: 'filter',
+    viewId: CONSERVATION_VIEW,
+    field: CONSERVATION_COLUMN,
+    range: [0.9, 1],
+    cause: { requestedBy: 'user', computedBy: 'user', intent: 'keep the residues whose column the family agrees on most' },
   });
 
 /** The sentence a dispatch was refused with, or `null` when it landed. */
@@ -113,7 +136,7 @@ function cellMarkup(surface: ProtSurface, viewId: string): string {
 
 describe('before either stage: two declared charts, and the library’s own refusal at each', () => {
   it('refuses a gesture at both charts, naming the column no act has landed', async () => {
-    const surface = await openProtSurfaceUnrun(ARTIFACT);
+    const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
     // the session has nothing on it at all — a refused dispatch lands no commit,
     // and nothing else has been dispatched
     expect(surface.session.commits('path')).toHaveLength(0);
@@ -129,7 +152,7 @@ describe('before either stage: two declared charts, and the library’s own refu
   });
 
   it('and the two cells PRINT that sentence, verbatim, instead of drawing an empty axis', async () => {
-    const surface = await openProtSurfaceUnrun(ARTIFACT);
+    const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
     const refusals = await probeTheUnlandedColumns(surface.session);
     const collected: ProtSurface = { ...surface, refusals };
     for (const [viewId, column] of [
@@ -148,21 +171,21 @@ describe('before either stage: two declared charts, and the library’s own refu
   });
 
   it('a gesture ACCEPTED here would be a fault, and the surface says so rather than swallowing it', async () => {
-    const surface = await openProtSurfaceUnrun(ARTIFACT);
+    const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
     const refusals = await probeTheUnlandedColumns(surface.session);
     // both refused, so both sentences are kept
     expect(Object.values(refusals).every((s) => s !== null)).toBe(true);
     // AND THE READING IS TWO-WAY: on a surface whose stages have run, a gesture
     // that came back accepted (`null`) is reported as a problem, because it would
     // mean the column existed before its act
-    const pretend: ProtSurface = { ...surface, refusals: { [INTERFACE_VIEW]: null, [SURFACE_VIEW]: refusals[SURFACE_VIEW] ?? null }, run: { outcomes: [], narrative: [], pairs: null, contacts: null, surface: null } };
+    const pretend: ProtSurface = { ...surface, refusals: { [INTERFACE_VIEW]: null, [SURFACE_VIEW]: refusals[SURFACE_VIEW] ?? null }, run: { outcomes: [], narrative: [], pairs: null, contacts: null, surface: null, conservation: null } };
     expect(protSurfaceProblems(pretend)).toEqual([`the gesture at "${INTERFACE_VIEW}" was ACCEPTED before its stage ran — the column it reads was already there, so this desk's account of its own pipeline is wrong`]);
   });
 });
 
 describe('the two stages, landing one at a time', () => {
   it('lands its acts in the stages’ order — two commits for the first stage, one for the second', async () => {
-    const surface = await openProtSurfaceUnrun(ARTIFACT);
+    const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
     expect(surface.session.commits('path')).toHaveLength(0);
     // the boot's own order: collect the two refusals, THEN run the stages — so
     // `protSurfaceProblems` can judge both halves (an act refused is a fault, and
@@ -170,20 +193,23 @@ describe('the two stages, landing one at a time', () => {
     const refusals = await probeTheUnlandedColumns(surface.session);
     const run = await runProtStages(surface.session);
     expect(protSurfaceProblems({ ...surface, refusals, run })).toEqual([]);
-    // ONE COMMIT PER ACT, in the order the two stages dispatch them
+    // ONE COMMIT PER ACT, in the order the three stages dispatch them —
+    // conservation first, because the plan publishes it as step 2 and it is the
+    // one act that parses no headless structure
     expect(run.outcomes.map((o) => [o.stage, o.act])).toEqual([
+      ['conservation', CONSERVATION_ACT],
       ['interactions', PAIRS_ACT],
       ['interactions', CONTACTS_ACT],
       ['surface', SURFACE_ACT],
     ]);
-    expect(run.outcomes.map((o) => o.refusal)).toEqual([null, null, null]);
-    expect(surface.session.commits('path')).toHaveLength(3);
+    expect(run.outcomes.map((o) => o.refusal)).toEqual([null, null, null, null]);
+    expect(surface.session.commits('path')).toHaveLength(4);
     expect(surface.session.commits('path').map((c) => c.viewId)).toEqual(PROT_ACT_ORDER.map((act) => `analysis:${act}`));
     // THE COUNT PER STAGE, which is what "the screen gains a picture when a stage
-    // ends" comes down to: stage one is +2 and stage two is +1. Two rather than
-    // one because the pair table cannot carry a chart, so the same evidence has to
-    // land again at the residue grain (src/prot/analyses.ts).
-    expect(PROT_STAGES.map((s) => s.acts.length)).toEqual([2, 1]);
+    // ends" comes down to: +1, then +2, then +1. The middle one is two rather
+    // than one because the pair table cannot carry a chart, so the same evidence
+    // has to land again at the residue grain (src/prot/analyses.ts).
+    expect(PROT_STAGES.map((s) => s.acts.length)).toEqual([1, 2, 1]);
     // and every act's cause carries the intent the def wrote down — the ledger's
     // sentence and the declaration cannot drift
     for (const [index, commit] of surface.session.commits('path').entries()) {
@@ -192,10 +218,11 @@ describe('the two stages, landing one at a time', () => {
     }
   });
 
-  it('lands three columns from the first stage and two from the second — and not the pair table, which no act can land', async () => {
-    const surface = await openProtSurfaceUnrun(ARTIFACT);
+  it('lands two columns from the first stage, three from the second and two from the third — and not the pair table, which no act can land', async () => {
+    const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
     const run = await runProtStages(surface.session);
     expect(run.outcomes.map((o) => [o.act, [...o.materialized]])).toEqual([
+      [CONSERVATION_ACT, [CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN]],
       // THE TABLE CHANNEL MATERIALIZES NOTHING, and that is the finding: the rows
       // came back in the act's own answer and the data space never saw them
       [PAIRS_ACT, []],
@@ -219,7 +246,7 @@ describe('the two stages, landing one at a time', () => {
   });
 
   it('and `why` on each new chart reaches the act that made its column', async () => {
-    const surface = await openProtSurfaceAsync(ARTIFACT);
+    const surface = await openProtSurfaceAsync(ARTIFACT, undefined, EVIDENCE);
     const path = surface.session.commits('path');
     for (const [viewId, act] of [
       [INTERFACE_VIEW, CONTACTS_ACT],
@@ -236,7 +263,7 @@ describe('the two stages, landing one at a time', () => {
   });
 
   it('keeps an account of the run in a recorder, one entry per stage', async () => {
-    const surface = await openProtSurfaceUnrun(ARTIFACT);
+    const surface = await openProtSurfaceUnrun(ARTIFACT, EVIDENCE);
     const run = await runProtStages(surface.session);
     // The narrative is the footprintjs recorder's own, collected during the
     // traversal: it names each stage by the label the def gave it, in order. It is
@@ -251,7 +278,7 @@ describe('the two stages, landing one at a time', () => {
 
 describe('after both stages: the pictures draw, and the cursor takes them away again', () => {
   it('draws both charts, with their counts read off the acts’ own answers', async () => {
-    const surface = await openProtSurfaceAsync(ARTIFACT);
+    const surface = await openProtSurfaceAsync(ARTIFACT, undefined, EVIDENCE);
     const bar = cellMarkup(surface, INTERFACE_VIEW);
     expect(bar).not.toContain('nothing to draw yet');
     expect(bar).toContain('<svg');
@@ -281,7 +308,7 @@ describe('after both stages: the pictures draw, and the cursor takes them away a
   });
 
   it('accepts at the head the very gestures it refused before — the same two, word for word', async () => {
-    const surface = await openProtSurfaceAsync(ARTIFACT);
+    const surface = await openProtSurfaceAsync(ARTIFACT, undefined, EVIDENCE);
     // the sentences the boot collected BEFORE the stages, kept
     expect(surface.refusals[INTERFACE_VIEW]).toBe(`no column "${INTERFACE_CONTACTS_COLUMN}" in table "residues"`);
     expect(surface.refusals[SURFACE_VIEW]).toBe(`no column "${SASA_COLUMN}" in table "residues"`);
@@ -291,15 +318,17 @@ describe('after both stages: the pictures draw, and the cursor takes them away a
   });
 
   it('SEEKS BACK ONE COMMIT and the surface chart is refused again, in the same words', async () => {
-    const surface = await openProtSurfaceAsync(ARTIFACT);
+    const surface = await openProtSurfaceAsync(ARTIFACT, undefined, EVIDENCE);
     const path = surface.session.commits('path');
-    expect(path).toHaveLength(3);
+    expect(path).toHaveLength(4);
     // the cursor moves to the commit the CONTACTS act landed — one before the
-    // surface act. Seeking is navigation, not mutation: the head does not move.
-    const back = surface.session.seek(path[1]!.id);
+    // surface act, named from the END of the path so a new act arriving at the
+    // FRONT of the dispatch order cannot silently re-point this assertion.
+    // Seeking is navigation, not mutation: the head does not move.
+    const back = surface.session.seek(path.at(-2)!.id);
     expect(back.ok).toBe(true);
-    expect(surface.session.cursor()).toBe(path[1]!.id);
-    expect(surface.session.head).toBe(path[2]!.id);
+    expect(surface.session.cursor()).toBe(path.at(-2)!.id);
+    expect(surface.session.head).toBe(path.at(-1)!.id);
 
     // THE ASSERTION THIS PACKET EXISTS FOR: the same gesture, the same sentence.
     expect(refusalOf(await keepTheBuried(surface))).toBe(surface.refusals[SURFACE_VIEW]);
@@ -307,8 +336,9 @@ describe('after both stages: the pictures draw, and the cursor takes them away a
     expect(refusalOf(await pickOneContact(surface))).toBeNull();
 
     // and the table itself has un-built: the surface act's two columns are gone
-    // from it and the first stage's three are not
-    surface.session.seek(path[1]!.id);
+    // from it and the contacts act's three are not — named from the end of the
+    // path for the same reason the seek above is
+    surface.session.seek(path.at(-2)!.id);
     const there = await residuesAt(surface.session, surface.tables);
     const columns = Object.keys(there.rows[0] ?? {});
     expect(columns).toContain(INTERFACE_CONTACTS_COLUMN);
@@ -322,22 +352,30 @@ describe('after both stages: the pictures draw, and the cursor takes them away a
     expect(cellMarkup(there2, INTERFACE_VIEW)).not.toContain('nothing to draw yet');
   });
 
-  it('SEEKS BACK PAST THE FIRST STAGE and both charts go with it', async () => {
-    const surface = await openProtSurfaceAsync(ARTIFACT);
+  it('SEEKS BACK TO THE VERY FIRST COMMIT and the two later stages’ charts go with it, while the first stage’s stays', async () => {
+    /*
+      THE FIRST COMMIT IS THE CONSERVATION ACT'S now, so this cursor is the
+      sharpest statement the desk can make: the columns of the stage that HAD
+      landed by then are on the table and the columns of the two that had not
+      are gone — one cursor, three pictures, and each one drawn or refused by
+      what the log really said at that point.
+    */
+    const surface = await openProtSurfaceAsync(ARTIFACT, undefined, EVIDENCE);
     const path = surface.session.commits('path');
-    // the first stage's FIRST act — the pair table, which lands no column at all,
-    // so at this cursor the residues table is exactly what the file said
     surface.session.seek(path[0]!.id);
     const there = await residuesAt(surface.session, surface.tables);
     const columns = Object.keys(there.rows[0] ?? {});
     for (const landed of ['contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation', SASA_COLUMN, RELATIVE_SASA_COLUMN]) expect(columns).not.toContain(landed);
-    expect(columns).toEqual([RESIDUE_KEY, 'chain', 'resnum', 'resname', 'ca_x', 'ca_y', 'ca_z', 'phi', 'psi']);
-    // both gestures refused again, each in its own words
+    expect(columns).toEqual([RESIDUE_KEY, 'chain', 'resnum', 'resname', 'ca_x', 'ca_y', 'ca_z', 'phi', 'psi', CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN]);
+    // both of the LATER stages' gestures refused again, each in its own words
     expect(refusalOf(await pickOneContact(surface))).toBe(surface.refusals[INTERFACE_VIEW]);
     expect(refusalOf(await keepTheBuried(surface))).toBe(surface.refusals[SURFACE_VIEW]);
-    // and both cells print their sentence
+    // …and the conservation gesture, which was refused at the boot, LANDS here
+    expect(refusalOf(await keepTheConserved(surface))).toBeNull();
+    // and both of the later cells print their sentence while the first one draws
     const there2: ProtSurface = { ...surface, residues: there };
     for (const viewId of [INTERFACE_VIEW, SURFACE_VIEW]) expect(cellMarkup(there2, viewId)).toContain('nothing to draw yet');
+    expect(cellMarkup(there2, CONSERVATION_VIEW)).not.toContain('nothing to draw yet');
   });
 });
 
@@ -371,16 +409,18 @@ describe('the run, as it happens', () => {
     const run = await runProtStages(session, { onOutcome: (outcome) => happened.push(`watched ${outcome.act} → ${outcome.commit ?? 'nothing'}`) });
 
     expect(happened).toEqual([
+      `dispatched ${CONSERVATION_ACT}`,
+      `watched ${CONSERVATION_ACT} → c1`,
       `dispatched ${PAIRS_ACT}`,
-      `watched ${PAIRS_ACT} → c1`,
+      `watched ${PAIRS_ACT} → c2`,
       `dispatched ${CONTACTS_ACT}`,
-      `watched ${CONTACTS_ACT} → c2`,
+      `watched ${CONTACTS_ACT} → c3`,
       `dispatched ${SURFACE_ACT}`,
-      `watched ${SURFACE_ACT} → c3`,
+      `watched ${SURFACE_ACT} → c4`,
     ]);
     // the same rows arrive again on the finished run — one owner, twice delivered
     expect(run.outcomes.map((o) => o.act)).toEqual([...PROT_ACT_ORDER]);
-    expect(run.outcomes.map((o) => o.commit)).toEqual(['c1', 'c2', 'c3']);
+    expect(run.outcomes.map((o) => o.commit)).toEqual(['c1', 'c2', 'c3', 'c4']);
   });
 
   it('answers exactly today’s run when nobody is watching', async () => {
@@ -412,7 +452,7 @@ describe('the run, as it happens', () => {
  */
 describe('a row’s seek reaches the cursor the desk is folded at', () => {
   it('moves it to that act’s commit, and refuses an unknown one in the session’s words', async () => {
-    const surface = await openProtSurfaceAsync(ARTIFACT);
+    const surface = await openProtSurfaceAsync(ARTIFACT, undefined, EVIDENCE);
     const view = createSessionView(sessionSource(surface.session), { as: 'user' });
     await view.refresh();
 

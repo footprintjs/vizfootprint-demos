@@ -1,11 +1,12 @@
 /**
- * THE ORCHESTRATOR — one footprintjs chart whose two stages land the desk's two
- * stages, in order, and whose recorder keeps the account of it.
+ * THE ORCHESTRATOR — one footprintjs chart with a stage per declared stage,
+ * landing them in order, and whose recorder keeps the account of it.
  *
  * ```
  *   stage "interactions"  →  declareAnalysis(interactionPairs)     → a commit
  *                            declareAnalysis(residueContacts)      → a commit
  *   stage "surface"       →  declareAnalysis(residueSurface)       → a commit
+ *   stage "conservation"  →  declareAnalysis(residueConservation)  → a commit
  * ```
  *
  * ── WHY A CHART AND NOT A LOOP ──────────────────────────────────────────────
@@ -47,7 +48,7 @@
 import { flowChart } from 'footprintjs';
 import type { InteractionSession } from 'vizfootprint/agent';
 import type { Cause } from 'vizfootprint/cause';
-import { CONTACTS_ACT, PAIRS_ACT, PROT_STAGES, SURFACE_ACT, type ContactsOutput, type PairsOutput, type SurfaceOutput } from './analyses.js';
+import { CONSERVATION_ACT, CONTACTS_ACT, PAIRS_ACT, PROT_STAGES, SURFACE_ACT, type ConservationOutput, type ContactsOutput, type PairsOutput, type SurfaceOutput } from './analyses.js';
 
 /** What one act did — the row the narrative renders and the desk's captions read. */
 export interface ActOutcome {
@@ -75,6 +76,16 @@ export interface ProtRun {
   readonly contacts: ContactsOutput | null;
   /** What the surface act landed, and the parameters it ran at. */
   readonly surface: SurfaceOutput | null;
+  /**
+   * What the conservation act landed: which alignment each chain was cited
+   * against, how many residues got a column, and every refusal.
+   *
+   * IT CAN BE PRESENT AND STILL CARRY REFUSALS, which no other act's answer
+   * does: a chain in no family scores nothing while the other chain's score
+   * stands, so the act LANDS and has something to say. `./session.ts` hands
+   * these sentences to the desk beside the act's own outcome.
+   */
+  readonly conservation: ConservationOutput | null;
 }
 
 /** The cause every act of a run carries: the system asked and the system computed, with the act's own declared intent. */
@@ -186,17 +197,30 @@ export async function runProtStages(session: InteractionSession, watch?: ProtRun
     scope.$setValue(stage.stage, { stage: stage.stage, acts } satisfies StageSummary);
   };
 
-  // TWO STAGES, and the list they come from is the same one the def's captions
-  // name their stage from (`./analyses.ts` · PROT_STAGES) — so a third stage is
-  // a row in that list plus a line here, and never a caption that disagrees
-  // with the chart. The shape is hard-coded rather than folded because
-  // `flowChart(...).addFunction(...)` is a fluent builder: a loop over the list
-  // would need a reduce whose type nobody can read, to save two lines.
-  const [first, second] = PROT_STAGES;
-  if (first === undefined || second === undefined || PROT_STAGES.length !== 2) {
-    throw new Error(`this orchestrator is written for the two stages src/prot/analyses.ts declares, and the list now holds ${String(PROT_STAGES.length)} — add the stage to the chart below rather than letting it run without one`);
+  // ONE STAGE FUNCTION PER DECLARED STAGE, folded off the list the def's
+  // captions name their stage from (`./analyses.ts` · PROT_STAGES) — so a new
+  // stage is a ROW IN THAT LIST and nothing here, and never a caption that
+  // disagrees with the chart.
+  //
+  // IT WAS HARD-CODED FOR TWO, and the note where this stands said a fold
+  // "would need a reduce whose type nobody can read, to save two lines". Two
+  // lines was right while there were two stages; the conservation stage made it
+  // three and would have made it a third hand-written line plus a guard nobody
+  // can forget to update. The reduce is readable because the fluent builder
+  // answers its own type: `addFunction` gives back the builder it was called
+  // on, so the accumulator is whatever `flowChart` returned and nothing is
+  // annotated.
+  //
+  // The ORDER is still the chart's and not a comment's: each stage function
+  // awaits every act it dispatches, and the next stage does not start until it
+  // has returned.
+  const [first, ...rest] = PROT_STAGES;
+  if (first === undefined) {
+    throw new Error('src/prot/analyses.ts declares no stage at all, so this orchestrator has nothing to run — a desk that lands nothing should say so rather than run an empty chart');
   }
-  const chart = flowChart<Record<string, StageSummary>>(first.label, stageOf(0), first.stage).addFunction(second.label, stageOf(1), second.stage).build();
+  const chart = rest
+    .reduce((built, stage, at) => built.addFunction(stage.label, stageOf(at + 1), stage.stage), flowChart<Record<string, StageSummary>>(first.label, stageOf(0), first.stage))
+    .build();
 
   const trace = narrative();
   // The INPUT is the declaration, not the work: which stages will run and which
@@ -211,5 +235,6 @@ export async function runProtStages(session: InteractionSession, watch?: ProtRun
     pairs: (outputs.get(PAIRS_ACT) as PairsOutput | undefined) ?? null,
     contacts: (outputs.get(CONTACTS_ACT) as ContactsOutput | undefined) ?? null,
     surface: (outputs.get(SURFACE_ACT) as SurfaceOutput | undefined) ?? null,
+    conservation: (outputs.get(CONSERVATION_ACT) as ConservationOutput | undefined) ?? null,
   };
 }

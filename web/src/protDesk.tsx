@@ -246,6 +246,18 @@ function NotHere(): JSX.Element {
         those axes are wider than the marks. The crosshair through zero beside it IS declared, and the record carries it. When the library can declare the range too, the declaration replaces the prop and this line goes.
       </li>
       <li>
+        <b>And one piece of evidence on this desk that no commit can vouch for:</b> the curated family alignments the conservation scores are taken from. They are somebody else&rsquo;s published, versioned work and the page names them — <code>PF00545.26</code> and <code>PF01337.25</code>, accession
+        and version read out of each file&rsquo;s own header rather than typed — but a Stockholm alignment is not <code>rows</code>, <code>csv</code> or <code>json</code>, so the library&rsquo;s source port has no carrier for it and this page fetches it plainly, exactly as it fetches the structure
+        file. <b>The consequence, said plainly:</b> the version is on the SCREEN and on no commit, so a reader who travels back through the record gets the rows that were true then and whatever alignment the page happens to be holding. The digests that would have been versions are in{' '}
+        <code>data/prot/conservation/PROVENANCE.json</code>, which travels with the build.
+      </li>
+      <li>
+        <b>And one method this page declares and cannot run:</b> the family&rsquo;s own profile HMM. Placing our residues in that alignment is the one thing the conservation stage COMPUTES, and there is a better way to do it than the one that ran here — HMMER&rsquo;s <code>hmmalign</code>, against the
+        model the family&rsquo;s curators built. The HMM is 11,752 bytes and answers a browser, so what is missing is not the data but the tool: the container IS HMMER, and a static page has nothing to run it on. So the arm is declared and refuses by name, this build placed by pairwise alignment to a
+        consensus folded from the alignment&rsquo;s columns, and every number it landed carries the clause that says so — on the card&rsquo;s face, on the stage&rsquo;s own line and in its note. <b>The consequence, said plainly:</b> the two methods disagree at the edges of a domain and around an
+        insertion, so a score here may be attributed to the wrong column, and it is not comparable with a published per-residue figure placed the better way.
+      </li>
+      <li>
         <b>And one request this page makes that the other three do not:</b> it asks <code>fonts.googleapis.com</code> for IBM Plex Sans, Serif and Mono. That is a THIRD-PARTY REQUEST from a page that otherwise makes none — every byte of data
         here is the repository&rsquo;s own — so it is named rather than made quietly. Each family carries a real fallback stack, so a blocked request changes the letters and nothing else.
       </li>

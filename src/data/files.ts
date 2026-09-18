@@ -60,6 +60,53 @@ export const PROT_FILES = {
 } as const;
 
 /**
+ * WHERE THE CITED ALIGNMENTS LIVE — the conservation stage's committed
+ * evidence, and the ONE place its file-naming convention is spelled.
+ *
+ * The conservation stage cites somebody else's curated alignment and computes
+ * only where our residues sit in it (`src/prot/placement.ts`). Five files carry
+ * what that needs for the committed example, so the desk's second stage lands
+ * with the network unplugged exactly as the first one does:
+ *
+ *   `<ENTRY>-entities.json`   the archive's own polymer-entity record — the
+ *                             entity sequence, the UniProt accession, the
+ *                             aligned regions and the author↔entity residue
+ *                             mapping (hops 3 and 4).
+ *   `<ACCESSION>-pfam.json`   which Pfam family that accession is in, and over
+ *                             which residues of it.
+ *   `<PFAM>-seed.sto`         the family's curated SEED alignment, in
+ *                             Stockholm — the work this desk cites.
+ *
+ * THE NAMES CARRY NO VERSION, deliberately: a family's version lives in the
+ * alignment's own `#=GF AC` header and is READ from it (`src/prot/stockholm.ts`
+ * says why a typed version is a version that can drift from the bytes it
+ * names). So `PF00545-seed.sto` is the file and `PF00545.26` is what the page
+ * cites.
+ *
+ * {@link conservationFileOf} mints these names and
+ * {@link PROT_CONSERVATION_FILES} is the static list the build copies — one
+ * convention, two readers, and `tests/prot-conservation.test.ts` asserts the
+ * minted names are the committed ones.
+ */
+export const PROT_CONSERVATION_DIR = 'data/prot/conservation/';
+
+/** The three names, minted — the convention above, as functions, so no reader spells one. */
+export const conservationFileOf = {
+  entities: (entry: string): string => `${PROT_CONSERVATION_DIR}${entry.toUpperCase()}-entities.json`,
+  matches: (accession: string): string => `${PROT_CONSERVATION_DIR}${accession.toUpperCase()}-pfam.json`,
+  alignment: (family: string): string => `${PROT_CONSERVATION_DIR}${family.toUpperCase()}-seed.sto`,
+} as const;
+
+/** What the committed example's conservation stage reads — every one of them minted by {@link conservationFileOf}. */
+export const PROT_CONSERVATION_FILES: readonly string[] = [
+  conservationFileOf.entities('1AY7'),
+  conservationFileOf.matches('P05798'),
+  conservationFileOf.matches('P11540'),
+  conservationFileOf.alignment('PF00545'),
+  conservationFileOf.alignment('PF01337'),
+];
+
+/**
  * What a static build must carry, beyond the tables themselves.
  *
  * The provenance records ride along because a dashboard that says where its
@@ -68,7 +115,7 @@ export const PROT_FILES = {
  * to travel with the file it covers — publishing the boundaries without it
  * would break the one condition that made publishing them lawful.
  */
-export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json', 'data/exo/PROVENANCE.json', 'data/exo/FETCH.json', 'data/prot/PROVENANCE.json'] as const;
+export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json', 'data/exo/PROVENANCE.json', 'data/exo/FETCH.json', 'data/prot/PROVENANCE.json', 'data/prot/conservation/PROVENANCE.json'] as const;
 
 /** Everything the built site needs under `data/` — the tables and the papers that must travel with them. */
-export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...Object.values(EXO_FILES), ...Object.values(PROT_FILES), ...SITE_PROVENANCE_FILES];
+export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...Object.values(EXO_FILES), ...Object.values(PROT_FILES), ...PROT_CONSERVATION_FILES, ...SITE_PROVENANCE_FILES];

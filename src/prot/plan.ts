@@ -21,12 +21,21 @@
  *     project's own `docs/stages.md` publishes, and the stepper is the plan's
  *     view — so the stepper shows six.
  *
- * A grey circle would have hidden the interesting half of that. THREE of these
- * six will not run on this build and they are blocked by three different
- * people: the WORLD (a service that answers no browser), THIS BUILD (a static
- * page that cannot hold a key), and US (work outstanding, with nothing external
- * in the way). A reader deserves to know which, and before this file the page
- * had no way to say *we have not built this yet* out loud.
+ * A grey circle would have hidden the interesting half of that. TWO of these
+ * six will not run on this build and they are blocked by two different people:
+ * THIS BUILD (a static page that cannot hold a key) and US (work outstanding,
+ * with nothing external in the way). A reader deserves to know which, and
+ * before this file the page had no way to say *we have not built this yet* out
+ * loud.
+ *
+ * THERE WERE THREE, and the third is worth a sentence because of how it went
+ * away. Step 2 was blocked by THE WORLD — *no public sequence-search service
+ * answers a browser* — which was measured, was true, and was an answer to the
+ * wrong question: the conservation of a residue in a KNOWN FAMILY does not need
+ * a search, because the curated alignment already exists and is served. The
+ * vocabulary below keeps `'the world'` all the same: it is the honest word for
+ * a stage somebody else's service really does refuse, and it is exactly the
+ * word a later reader should be suspicious of.
  *
  * ── AND WHY EVERY LABEL HERE IS EITHER NEW OR A POINTER ────────────────────
  * Two spellings of one name is the thing this repository refuses (the
@@ -106,15 +115,23 @@ export const PROT_PLAN: readonly PlanStep[] = [
       'It is the only step of the plan that lands no commit of its own — its answer is already true at the root of this log, before the record starts — so its mark is landed, its press takes the focus, and there is nowhere earlier for the cursor to go.',
     line: 'landed by the parse, before this record starts — no commit of its own',
   },
-  {
-    step: 2,
-    stage: 'conservation',
-    name: 'Sequence Analysis',
-    question: null,
-    blockedBy: 'the world',
-    why: null,
-    line: null,
-  },
+  /*
+    STEP 2 WAS BLOCKED BY THE WORLD, AND IS NOT ANY MORE.
+
+    It carried `blockedBy: 'the world'` for eight releases on a measured
+    reason: a sequence-database search needs a service that answers a browser,
+    and neither public one does. The measurement was right and the question was
+    wrong — for a protein in a known family the curated alignment already
+    exists, is versioned, and IS served to a browser. So the def dispatches an
+    act for it (`./analyses.ts` · `CONSERVATION_ACT`), and this step carries
+    what every other landed step carries: the id, and nothing else. The
+    sentence, the reason and the line come from the list that owns them, which
+    is the law at the top of this file.
+
+    `PROT_UNAVAILABLE_STAGES` is where the old reason lived and it is where the
+    reversal is written down.
+  */
+  { step: 2, stage: 'conservation', name: 'Sequence Analysis', question: null, blockedBy: null, why: null, line: null },
   { step: 3, stage: 'surface', name: 'Structure Analysis', question: null, blockedBy: null, why: null, line: null },
   { step: 4, stage: 'interactions', name: 'Interaction Mapping', question: null, blockedBy: null, why: null, line: null },
   {

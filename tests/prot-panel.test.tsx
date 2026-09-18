@@ -41,14 +41,16 @@ import { join } from 'node:path';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ReactElement } from 'react';
-import { PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT } from '../src/prot/analyses.js';
+import { CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, type ConservationOutput } from '../src/prot/analyses.js';
+import { SCORE_IS, SCORE_IS_NOT } from '../src/prot/conservation.js';
+import { CONSENSUS } from '../src/prot/placement.js';
 import { PROT_BLOCKED } from '../src/prot/plan.js';
 import { protTables } from '../src/prot/etl.js';
 import { PROT_FILES } from '../src/data/files.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
 import { stepperStages } from '../web/src/protStages.js';
 import { ChartCard } from '../web/src/workbench/ChartCard.js';
-import { BLOCKED_CARDS, NARRATIVE_LINES, firstClause, stageFacts, stageWords } from '../web/src/workbench/panel.js';
+import { BLOCKED_CARDS, NARRATIVE_LINES, firstClause, placementSaid, stageFacts, stageWords } from '../web/src/workbench/panel.js';
 import { columnTracks, rowTracks } from '../web/src/workbench/charts.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -104,6 +106,7 @@ const REFUSED: readonly ActOutcome[] = [ALL_LANDED[0]!, ALL_LANDED[1]!, landedAc
  */
 const RUN: ProtRun = {
   outcomes: ALL_LANDED,
+  conservation: null,
   narrative: [
     'Stage "Every non-covalent contact in the entry" started.',
     'Stage "Every non-covalent contact in the entry" wrote 3 columns.',
@@ -309,11 +312,76 @@ describe('“no stage” is three different sentences, and the CHROME carries th
   });
 });
 
+describe('THE CONSERVATION STAGE SAYS WHICH METHOD PLACED ITS NUMBERS — on its own line, not only in its note', () => {
+  /** The conservation stage's acts and its own answer — the shape the orchestrator hands over. */
+  const CONSERVED_ACT = landedAct({ stage: 'conservation', act: CONSERVATION_ACT, commit: 'c0', materialized: [CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN] });
+  const COUNTS = {
+    residues: 185,
+    scored: 162,
+    absent: 23,
+    method: 'consensus' as const,
+    weaker: true,
+    overlaps: 0,
+    chains: [
+      { chain: 'A', cited: 'PF00545.26', family: 'PF00545', familyName: 'ribonuclease', sequences: 283, declaredSequences: 283, positions: 100, domain: [5, 92] as const, domainResidues: 88, placed: 82, identities: 33, score: 79, residues: 96, scored: 82, absent: 14, method: 'consensus' as const, refusal: null },
+      { chain: 'B', cited: 'PF01337.25', family: 'PF01337', familyName: 'Barstar', sequences: 69, declaredSequences: 69, positions: 97, domain: [1, 81] as const, domainResidues: 80, placed: 80, identities: 30, score: 99, residues: 89, scored: 80, absent: 9, method: 'consensus' as const, refusal: null },
+    ],
+  };
+  const CONSERVED_RUN = { ...RUN, outcomes: [CONSERVED_ACT], conservation: { as: 'columns', table: 'residues', columns: {}, counts: COUNTS, refusals: [] } as unknown as ConservationOutput } as unknown as ProtRun;
+  const stage = stepperStages([CONSERVED_ACT], CONSERVED_RUN).find((s) => s.stage === 'conservation')!;
+
+  it('reads four facts off the act’s own answer: what was scored, what has no column, which alignments, and which method', () => {
+    expect(stageFacts(stage, CONSERVED_RUN, TABLES.counts)).toEqual([
+      { id: 'scored', label: 'Residues scored', value: '162 / 185' },
+      { id: 'absent', label: 'No column, so no score', value: '23' },
+      { id: 'cited', label: 'Alignments cited', value: 'PF00545.26 + PF01337.25 · 352 sequences' },
+      { id: 'placed', label: 'Placed by', value: 'consensus — the weaker method' },
+    ]);
+  });
+
+  it('puts the method ON THE STAGE’S OWN QUIET LINE, with the alignments it was placed against', () => {
+    const said = placementSaid(stage, CONSERVED_RUN)!;
+    expect(said.clause).toBe(`${CONSENSUS.said}, over PF00545.26 and PF01337.25`);
+    const words = wordsFor(stage, CONSERVED_RUN);
+    expect(words.line).toContain(said.clause);
+    // the fold's own line is still there, and the clause is APPENDED to it
+    expect(words.line.startsWith(stage.subtitle)).toBe(true);
+  });
+
+  it('leads the note with whose data it is, what the score is, what it is NOT, and the whole placement argument', () => {
+    const words = wordsFor(stage, CONSERVED_RUN);
+    expect(words.sentences[0]).toContain('THE ALIGNMENT IS CITED, NOT BUILT: PF00545.26 and PF01337.25');
+    expect(words.sentences[1]).toContain(SCORE_IS);
+    expect(words.sentences[1]).toContain(SCORE_IS_NOT);
+    expect(words.sentences[2]).toBe(CONSENSUS.why);
+  });
+
+  it('says NOTHING of the kind for any other stage — an absence is absent', () => {
+    expect(placementSaid(surface, RUN)).toBeNull();
+    expect(placementSaid(interactions, RUN)).toBeNull();
+    expect(wordsFor(surface).line).toBe(surface.subtitle);
+  });
+
+  it('carries every refusal the act reported, even when the act LANDED — the state that would otherwise be silent', () => {
+    const oneChain = { ...CONSERVED_RUN, conservation: { as: 'columns', table: 'residues', columns: {}, counts: COUNTS, refusals: ['chain B (P11540) is in no Pfam family, so there is no curated alignment to score its residues against and no residue of chain B is scored. Every other chain\'s score stands.'] } as unknown as ConservationOutput } as unknown as ProtRun;
+    expect(placementSaid(stage, oneChain)!.note).toContain("chain B (P11540) is in no Pfam family, so there is no curated alignment to score its residues against and no residue of chain B is scored. Every other chain's score stands.");
+  });
+});
+
 describe('A STAGE THAT WILL NOT RUN HERE GETS A CARD, and the reason is inside it', () => {
-  it('is one card per declared stage that will not run — three, one per kind of blocked', () => {
+  it('is one card per declared stage that will not run — two now, each a different kind of blocked', () => {
+    /*
+      IT WAS THREE. The conservation stage was one of them, declared to the def
+      as unavailable on a measured reason that turned out to answer the wrong
+      question, and it is a landed stage with a picture now
+      (`src/prot/analyses.ts` · `PROT_UNAVAILABLE_STAGES` records the reversal).
+      The card list is folded from `PROT_BLOCKED`, so it followed without this
+      file being edited for anything but the count.
+    */
     expect(BLOCKED_CARDS.map((c) => c.id)).toEqual(PROT_BLOCKED.map((s) => s.stage));
-    expect(BLOCKED_CARDS).toHaveLength(3);
-    expect(BLOCKED_CARDS.map((c) => c.tag)).toEqual(['not available here', 'not on this build', 'not built yet']);
+    expect(BLOCKED_CARDS).toHaveLength(2);
+    expect(BLOCKED_CARDS.map((c) => c.tag)).toEqual(['not on this build', 'not built yet']);
+    expect(PROT_UNAVAILABLE_STAGES).toEqual([]);
   });
 
   it('says WHERE THE PICTURE WOULD BE the reason’s own first clause, and never a paraphrase', () => {
@@ -322,16 +390,17 @@ describe('A STAGE THAT WILL NOT RUN HERE GETS A CARD, and the reason is inside i
       expect(card.why).toContain(card.short.replace(/\.$/, ''));
       expect(card.short.split(/\s+/).length, `${card.id}'s visible line is a paragraph, not a handful of words`).toBeLessThan(20);
     }
-    // the stage the def declares unavailable takes its paragraph from the def,
-    // which is the one owner of that sentence
-    expect(BLOCKED_CARDS.find((c) => c.id === 'conservation')!.why).toBe(PROT_UNAVAILABLE_STAGES[0]!.why);
+    // and each card's paragraph is the PLAN's own, which is the one owner of
+    // those two sentences now that the def's unavailable list is empty
+    for (const card of BLOCKED_CARDS) expect(card.why).toBe(PROT_BLOCKED.find((s) => s.stage === card.id)!.why);
   });
 
   it('cuts that first clause at a punctuation boundary and never at a word count', () => {
     expect(firstClause('one thing, and another: the rest of it')).toBe('one thing, and another');
     expect(firstClause('one sentence. a second one')).toBe('one sentence.');
     expect(firstClause('nothing to cut')).toBe('nothing to cut');
-    expect(firstClause(PROT_UNAVAILABLE_STAGES[0]!.why)).toBe('this stage needs a sequence-database search, and a static page cannot make one');
+    // and over a real declared paragraph — the plan's own, cut at its first colon
+    expect(firstClause(BLOCKED_CARDS[0]!.why)).toBe('this stage needs a model, and a static page cannot hold the key that would call one');
   });
 
   it('draws the card with the words where the marks would be — and NO chart, no axis, no frame pretending to be one', async () => {

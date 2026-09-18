@@ -68,11 +68,14 @@ A tile was words only for one round, on the honest ground that a library chart a
 | pane | at 1280×800 | what it does |
 |---|---|---|
 | the focus | 906×322 | draws, with its axes — 2.8 : 1, where the design drew it at 3.4 : 1. It was 906×278 until the card's face was cleared, which handed 44px straight to the picture |
-| cross-chain bars (strip) | 940×104 | draws 185 bars, **no axis chrome** |
+| conservation run (strip) | 465×104 | draws 162 marks, **no axis chrome** — 162 and not 185, because 23 residues have no column in their family's alignment and the line stops rather than dipping to zero |
+| cross-chain bars (strip) | 465×104 | draws 185 bars, **no axis chrome** |
 | backbone angles (column) | 282×125 | draws 181 dots over a **56px band**, no axis chrome. At 1440 it is 175px and draws its axes: same rule, two answers |
 | the contact table | 282×125 | its own rows, its own scroll |
 | the 3D view | 282×73 | **says it instead.** Measured at 282×114 its canvas was 282×67 and the well was EMPTY: it is the one pane whose content is a canvas and not marks, it cannot show a crossfilter by density, and a camera cannot be fitted to that aspect. So the pane says the viewer draws in the focus and a press puts it there (906×282 with the camera fitted) |
-| the three blocked steps | one card, 3 rows | nothing to filter |
+| the two blocked steps | one card, 2 rows | nothing to filter |
+
+**The strip holds THREE wide tiles now and not two**, because the conservation stage landed a run of its own (`src/prot/analyses.ts`): each wide pane went from 940px to 465px and kept its height, its marks and its band, which `tests/prot-viewport.smoke.test.ts` measures at both budgets. Nothing about the layout was re-chosen for it — `charts.ts · shapeOfView` reads the def's own `chartKind` and a `line` wants width, so the pane went where the rule already said it would.
 
 **`axes?: boolean \| 'y'` is the library's own reduced-rendering hook** — built so a merged frame can draw one guide for a stack, reused here so a small pane keeps its marks and drops its labels. What it cannot move is `PAD`, a module constant (`{ l: 52, r: 18, t: 18, b: 44 }`): 62px of any box is margin whatever is in it, which is why a 67px pane once reported 185 dots and drew them in a 5px band. **Reported, and invisible, reads as broken rather than as small** — that is the failure this floor exists to prevent, and the browser test measures the mark BAND and not only the count.
 
@@ -243,6 +246,23 @@ The fold is `protCells.tsx` · `narrowingOf` (the facts) and `charts.ts` · `nar
 It is the one pane whose content is a canvas: it **recolours** under a clause (`molstarRenderer.ts` · `paintOf` paints `dropped` by `keepPredicate`) rather than dimming or dropping marks, and at rail size a recolour is invisible — part of why the connection could not be seen at all. In the rail this pane is words already, so **the words carry the same narrowing sentence**; promoted, it recolours as before and its footer carries the long form.
 
 **The finding, and this is its second consumer: a picture cannot be asked what it drew.** `BoundRenderer.update` answers `{ ok: true }` (or a typed gap) and nothing else, so a host cannot ask how many residues were repainted — the renderer writes a count into its own `role="status"` line and the host cannot read it back. The fold here is honest because it is the same predicate on the same rows, not because the renderer confirmed anything. A `RenderReport` on the way back out — marks drawn, marks dimmed, rows the renderer could not place — is the shape that would close it, and it would serve every host that wants to say what a third-party picture did.
+
+### AND ONE MORE THING THAT MAY LIVE ON THE FACE: WHICH METHOD PRODUCED THE NUMBERS
+
+> a reader must not be able to mistake a consensus-placed score for an HMM-placed one
+
+The face law is *a title, a picture and one line of figures*, and everything else moved behind `Full note`. **One kind of fact earned a place back on that line: the METHOD, for a number whose value depends on a choice between two of them.**
+
+| the card | what it says | why it is on the face |
+|---|---|---|
+| the conservation run | `162 of 185 residues scored · PF00545.26 + PF01337.25 · consensus-placed — the weaker method` | the score is a fact about somebody else's curated alignment, and WHERE OUR RESIDUES SIT IN IT was computed here by the worse of two methods (`src/prot/placement.ts`: pairwise alignment to a consensus, because the better one needs HMMER and a static page has nothing to run it on). The two disagree at the edges of a domain, so a reader comparing this with a published per-residue figure is comparing two different placements |
+| the other four | counts only | they MEASURE something off the entry's own coordinates. There is one way to count a contact and one way to roll a probe, so there is no choice for a reader to be unaware of |
+
+**The rule, stated so a later card can be judged by it:** a number whose value depends on which of several METHODS ran carries the method on the face, beside the counts, after them and before the narrowing sentence. A number that is a measurement carries no such clause, because an absence is absent.
+
+**It is not a caption — it is one owner, read in three places.** `src/prot/placement.ts` · `PlacementStrategy.said` is the words and `.weaker` is the boolean a consumer branches on; `protCells.tsx` (the cell's `foot`), `panel.ts · placementSaid` (the stage's own quiet line and the lead of its note) and the act's own `honesty.notes` all read that one record. `tests/prot-conservation.test.ts` pins the clause byte for byte and `tests/prot-cells.test.tsx` pins the face.
+
+**And the arm that is not implemented refuses BY NAME** rather than being a comment: `placeAgainstHmm()` is a real function returning the sentence a reader would see, so the next packet's whole job is replacing its body. It is named in `protDesk.tsx · NotHere` with every other omission.
 
 ### Where the line does NOT go
 
