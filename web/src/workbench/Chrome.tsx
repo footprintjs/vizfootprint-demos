@@ -160,53 +160,6 @@ export function Disclosure({ title, label, shape, children }: DisclosureProps): 
   );
 }
 
-// ── the designed home for what is selected ───────────────────────────────────
-
-export interface SelectionBarProps {
-  /** The Mono eyebrow that names the row — what these controls are about. */
-  readonly eyebrow: string;
-  readonly children: ReactNode;
-}
-
-/**
- * WHAT IS SELECTED, IN A ROOM OF ITS OWN.
- *
- * The library's own two pieces — the live chips and the saved pictures — used
- * to sit loose between the panel and the charts, at two different sizes, on no
- * token and in no card. They say something true and they stay; what they get
- * here is a home: one quiet glass row, a Mono eyebrow naming it, and the
- * library's parts inside at this desk's own density.
- *
- * The density is the LIBRARY'S OWN HOOK and not a selector into its markup:
- * both of those parts re-root `.vzf` on themselves, which re-declares the
- * library's defaults there and discards a host's inherited token overrides — so
- * the composition hands each one `className="pw-scope"` and the bridge rule in
- * `./theme.css` reaches them again (a finding, reported).
- */
-export function SelectionBar({ eyebrow, children }: SelectionBarProps): JSX.Element {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'baseline',
-        gap: 14,
-        flexWrap: 'wrap',
-        padding: '10px 14px',
-        background: 'var(--pw-glass-facts)',
-        backdropFilter: 'var(--pw-blur-facts)',
-        WebkitBackdropFilter: 'var(--pw-blur-facts)',
-        border: '1px solid var(--pw-edge-card)',
-        borderRadius: 'var(--pw-r-card)',
-        minWidth: 0,
-      }}
-    >
-      <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-soft)', flex: '0 0 auto' }}>{eyebrow}</span>
-      <span aria-hidden style={{ flex: '0 0 1px', alignSelf: 'stretch', background: 'var(--pw-rule-divider)' }} />
-      {children}
-    </div>
-  );
-}
-
 // ── the header ───────────────────────────────────────────────────────────────
 
 export interface WorkbenchHeaderProps {
@@ -218,13 +171,25 @@ export interface WorkbenchHeaderProps {
   readonly entryTitle: string;
   /** The method line — already assembled by the business layer out of the entry's records. `null` when the records carry none of it. */
   readonly method: string | null;
+  /**
+   * WHICH POINT IN THE RUN the pictures come from, in the page's own words.
+   *
+   * It is the only thing on screen that says so, and the stepper's whole
+   * purpose is to move it — so it lives in the band that answers *what am I
+   * looking at*, because this is the same question about time rather than about
+   * the entry. A ReactNode because its LOUD forms (a refused read, a read in
+   * flight) carry their own `role="status"` and their own colour, and a band
+   * that flattened those to a string would be deciding that the quiet case is
+   * the only one.
+   */
+  readonly at: ReactNode;
   /** What the way back to the search is called. */
   readonly searchAgain: string;
   onSearchAgain(): void;
 }
 
 /** Band 1: the title, a hairline, the entry, and — right-aligned — the method and the way out. */
-export function WorkbenchHeader({ title, entry, entryTitle, method, searchAgain, onSearchAgain }: WorkbenchHeaderProps): JSX.Element {
+export function WorkbenchHeader({ title, entry, entryTitle, method, at, searchAgain, onSearchAgain }: WorkbenchHeaderProps): JSX.Element {
   return (
     <header
       style={{
@@ -248,68 +213,109 @@ export function WorkbenchHeader({ title, entry, entryTitle, method, searchAgain,
         <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 15, fontWeight: 500, letterSpacing: '0.02em', color: 'var(--pw-ink)' }}>{entry}</span>
         <span style={{ fontSize: 13.5, color: 'var(--pw-mid)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entryTitle}</span>
       </span>
-      <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18 }}>
+      <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18, minWidth: 0 }}>
         {method === null ? null : <span style={{ fontSize: 12.5, color: 'var(--pw-mid-2)', whiteSpace: 'nowrap' }}>{method}</span>}
+        <span aria-hidden style={{ flex: '0 0 1px', height: 22, background: 'var(--pw-rule-divider)' }} />
+        <span style={{ minWidth: 0 }}>{at}</span>
         <GlassButton onPress={onSearchAgain}>{searchAgain}</GlassButton>
       </span>
     </header>
   );
 }
 
-// ── the facts strip ──────────────────────────────────────────────────────────
+// ── the record, at the bottom edge and never below a scroll ──────────────────
 
-/** One fact: its numbers, and the words around them. Assembled by the business layer off the run — never by this file. */
-export interface FactItem {
-  /** A stable key, so the strip does not key on prose. */
-  readonly id: string;
-  /** The numbers and the words around them, in order — `value` is Mono at full ink, `before`/`after` are labels at mid. */
-  readonly parts: readonly { readonly before?: string; readonly value: string; readonly after?: string }[];
-}
-
-export interface FactsStripProps {
-  readonly items: readonly FactItem[];
-  /** What the strip is called for a screen reader. */
+export interface RecordDrawerProps {
+  /** What the control is called for a screen reader. */
   readonly label: string;
-  /** Said instead, when the run has landed nothing to count. */
-  readonly nothing?: string;
+  /** What is inside, named with its counts — visible while it is shut, which is the whole point. */
+  readonly title: ReactNode;
+  /** What a press reveals. It gets its own scroll; the PAGE never gets one. */
+  readonly children: ReactNode;
 }
 
-/** Band 2: the entry's own counts, separated by hairlines, numbers in Mono at full ink. */
-export function FactsStrip({ items, label, nothing }: FactsStripProps): JSX.Element {
+/**
+ * THE RECORD — a drawer at the bottom edge of the instrument.
+ *
+ * ── WHY A DRAWER AND NOT A REGION BELOW THE FOLD ───────────────────────────
+ * *"I don't want a scrolling dashboard"* is the author's ruling, taken
+ * literally: the page itself does not scroll to operate this desk. That leaves
+ * the record material — every commit, every refusal, the data checks, the
+ * residue table at the cursor, the recorder's whole account, the list of what
+ * this page does without, the credit and the provenance — needing a home
+ * INSIDE one viewport. So it lives behind this bar:
+ *
+ *   - its PRESENCE is visible without scrolling anything: the shut bar names
+ *     what is inside it, with the counts, at the bottom edge of the window;
+ *   - reaching it is one deliberate press — the same gesture, the same chevron,
+ *     as every other fold on this desk;
+ *   - opening it draws it OVER the charts rather than pushing them, so the
+ *     instrument does not re-lay-out under a reader who only wanted to read a
+ *     commit;
+ *   - and the drawer scrolls, not the page. That is the distinction the ruling
+ *     is about: a dashboard you have to scroll to USE, versus a record you
+ *     chose to open.
+ *
+ * Nothing is deleted and nothing is behind two presses that was behind one: the
+ * four record panels keep their own disclosures inside it, exactly as they were.
+ */
+export function RecordDrawer({ label, title, children }: RecordDrawerProps): JSX.Element {
+  const [open, setOpen] = useState(false);
   return (
-    <div
-      aria-label={label}
-      style={{
-        boxSizing: 'border-box',
-        minHeight: 40,
-        padding: '8px 24px',
-        background: 'var(--pw-glass-facts)',
-        backdropFilter: 'var(--pw-blur-facts)',
-        WebkitBackdropFilter: 'var(--pw-blur-facts)',
-        borderBottom: '1px solid var(--pw-rule-faint)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 18,
-        flexWrap: 'wrap',
-        fontSize: 12.5,
-        color: 'var(--pw-mid)',
-      }}
-    >
-      {items.length === 0 && nothing !== undefined ? <span>{nothing}</span> : null}
-      {items.map((item, index) => (
-        <span key={item.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 18 }}>
-          {index === 0 ? null : <span aria-hidden style={{ flex: '0 0 1px', height: 14, background: 'var(--pw-rule-divider)' }} />}
-          <span>
-            {item.parts.map((part, at) => (
-              <span key={`${item.id}:${String(at)}`}>
-                {part.before === undefined ? null : part.before}
-                <span style={{ fontFamily: 'var(--pw-font-mono)', color: 'var(--pw-ink)' }}>{part.value}</span>
-                {part.after === undefined ? null : ` ${part.after}`}
-              </span>
-            ))}
-          </span>
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 5, display: 'flex', flexDirection: 'column', maxHeight: '100%', minHeight: 0 }}>
+      {!open ? null : (
+        <div
+          style={{
+            flex: '0 1 auto',
+            minHeight: 0,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            maxHeight: '74vh',
+            padding: '14px 24px 16px',
+            background: 'var(--pw-glass-panel)',
+            backdropFilter: 'var(--pw-blur-panel)',
+            WebkitBackdropFilter: 'var(--pw-blur-panel)',
+            borderTop: '1px solid var(--pw-rule-divider)',
+            boxShadow: 'var(--pw-shadow-hero)',
+            fontSize: 12,
+            lineHeight: 1.6,
+            color: 'var(--pw-mid-2)',
+          }}
+        >
+          {children}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={label}
+        style={{
+          font: 'inherit',
+          fontFamily: 'var(--pw-font-sans)',
+          fontSize: 11.5,
+          color: 'var(--pw-mid)',
+          background: 'var(--pw-glass-header)',
+          backdropFilter: 'var(--pw-blur-header)',
+          WebkitBackdropFilter: 'var(--pw-blur-header)',
+          border: 0,
+          borderTop: '1px solid var(--pw-rule-divider)',
+          padding: '7px 24px',
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          textAlign: 'left',
+          cursor: 'pointer',
+          flex: '0 0 auto',
+        }}
+      >
+        <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9.5, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-soft)' }}>the record</span>
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+        <span style={{ marginLeft: 'auto', display: 'inline-flex', color: 'var(--pw-accent)' }}>
+          <Chevron open={!open} />
         </span>
-      ))}
+      </button>
     </div>
   );
 }

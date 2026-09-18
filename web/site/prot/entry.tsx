@@ -177,9 +177,30 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         credit={booted.credit}
         counts={surface.tables.counts}
         onSearchAgain={onSearchAgain}
+        record={<PageFoot booted={booted} surface={surface} onSearchAgain={onSearchAgain} />}
       />
+    </>
+  );
+}
+
+/**
+ * THE PAGE'S OWN FOOT — the credit the archive asks for, what this desk cannot
+ * say about this entry, and the static-build note.
+ *
+ * It USED TO SIT UNDER THE DESK, and the author's ruling moved it: *"I don't
+ * want a scrolling dashboard."* So it goes where the rest of the record went —
+ * inside the drawer at the bottom edge of the instrument
+ * (`web/src/protDesk.tsx` takes it as `record`, `workbench/Chrome.tsx` ·
+ * `RecordDrawer` argues the shape). Not one word of it changed; what changed is
+ * that reaching it is one press instead of one scroll, and its presence is
+ * named on the shut bar.
+ */
+function PageFoot({ booted, surface, onSearchAgain }: { readonly booted: Booted; readonly surface: ProtSurface; onSearchAgain(): void }): JSX.Element {
+  const { notes } = booted;
+  return (
+    <>
       {/*
-        THE CREDIT AND THE ENTRY'S OWN LINE, under the desk rather than over it.
+        THE CREDIT AND THE ENTRY'S OWN LINE, in the record rather than under the desk.
         The design puts a 60px header at the top and the workbench owns it now,
         so these move DOWN rather than away: the archive asks that the
         depositors and the primary citation be credited, this desk names every

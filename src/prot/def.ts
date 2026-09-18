@@ -416,13 +416,26 @@ export const PROT_ENCODING_RULES: EncodingRules = {
  * `pairs` and `sheet` declare none, for the reason all four demos' sheets do:
  * they show rows, not a mark.
  */
+export const PROT_ENCODINGS: readonly ViewEncodingDecl[] = [
+  { viewId: RAMA_VIEW, chartKind: 'scatter', channels: ['x', 'y'], initial: { x: 'phi', y: 'psi' } },
+  { viewId: STRUCTURE_VIEW, chartKind: 'structure', channels: ['color'], initial: { color: 'chain' } },
+  { viewId: INTERFACE_VIEW, chartKind: 'bar', channels: ['category', 'y'], initial: { category: RESIDUE_KEY, y: INTERFACE_CONTACTS_COLUMN } },
+  { viewId: SURFACE_VIEW, chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } },
+];
+
+/**
+ * EXPORTED, because the LAYOUT reads `chartKind` and the wire does not serve it.
+ *
+ * A host laying a dashboard out by the shape of what each view draws needs to
+ * know that a line wants width and a scatter wants a square. The def declares
+ * exactly that, per view, right here — and the served `ViewView`
+ * (`vizfootprint-ui` · `adapter/types.ts`) carries `chartKind` only for a
+ * LAYER, so a plain view's declared kind never reaches the reader's side. So
+ * `web/src/workbench/charts.ts` · `shapeOfView` imports this list rather than
+ * asking the session. Reported as a finding; one declaration either way.
+ */
 function protEncodings(): readonly ViewEncodingDecl[] {
-  return [
-    { viewId: RAMA_VIEW, chartKind: 'scatter', channels: ['x', 'y'], initial: { x: 'phi', y: 'psi' } },
-    { viewId: STRUCTURE_VIEW, chartKind: 'structure', channels: ['color'], initial: { color: 'chain' } },
-    { viewId: INTERFACE_VIEW, chartKind: 'bar', channels: ['category', 'y'], initial: { category: RESIDUE_KEY, y: INTERFACE_CONTACTS_COLUMN } },
-    { viewId: SURFACE_VIEW, chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } },
-  ];
+  return PROT_ENCODINGS;
 }
 
 // ── the words ────────────────────────────────────────────────────────────────

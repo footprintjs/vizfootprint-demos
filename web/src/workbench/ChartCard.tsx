@@ -28,6 +28,41 @@
 import { useState, type ReactNode } from 'react';
 import { Chevron, GlassButton } from './Chrome.js';
 
+/** One of a stage's own numbers: the name of a figure, and the figure. Folded by the business layer off the acts' own answers, never counted here. */
+export interface CardFact {
+  readonly id: string;
+  readonly label: string;
+  readonly value: string;
+}
+
+/**
+ * WHAT THE STAGE THAT LANDED THIS PICTURE DID — the block that used to be a
+ * prose band under the stepper.
+ *
+ * The author's ruling removed that band (*"no paragraphs, nothing similar — I
+ * don't want a scrolling dashboard"*) and its content came HERE, to the thing
+ * it is about. Only the FOCUSED card carries it; a rail tile is a picture and a
+ * name.
+ *
+ * `mark` is on the visible line in Mono (`stage 3`) so that a picture a reader
+ * PROMOTED out of the rail can never be read as that stage's own — the line
+ * names which stage is speaking, whatever picture it is sitting on.
+ */
+export interface CardStage {
+  /** `stage 3` — the Mono prefix on the quiet line. */
+  readonly mark: string;
+  /** The one quiet line: what this stage put on the desk. */
+  readonly line: string;
+  /**
+   * Its own numbers, in Mono under the picture. EMPTY means no row at all: an
+   * absence is absent, and *this stage has landed no counts to read* took a
+   * whole row under a drawing to say nothing.
+   */
+  readonly facts: readonly CardFact[];
+  /** The act's refusal, verbatim — visible, never behind a press. */
+  readonly refusal: string | null;
+}
+
 /** One legend chip: a swatch and the name it stands for. Handed in as a colour, never chosen here. */
 export interface LegendChip {
   readonly id: string;
@@ -56,39 +91,66 @@ export interface ChartCardProps {
   readonly noteAria: string;
   /** The ✕, and only when there is a clause to clear. */
   readonly clear: { readonly label: string; onPress(): void } | null;
-  /** The height this card gives its picture, in CSS pixels — the frame measures it. */
-  readonly height: number;
+  /** What the stage that landed this picture did — {@link CardStage}. `null` on every card that is not the focus. */
+  readonly stage?: CardStage | null;
+  /**
+   * The height this card gives its picture.
+   *
+   * A NUMBER is CSS pixels, which is what a card in a scrolling band wants.
+   * `'fill'` is the instrument's form: the card takes the whole height its
+   * parent row gives it and the picture takes whatever the card's own chrome
+   * leaves — `flex: 1 1 0` with `min-height: 0`, the definite height
+   * `vizfootprint-ui` · `primitives/ChartFrame.tsx` needs before its
+   * ResizeObserver can hand a size to the chart. The card must then be inside a
+   * parent with a definite height of its own, which is the one thing a caller
+   * has to get right (`web/src/protDesk.tsx` · the zone-1 grid).
+   */
+  readonly height: number | 'fill';
   readonly children: ReactNode;
 }
 
 /** The card. See the file header for the one visible line and the law about the note. */
-export function ChartCard({ id, label, focused, howToRead, legend, footLeft, footRight, note, noteLabel, noteAria, clear, height, children }: ChartCardProps): JSX.Element {
+export function ChartCard({ id, label, focused, howToRead, legend, footLeft, footRight, note, noteLabel, noteAria, clear, stage = null, height, children }: ChartCardProps): JSX.Element {
   const [open, setOpen] = useState(false);
+  const fills = height === 'fill';
   return (
     <article
       data-chart={id}
       data-focused={focused ? 'true' : undefined}
       aria-label={label}
       style={{
+        ...(fills ? { height: '100%', minHeight: 0, overflow: 'hidden' } : {}),
         border: `1px solid ${focused ? 'var(--pw-edge-hero)' : 'var(--pw-edge-card)'}`,
         borderRadius: focused ? 'var(--pw-r-hero)' : 'var(--pw-r-card)',
         background: focused ? 'var(--pw-glass-hero)' : 'var(--pw-glass-card)',
         backdropFilter: focused ? 'var(--pw-blur-hero)' : 'var(--pw-blur-card)',
         WebkitBackdropFilter: focused ? 'var(--pw-blur-hero)' : 'var(--pw-blur-card)',
         boxShadow: focused ? 'var(--pw-shadow-hero)' : 'var(--pw-shadow-card)',
-        padding: focused ? '22px 24px 18px' : '16px 18px 14px',
+        /* THE FOCUS IS AN INSTRUMENT'S SLOT NOW, not a card in a scrolling
+           band: every pixel of padding is a pixel off the picture, and the
+           picture is the point. Measured at 1280×800, the card's own chrome was
+           201px of a 412px slot before this line. */
+        padding: focused ? '12px 16px 10px' : '16px 18px 14px',
         display: 'flex',
         flexDirection: 'column',
         minWidth: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginBottom: focused ? 14 : 8 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: focused ? 7 : 8 }}>
         <div style={{ flex: '1 1 auto', minWidth: 0 }}>
           <h2 style={{ margin: 0, fontSize: focused ? 16 : 13.5, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--pw-ink)' }}>{label}</h2>
           {/* THE ONE VISIBLE LINE. Absent rather than invented when the library
               derived none — a view that declares no encoding surface has no
               bindings to derive a how-to-read line from, and says nothing. */}
           {howToRead === null ? null : <p style={{ margin: '4px 0 0', fontSize: focused ? 13 : 12, color: 'var(--pw-mid-2)' }}>How to read: {howToRead}</p>}
+          {/* THE STAGE'S ONE QUIET LINE, beside the library's own derived one —
+              the band's first field, in the place the band was about */}
+          {stage === null ? null : (
+            <p style={{ margin: '3px 0 0', fontSize: focused ? 13 : 12, color: 'var(--pw-mid-2)' }}>
+              <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-accent-bright)', marginRight: 5 }}>{stage.mark}</span>
+              {stage.line}
+            </p>
+          )}
         </div>
         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           {legend.map((chip) => (
@@ -118,31 +180,182 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
         renders nothing and never grows, because what would have grown it is the
         chart it is not drawing.
       */}
-      <div style={{ display: 'flex', flexDirection: 'column', height, minWidth: 0 }}>{children}</div>
+      <div style={fills ? { display: 'flex', flexDirection: 'column', flex: '1 1 0', minHeight: 0, minWidth: 0 } : { display: 'flex', flexDirection: 'column', height, minWidth: 0 }}>{children}</div>
 
+      {/* THE STAGE'S OWN NUMBERS, in Mono under the picture: the band's `<dl>`,
+          beside the other figures about this same picture rather than in a
+          300px column of its own with white space under it. And its REFUSAL,
+          visible — a refusal is never behind a press. */}
+      {stage === null ? null : (
+        <>
+          {stage.facts.length === 0 ? null : (
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginTop: 7, paddingTop: 6, borderTop: '1px solid var(--pw-rule)', fontSize: 11.5, color: 'var(--pw-mid-2)' }}>
+              {stage.facts.map((fact) => (
+                <span key={fact.id} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
+                  {fact.label}
+                  <b style={{ fontFamily: 'var(--pw-font-mono)', fontWeight: 500, color: 'var(--pw-ink)' }}>{fact.value}</b>
+                </span>
+              ))}
+            </div>
+          )}
+          {stage.refusal === null ? null : (
+            <p role="status" style={{ margin: '7px 0 0', fontSize: 12, lineHeight: 1.45, color: 'var(--pw-refuse-ink)' }}>
+              {stage.refusal}
+            </p>
+          )}
+        </>
+      )}
+
+      {/*
+        THE FOOTER: COUNTS ON THE LEFT, THE OWNING STAGE ON THE RIGHT, both
+        Mono, ONE LINE, never wrapping.
+        The counts are load-bearing and are the ONLY surviving copy of
+        themselves: the counted-facts band was deleted on the grounds that each
+        card carries its own, so a card that dropped them would lose them off
+        the page entirely — two cuts each justified by the other place, which is
+        the silent omission this desk is built against
+        (`tests/prot-viewport.smoke.test.ts` counts them on the rendered page).
+        So if this line ever wraps, the ATTRIBUTION is what shortens — never the
+        numbers.
+      */}
       {footLeft === null && footRight === null ? null : (
         <div
           style={{
             display: 'flex',
             alignItems: 'baseline',
             gap: 16,
-            marginTop: 10,
-            paddingTop: 10,
+            marginTop: 7,
+            paddingTop: 6,
             borderTop: '1px solid var(--pw-rule)',
             fontFamily: 'var(--pw-font-mono)',
             fontSize: 11,
             color: 'var(--pw-mid-2)',
+            whiteSpace: 'nowrap',
+            minWidth: 0,
           }}
         >
-          {footLeft === null ? null : <span>{footLeft}</span>}
-          {footRight === null ? null : <span style={{ marginLeft: 'auto' }}>{footRight}</span>}
+          {footLeft === null ? null : <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{footLeft}</span>}
+          {footRight === null ? null : <span style={{ marginLeft: 'auto', flex: '0 0 auto' }}>{footRight}</span>}
         </div>
       )}
 
-      {/* THE NOTE, REACHABLE IN ONE PRESS and never deleted — the omit-never-deny law, drawn */}
+      {/*
+        THE NOTE, REACHABLE IN ONE PRESS and never deleted — the omit-never-deny
+        law, drawn.
+
+        In a card that FILLS a definite box it gets its own scroll and the
+        picture above yields the height it needs (`flex: 0 1 auto` beside the
+        frame's `flex: 1 1 0`). A note clipped by the card it opened inside
+        would be a note this desk deleted with `overflow: hidden`, which is the
+        one thing the law forbids.
+      */}
       {note === null || !open ? null : (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--pw-rule)', fontSize: 12, lineHeight: 1.6, color: 'var(--pw-mid-2)' }}>{note}</div>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--pw-rule)', fontSize: 12, lineHeight: 1.6, color: 'var(--pw-mid-2)', ...(fills ? { flex: '0 1 auto', minHeight: 0, overflowY: 'auto' as const } : {}) }}>{note}</div>
       )}
+    </article>
+  );
+}
+
+// ── the rail: a picture and a name, and one press brings it everything else ──
+
+export interface ChartTileProps {
+  /** The cell's address — stamped as `data-chart`, the same way the card stamps it, because a test names a chart by it wherever it is drawn. */
+  readonly id: string;
+  /** The picture's name: the tile's heading and part of its accessible name. */
+  readonly label: string;
+  /** What it counts at this cursor — or, when there is nothing to draw, the library's own sentence saying so. `null` when it has neither. */
+  readonly said: string | null;
+  /** The control that brings it into the focus — what it is called, and what a press does. */
+  readonly promote: { readonly label: string; onPress(): void };
+  /** `true` lays the tile out for the bottom strip; a block for the right column otherwise. */
+  readonly wide?: boolean;
+  /** The picture. `null` for a step that has none — the three that will not run here — and then {@link ChartTileProps.said} is the whole body. */
+  readonly children?: ReactNode;
+}
+
+/**
+ * ONE TILE — A NAME, A COUNT, AND ITS MARKS.
+ *
+ * ── WHY A TILE DRAWS ITS CHART, which is the interesting decision ──────────
+ * It did not, for one round: eight tiles at about 150px each is a size where a
+ * library chart's axis labels are illegible and 185 marks merge into a texture,
+ * and drawing something unreadable and calling it a chart is the same lie as a
+ * fake axis on a stage that never ran.
+ *
+ * What overturned that is the REASON focus mode exists. This dashboard's views
+ * are crossfiltered (`src/prot/def.ts` · `links.default: 'crossfilter'`): a
+ * pick in one chart narrows the others. A tile that shows no marks cannot show
+ * that — and an effect nobody can see might as well not have happened. So the
+ * arrangement is *one big, the rest small, all on screen at once*, and the
+ * small ones MUST draw: 185 marks dropping to 12 is perfectly legible at tile
+ * size, because it is a change in DENSITY and not a value read off an axis.
+ *
+ * The honesty floor does not bend with it — no axis labels the tile cannot fit,
+ * no fake axes, nothing dressed as a reading it is not. What a tile claims is
+ * exactly what it shows: this many marks, this shape, and its own count in
+ * words beside its name.
+ *
+ * ── AND WHY THE CONTROL IS THE HEADER AND NOT THE WHOLE TILE ───────────────
+ * The picture inside is the library's and is LIVE — a pick in it is a real
+ * commit on the record, which is the whole point of drawing it. So the tile
+ * cannot be one big button: a button may not contain the library's own axis
+ * controls, and a press anywhere would swallow the gesture that makes the tile
+ * worth drawing. The header row is the promote control, with the accessible
+ * name; the picture below it belongs to the reader.
+ */
+export function ChartTile({ id, label, said, promote, wide = false, children }: ChartTileProps): JSX.Element {
+  return (
+    <article
+      data-chart={id}
+      data-tile="true"
+      aria-label={label}
+      style={{
+        border: '1px solid var(--pw-edge-card)',
+        borderRadius: 'var(--pw-r-card)',
+        background: 'var(--pw-glass-card)',
+        backdropFilter: 'var(--pw-blur-card)',
+        WebkitBackdropFilter: 'var(--pw-blur-card)',
+        padding: '5px 8px 7px',
+        display: 'flex',
+        flexDirection: 'column',
+        // NOT ONE FIXED HEIGHT: a tile is whatever its pane gives it, and the
+        // library's frame re-measures itself when that changes.
+        ...(children === undefined ? {} : { flex: '1 1 0' }),
+        minHeight: 0,
+        minWidth: 0,
+      }}
+    >
+      <button
+        type="button"
+        onClick={promote.onPress}
+        aria-label={promote.label}
+        style={{
+          font: 'inherit',
+          fontFamily: 'var(--pw-font-sans)',
+          textAlign: 'left',
+          cursor: 'pointer',
+          background: 'none',
+          border: 0,
+          padding: 0,
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 6,
+          width: '100%',
+          minWidth: 0,
+          flex: '0 0 auto',
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pw-ink)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span aria-hidden style={{ marginLeft: 'auto', fontFamily: 'var(--pw-font-mono)', fontSize: 9.5, color: 'var(--pw-accent)', flex: '0 0 auto' }}>
+          ⤢
+        </span>
+      </button>
+      {/* THE COUNT, in Mono — the only surviving copy of these numbers now that
+          the counted-facts band is gone, and never a sentence. */}
+      {said === null ? null : (
+        <span style={{ fontFamily: children === undefined ? 'var(--pw-font-sans)' : 'var(--pw-font-mono)', fontSize: children === undefined ? 10.5 : 9.5, lineHeight: 1.35, color: 'var(--pw-mid-2)', flex: '0 0 auto', minWidth: 0, ...(children === undefined ? {} : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }) }}>{said}</span>
+      )}
+      {children === undefined ? null : <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 0', minHeight: 0, minWidth: 0, marginTop: 3 }}>{children}</div>}
     </article>
   );
 }

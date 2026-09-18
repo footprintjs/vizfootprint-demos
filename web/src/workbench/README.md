@@ -7,7 +7,7 @@ That is the author's ruling and it is the shape of this folder, not a preference
 | layer | files here | one job | may import |
 |---|---|---|---|
 | 1 · **theme** | `theme.css`, `tokens.ts` | every colour, radius, shadow, blur and font family, once | `tokens.ts`: `react`, nothing else |
-| 2 · **components** | `Chrome.tsx`, `Stepper.tsx`, `StagePanel.tsx`, `ChartCard.tsx`, `Search.tsx` | **props in, markup out** | `react` + sibling components |
+| 2 · **components** | `Chrome.tsx`, `Stepper.tsx`, `ChartCard.tsx`, `Search.tsx` | **props in, markup out** | `react` + sibling components |
 | 3 · **business logic** | `bands.ts`, `steps.ts`, `panel.ts`, `charts.ts`, `results.ts` (and `../protStages.ts`, which was already this) | the rules, as **pure functions**: input is the run, output is the props | the run's own declarations (`src/prot/`), sibling types |
 | 4 · **data logic** | *not here* — `../protRows.ts`, `../protProjection.tsx`, `src/prot/session.ts` | the only code that touches the session | anything |
 
@@ -31,15 +31,53 @@ A component that takes only props is a component that can later move into `vizfo
 2. **No component counts.** A number on screen was folded by layer 3 off the run:
 
    ```ts
-   // bands.ts — the facts strip
-   { id: 'contacts', parts: [{ value: num(pairs.rows), after: 'non-covalent contacts,' }, { value: num(pairs.crossing), after: 'of them cross-chain' }] }
+   // panel.ts — the stage's own numbers, read off the act's answer field by field
+   { id: 'crossing', label: 'Crossing to another chain', value: num(pairs.crossing) }
    ```
 
-   A fact whose source has not landed is **absent** from the strip — never a zero and never a dash.
+   A fact whose source has not landed is **absent** — never a zero, never a dash, and (since the facts band went) never a second copy of a count another card already carries.
 
 3. **No component reaches a chart's internals.** The pictures are `vizfootprint-ui`'s, themed through the library's own hooks: its `--vzf-*` custom properties (the one bridge rule in `theme.css`) and the `colorOf` a chart accepts. There is not one descendant selector under a `.vzf-*` class in this folder, and `tests/prot-theme.test.ts` asserts that.
 
 4. **Nothing is dropped to make room.** The redesign moved every long caption behind a `Full note` disclosure — it did not shorten one. `tests/prot-cards.test.tsx` opens the disclosure and asserts the note's own sentences are in the DOM.
+
+## THE INSTRUMENT FITS THE WINDOW, and that is a functional law rather than a visual one
+
+> no paragraphs, nothing similar — I don't want a scrolling dashboard
+
+The author's ruling, and the REASON behind it is the one that decides every layout question here: *focus means once a stage is chosen it gets bigger and the rest stay small, **so that a selection in one chart is visible in another** — otherwise there is no use.* These views are crossfiltered (`src/prot/def.ts` · `links.default: 'crossfilter'`), so a pick in one pane narrows the others — and a pane that is off-screen, or drawn without marks, cannot show that. **An effect nobody can see might as well not have happened.** So:
+
+| the law | how it is kept | what breaks it |
+|---|---|---|
+| the PAGE never scrolls | `protDesk.tsx` root: `height: 100dvh`, four grid rows, the instrument pinned to the LAST one (`gridRow: '-2 / -1'`) | `min-height: 100dvh` — an indefinite height sizes an `fr` row to its CONTENT, which cost 208px of empty space in a 749px gap |
+| the instrument claims ALL the remaining height | `minmax(0, 1fr)` for the focus row, `minmax(0, 0.34fr)` for the bottom strip, `min-height: 0` on every shrinkable child | an `auto` track, or a child that refuses to shrink: both leave the remainder unclaimed |
+| no fixed pixel height anywhere in it | `fr` and `clamp` only; `ChartFrame` re-measures itself on every reflow | a `height: 340` — the number that made five cards a 2,622px page |
+| the right column stops shrinking before it stops working | `clamp(16rem, 22vw, 22.5rem)` — 256px floor, 360px ceiling (where the design drew it) | a percentage with no floor |
+| the right column's rows are NOT equal | drawings get `minmax(0, 1fr)` each, the text cards `auto` | five equal rows, which gave two charts 120px and three sentences more than they need |
+
+**The shape is an L, and the reason is aspect ratio** — the design's own artboards, not anybody's taste: the surface run was drawn at 3.4 : 1 and the cross-chain bars at 3.9 : 1, the Ramachandran at 1 : 1. So what wants WIDTH waits along the bottom and what wants a SQUARE (or rows, which want height) waits down the side. Which is which is read off the def's declared `chartKind` (`charts.ts · shapeOfView`) and never from a list of where each chart goes.
+
+`tests/prot-viewport.smoke.test.ts` measures all of it in a real browser at 1440×900 and 1280×800 — the page height, the dead space, every pane's size and marks, a window drag between the two — and `tests/prot-crossfilter.smoke.test.ts` drives the claim it is bought for: a pick in a tile, every other pane changing, the clause cleared, the marks back.
+
+## EVERY PANE THAT BINDS DATA DRAWS ITS MARKS — including the small ones
+
+A tile was words only for one round, on the honest ground that a library chart at 150px has illegible axis labels and 185 marks that merge into texture. **The crossfilter overturned it:** a pane with no marks cannot show a selection, and *185 marks dropping to 12* is perfectly legible at tile size because it is a change in DENSITY, not a value read off an axis.
+
+What survives of that rule is the floor: no axis labels a pane cannot fit, no fake axes, nothing dressed as a reading it is not. And the three steps that **will not run here** stay words — they have nothing to filter (`ChartCard.tsx · ChartTile`, whose `children` are optional for exactly that reason).
+
+**A tile's header is the control, not the whole tile.** The picture inside is live: a button may not contain the library's own axis controls, and a press anywhere would swallow the gesture that makes the tile worth drawing.
+
+## A STEP THAT WILL NOT RUN GETS A CARD, and the reason is inside it
+
+> for not-available, show the widget and tell inside it a text to tell why it's not there
+
+So the reason is read at the size and in the position of the thing it is about. Stages 5 and 6 declare no views at all, so their card has **no chart and no frame pretending to be one** — an empty axis would be the lie this desk exists to avoid. The card carries the kind of blocked, the reason's own first clause (`panel.ts · firstClause`) and the declared sentence; the whole paragraph is behind the same `Full note` press every other card has.
+
+## NO PROSE UNDER A DRAWING, in any card, focused or tiled
+
+The prose band under the stepper is **gone** — 342 words, then 136, then none — and not one of its sentences was deleted. `panel.ts`'s file header carries the field-by-field map of where each went, and `tests/prot-panel.test.tsx` is the proof. A card's footer is now **counts on the left, the owning stage on the right, both Mono, one line, never wrapping** — and if it wraps, the ATTRIBUTION shortens, never the numbers.
+
+**The counts are load-bearing and are the only surviving copy of themselves.** The counted-facts band was deleted because each card already carried its own; a card that dropped them too would lose them off the page entirely — two cuts each justified by the other place, which is the silent omission this desk is built against. The browser test counts them on the rendered page.
 
 ## One disclosure, everywhere something folds
 
@@ -47,17 +85,18 @@ A component that takes only props is a component that can later move into `vizfo
 
 | where | shape | what it holds |
 |---|---|---|
-| a chart card's `Full note` | the card's own `GlassButton` + `Chevron` | the long caption, whole |
-| the stage panel's `More about where you are standing` | `shape="bare"` | the dashboard's declared summary, this desk's claim about itself, the commit the pictures are drawn at, and the measured reason a declared stage cannot run here |
-| the four record panels, the recorder's account, the list of omissions | `shape="card"` | the library's own `CommitLog` / `GapsPanel` / `Sheet`, untouched |
+| a chart card's `Full note` | the card's own `GlassButton` + `Chevron` | the long caption, whole — and, on the focused card, the stage's own lead, its account and the recorder's sentences |
+| a step-that-will-not-run card's `Full note` | the same | the whole declared reason, and what the step would answer |
+| the record drawer's bar | `Chrome.tsx · RecordDrawer` | everything below: the acts of every stage, the four record panels, the recorder's account, the dashboard's own words, the omissions, and the page's own credit and provenance |
+| the panels inside it | `shape="card"` | the library's own `CommitLog` / `GapsPanel` / `Sheet`, untouched |
 
-**The panel shows three or four sentences and a `<dl>`, and nothing else.** That is the author's ruling — *less words shown, one panel, about the stage* — and the only things allowed past it are a REFUSAL (never behind a press) and ONE SHORT LINE naming the stage this build cannot run at all. That line is the measured reason's own first clause (`panel.ts · firstClause`, cut at a punctuation boundary, re-worded nowhere); the paragraph is in the fold. An announcement does not have to be a paragraph to be an announcement.
+**The record is a drawer and not a region below a fold**, because the page may not scroll to be operated. Its presence is visible without scrolling anything (the shut bar names what is inside it, with counts), reaching it is one press, it opens OVER the charts so the instrument does not re-lay-out under a reader, and **the drawer scrolls, not the page**. It is written FIRST in the markup and drawn LAST: `tests/prot-cursor.smoke.test.ts` opens `[aria-expanded="false"]` blindly to reach an act's seek control, so the first thing it meets has to be this bar and not a `Full note` the open panel would cover.
 
-`tests/prot-panel.test.tsx` holds the panel under 150 visible words and presses the fold to read every folded sentence back. `tests/prot-tail.test.tsx` does the same for the foot of the page.
+`tests/prot-tail.test.tsx` presses the bar and reads every folded sentence back.
 
 ## A number is Mono, the words round it are Sans
 
-`Chrome.tsx · Count`. One component, so no title spells it differently — the four record panels' counts and the facts strip agree by construction.
+`Chrome.tsx · Count`. One component, so no title spells it differently — the record panels' counts and the drawer's own bar agree by construction.
 
 ## The three library parts that lose a host's tokens, and the door back in
 

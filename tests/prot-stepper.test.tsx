@@ -1,20 +1,23 @@
 // @vitest-environment jsdom
 /**
- * THE STEPPER IS A CONTROL, NOT A PICTURE — and now it is the DESIGN's five
- * marks over the code's five states.
+ * THE STEPPER IS A CONTROL, NOT A PICTURE — and it now shows ALL SIX STEPS of
+ * the published plan, each one saying which kind of blocked it is.
  *
- * Three claims, in three layers:
+ * Four claims, in four layers:
  *
- *   1. THE FIVE MARKS, each as a reader reads it on screen — the mark, the tag
- *      under the name, whether the name is a control, and the one state that
- *      moves. Plus the sixth thing a column can be: the one the cursor is
- *      standing in.
- *   2. PRESSING A LANDED STAGE SEEKS — to the commit its LAST act landed, and
- *      to no other; a refused seek prints the session's own sentence.
- *   3. THE FOLDS ARE DERIVED — which charts a stage owns is an intersection of
- *      what its acts landed with what each view binds, which stage the cursor
- *      is standing in is read off the active path, and the CONNECTORS are a
- *      stated rule rather than a guess. All four are pure functions here.
+ *   1. THE SIX MARKS, each as a reader reads it on screen — the mark, the word
+ *      under the name, whether the column is a control and what it is called.
+ *      Including the three "will not run" reasons, which are ONE MARK FAMILY
+ *      with three different sentences, and the one step that landed before the
+ *      record started.
+ *   2. ONE CONTROL PER COLUMN, and three things a press can mean: seek the
+ *      cursor, bring a card into the focus, bring a picture into the focus.
+ *   3. NOTHING BETWEEN THE STEPPER AND THE CHARTS. No note, no per-stage
+ *      caret, no prose — the author's ruling — and the counts that note carried
+ *      are COUNTED FACTS now (`stepperTally`), not a sentence.
+ *   4. THE FOLDS ARE DERIVED — which charts a stage owns (including the
+ *      parse's own two), which stage the cursor stands in, and the CONNECTORS.
+ *      All pure functions here.
  *
  * ── WHY THE RUN IS HAND-BUILT ───────────────────────────────────────────────
  * `tests/prot-progression.test.ts` runs the real stages over the real entry and
@@ -22,24 +25,24 @@
  * folds, so their input is written out — one landed act, one refused act, one
  * act that landed a commit and no column.
  *
- * ── AND THE THREE NAMES THAT ARE A CONTRACT ────────────────────────────────
- * The seek control's accessible name, the expander's and the nav's are asserted
- * through the fold that produces them (`web/src/workbench/steps.ts`), so a
- * rename shows up here as well as in the browser smoke test that finds an act's
- * control by name.
+ * ── AND THE NAMES THAT ARE A CONTRACT ──────────────────────────────────────
+ * The seek control's accessible name, the acts list's and the nav's are all
+ * unchanged from before this packet: tests name controls by them, and a test
+ * that had to be edited to keep passing is a contract that was broken quietly.
  */
 import { describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ReactElement } from 'react';
 import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
-import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { BLOCKED_TAG, PROT_BLOCKED, PROT_PLAN } from '../src/prot/plan.js';
+import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
 import { ActRow, RunNarrative, landedLine, narrativeTitle } from '../web/src/protTrace.js';
 import { StageDetail } from '../web/src/protDesk.js';
-import { chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from '../web/src/protStages.js';
+import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from '../web/src/protStages.js';
 import { StageStepper } from '../web/src/workbench/Stepper.js';
-import { STEPPER_LABEL, expandLabelOf, seekLabelOf, stepViews, stepperNote } from '../web/src/workbench/steps.js';
+import { STEPPER_LABEL, actsLabelOf, focusLabelOf, seekLabelOf, showLabelOf, stepViews } from '../web/src/workbench/steps.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -119,231 +122,328 @@ const runWith = (over: Partial<ProtRun> = {}): ProtRun => ({
 async function stepper(
   outcomes: readonly ActOutcome[],
   run: ProtRun | null,
-  asked: string[] = [],
+  pressed: string[] = [],
   options: { readonly seekable?: boolean; readonly refuseWith?: string | null; readonly here?: string } = {},
 ) {
   const seekable = options.seekable ?? true;
   const stages = stepperStages(outcomes, run);
   const here = options.here === undefined ? null : (stages.find((s) => s.stage === options.here) ?? null);
-  let said: string | null = null;
-  const seek = (commitId: string): Promise<string | null> => {
-    asked.push(commitId);
-    return Promise.resolve(options.refuseWith ?? null);
+  const steps = stepViews(stages, here, seekable);
+  const panel = await mount(<StageStepper steps={steps} label={STEPPER_LABEL} refusedSeek={options.refuseWith ?? null} onSeek={(key) => pressed.push(key)} />);
+  /** One stage by its id — never by its position, because the PLAN's order is not the def's. */
+  const at = (stage: string): StepperStage => {
+    const found = stages.find((s) => s.stage === stage);
+    if (found === undefined) throw new Error(`no stage "${stage}" on the stepper`);
+    return found;
   };
-  const steps = stepViews(stages, here, seekable, (stage: StepperStage) => <StageDetail stage={stage} run={run} onSeek={seek} say={(s) => (said = s)} />);
-  const panel = await mount(<StageStepper steps={steps} label={STEPPER_LABEL} note={stepperNote(stages, seekable)} refusedSeek={options.refuseWith ?? null} onSeek={(key) => void seek(stages.find((s) => s.stage === key)?.commit ?? '')} />);
-  return { ...panel, stages, said: () => said };
+  /** One column's markup, for the assertions about the mark itself. */
+  const column = (stage: string): string => panel.steps()[at(stage).number - 1]!.innerHTML;
+  return { ...panel, stages, at, column };
 }
 
-/** One column's markup, for the assertions about the mark itself. */
-const markOf = (step: HTMLElement): string => step.innerHTML;
-
-describe('the five marks, as a reader reads them', () => {
-  it('draws one column per DECLARED stage — the two that run and the one this desk cannot', async () => {
+describe('ALL SIX STEPS OF THE PLAN, and each one says what it is', () => {
+  it('draws one column per PUBLISHED STEP — six, not the three the def dispatches for', async () => {
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    expect(panel.steps()).toHaveLength(PROT_STAGES.length + PROT_UNAVAILABLE_STAGES.length);
-    const said = panel.words();
-    for (const stage of PROT_STAGES) expect(said).toContain(stage.label);
-    for (const stage of PROT_UNAVAILABLE_STAGES) expect(said).toContain(stage.label);
-    // the plan is declared, and the stepper says that rather than leaving the
-    // marks to be read as a promise
-    expect(said).toContain('stages are DECLARED on this desk');
-    expect(said).toContain('A circle claims nothing about a stage that has not run.');
-    // …and the grid is one column per declared stage, derived from the list
+    expect(panel.steps()).toHaveLength(PROT_PLAN.length);
+    expect(panel.steps()).toHaveLength(6);
+    // …and the grid is one column per step, derived from the list
     const grid = panel.host.querySelector('ol')?.getAttribute('style') ?? '';
-    expect(grid).toContain(`repeat(${String(PROT_STAGES.length + PROT_UNAVAILABLE_STAGES.length)}, minmax(0, 1fr))`);
+    expect(grid).toContain(`repeat(${String(PROT_PLAN.length)}, minmax(0, 1fr))`);
     await panel.unmount();
   });
 
-  it('LANDED: the name is a REAL button, underlined, and what the stage put on the desk is one press away', async () => {
+  it('prints the SHORT declared name in each column, and carries the declared SENTENCE on the column’s own control', async () => {
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    const stage = panel.stages[0]!;
-    const button = panel.byLabel(seekLabelOf(stage));
-    expect(button?.tagName).toBe('BUTTON');
-    expect(button?.getAttribute('style') ?? '').toContain('text-decoration: underline');
-    // the mark is solid accent with the lifted shadow, and carries no tag
-    expect(markOf(panel.steps()[0]!)).toContain('var(--pw-accent)');
-    expect(panel.words()).not.toContain('landed —');
-    // and what it landed IS on the page, behind its own expander
-    await click(panel.byLabel(expandLabelOf(stage)));
-    expect(panel.words()).toContain(`landed 3 columns on the residues table — contacts, ${INTERFACE_CONTACTS_COLUMN}, interface_separation`);
-    expect(panel.words()).toContain('and cut 1 table into its own answer, which no clause in the data space reaches');
+    const said = panel.words();
+    // the short name is what six columns across a screen can hold — and it is
+    // DECLARED beside the sentence (`src/prot/plan.ts`), never cut from it here
+    for (const step of PROT_PLAN) expect(said).toContain(step.name);
+    // and no declared label was shortened: the sentence is the accessible name
+    // of the column's control, so a screen reader hears it in full
+    for (const stage of [...PROT_STAGES, ...PROT_UNAVAILABLE_STAGES]) {
+      const control = ([...panel.host.querySelectorAll('[aria-label]')] as HTMLElement[]).map((el) => el.getAttribute('aria-label') ?? '');
+      expect(control.some((name) => name.includes(stage.label)), `no control on the stepper carries the declared label "${stage.label}"`).toBe(true);
+    }
     await panel.unmount();
   });
 
-  it('REFUSED: rust, a badge, the word under the name — and the sentence itself, verbatim, one press away', async () => {
+  it('LANDED: solid accent, no word under the name, and the press SEEKS to the commit its last act landed', async () => {
+    const pressed: string[] = [];
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }), pressed);
+    const surface = panel.at('surface');
+    expect(surface.state).toBe('landed');
+    expect(panel.column('surface')).toContain('var(--pw-accent)');
+    const button = panel.byLabel(seekLabelOf(surface));
+    expect(button?.tagName).toBe('BUTTON');
+    await click(button);
+    expect(pressed).toEqual(['surface']);
+    await panel.unmount();
+  });
+
+  it('REFUSED: rust, a badge and the word under the name — the sentence itself is the focused card’s', async () => {
     const panel = await stepper(OUTCOMES, runWith());
-    const surface = panel.stages[1]!;
+    const surface = panel.at('surface');
     expect(surface.state).toBe('refused');
-    const column = markOf(panel.steps()[1]!);
+    const column = panel.column('surface');
     expect(column).toContain('var(--pw-refuse)');
     // the badge: a hue alone is never a state
     expect(column).toContain('!');
     expect(panel.words()).toContain('refused');
-    await click(panel.byLabel(expandLabelOf(surface)));
-    expect(panel.words()).toContain('1 act of this stage was refused');
-    expect(panel.words()).toContain('act "residueSurface" threw: the solvent probe found no polymer atom to roll over');
+    // the refusal itself is VERBATIM on the stage's own card and in its act
+    // rows — never re-worded, and never on the stepper
+    expect(surface.detail).toBe(OUTCOMES[2]!.refusal);
     await panel.unmount();
   });
 
-  it('NOT RUN: hollow and dashed, no tag, no control, and nothing to go back to', async () => {
+  it('NOT RUN: hollow and dashed, no word, no control, and no act it never dispatched is named', async () => {
     const one = [OUTCOMES[0]!, OUTCOMES[1]!];
     const panel = await stepper(one, runWith({ outcomes: one }));
-    const surface = panel.stages[1]!;
+    const surface = panel.at('surface');
     expect(surface.state).toBe('not-run');
-    expect(markOf(panel.steps()[1]!)).toContain('dashed');
-    // it is NOT a button
+    expect(panel.column('surface')).toContain('dashed');
+    // it is NOT a control: a press that answered nothing is worse than no press
     expect(panel.byLabel(seekLabelOf(surface))).toBeNull();
-    // and no act it never dispatched is named anywhere on screen
+    expect(panel.byLabel(showLabelOf(surface))).toBeNull();
+    expect(panel.byLabel(focusLabelOf(surface))).toBeNull();
     const said = panel.words();
     for (const id of PROT_ACT_ORDER.filter((a) => a !== PAIRS_ACT && a !== CONTACTS_ACT)) expect(said, `the stepper names "${id}", which this run never dispatched`).not.toContain(id);
-    // what it means is one press away, in the fold's own words
-    await click(panel.byLabel(expandLabelOf(surface)));
-    expect(panel.words()).toContain('declared, and not dispatched on this session — it has landed nothing, so there is nothing here to go back to');
     await panel.unmount();
   });
 
   it('RUNNING: the only state that moves, the only one with a progress hairline, and nothing clickable yet', async () => {
     const panel = await stepper([OUTCOMES[0]!], null, [], { seekable: false });
-    const interactions = panel.stages[0]!;
+    const interactions = panel.at('interactions');
     expect(interactions.state).toBe('running');
-    const column = markOf(panel.steps()[0]!);
-    // the animated arc, and the hairline at the share of its acts that are back
+    const column = panel.column('interactions');
     expect(column).toContain('pw-spin');
     expect(column).toContain('width: 50%');
-    // nobody else moves
-    expect(markOf(panel.steps()[1]!)).not.toContain('pw-spin');
-    expect(panel.words()).toContain('The cursor these stages move arrives with the desk, when the last act has landed — so nothing here is clickable yet.');
-    expect(panel.byLabel(seekLabelOf(interactions))).toBeNull();
-    await click(panel.byLabel(expandLabelOf(interactions)));
-    expect(panel.words()).toContain('running now — 1 of its 2 acts back');
+    // nobody else moves, and nothing is a control while the run is dispatching
+    expect(panel.column('surface')).not.toContain('pw-spin');
+    expect(panel.host.querySelectorAll('button')).toHaveLength(0);
     await panel.unmount();
   });
+});
 
-  it('NOT AVAILABLE HERE: hatched, struck through, tagged, never a button — and the reason is MEASURED', async () => {
-    const declared = PROT_UNAVAILABLE_STAGES[0]!;
+describe('THE THREE KINDS OF BLOCKED — one mark family, three sentences', () => {
+  it('wears the SAME mark for all three: hatched, struck through, never a spinner', async () => {
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    const stage = panel.stages[2]!;
-    expect(stage.state).toBe('unavailable');
-    const column = markOf(panel.steps()[2]!);
-    expect(column).toContain('var(--pw-mark-hatch)');
-    // the diagonal: it can never be mistaken for a stage that is still working
-    expect(column).toContain('var(--pw-strike)');
-    expect(panel.words()).toContain('not available here');
-    expect(panel.byLabel(seekLabelOf(stage))).toBeNull();
-    await click(panel.byLabel(expandLabelOf(stage)));
-    expect(panel.words()).toContain(declared.why);
-    expect(panel.words()).toContain('access-control-allow-origin');
-    expect(panel.words()).toContain('this stage dispatched nothing because it cannot run here at all');
+    for (const blocked of PROT_BLOCKED) {
+      const column = panel.column(blocked.stage);
+      expect(column, `${blocked.stage} is not hatched`).toContain('var(--pw-mark-hatch)');
+      // the diagonal: it can never be mistaken for a stage still working
+      expect(column, `${blocked.stage} is not struck through`).toContain('var(--pw-strike)');
+      expect(column).not.toContain('pw-spin');
+    }
+    // …and the mark the fold asks for is ONE name, so the two states cannot drift
+    const views = stepViews(stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED })), null, true);
+    expect(new Set(views.filter((v) => v.tag !== null && v.tag !== 'refused').map((v) => v.look))).toEqual(new Set(['declared-not-here']));
     await panel.unmount();
   });
 
-  it('CURRENT: the column the cursor stands in carries aria-current, a heavier name and the accent bar', async () => {
-    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }), [], { here: 'surface' });
-    const [interactions, surface] = panel.steps();
-    expect(surface?.getAttribute('aria-current')).toBe('step');
-    expect(interactions?.getAttribute('aria-current')).toBeNull();
-    // the name is the control, and it is the one carrying the step
-    const button = panel.byLabel(seekLabelOf(panel.stages[1]!));
-    expect(button?.getAttribute('aria-current')).toBe('step');
-    expect(button?.getAttribute('style') ?? '').toContain('font-weight: 600');
-    // the 3px bar across the bottom of its column, and only its column
-    expect(markOf(surface!)).toContain('height: 3px');
-    expect(markOf(interactions!)).not.toContain('bottom: 0px');
+  it('says WHICH KIND under each one, in three different words', async () => {
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const said = panel.words();
+    // the world, this build, us — and the words are declared once
+    expect(said).toContain(BLOCKED_TAG['the world']);
+    expect(said).toContain(BLOCKED_TAG['this build']);
+    expect(said).toContain(BLOCKED_TAG.us);
+    expect(said).toContain('not available here');
+    expect(said).toContain('not on this build');
+    expect(said).toContain('not built yet');
+    await panel.unmount();
+  });
+
+  it('is a CONTROL, and its name promises a card rather than a seek', async () => {
+    const pressed: string[] = [];
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }), pressed);
+    for (const blocked of PROT_BLOCKED) {
+      const stage = panel.at(blocked.stage);
+      expect(stage.commit, 'a blocked stage has no commit to seek to').toBeNull();
+      const control = panel.byLabel(showLabelOf(stage));
+      expect(control?.tagName, `${blocked.stage} is not a control`).toBe('BUTTON');
+      expect(showLabelOf(stage)).toContain('into the focus');
+      expect(showLabelOf(stage)).toContain('will not run on this build');
+      expect(showLabelOf(stage)).not.toContain('seek');
+      await click(control);
+    }
+    expect(pressed).toEqual(PROT_BLOCKED.map((b) => b.stage));
+    await panel.unmount();
+  });
+
+  it('is NEVER the not-run mark, which would read as still pending after a finished run', async () => {
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    for (const blocked of PROT_BLOCKED) {
+      expect(panel.at(blocked.stage).state).not.toBe('not-run');
+      expect(panel.column(blocked.stage)).not.toContain('dashed');
+    }
     await panel.unmount();
   });
 });
 
-describe('the connectors are a stated rule, not a guess', () => {
-  it('is solid between two stages that have run, dashed near up to the last one that ran, and dashed far past it', () => {
-    const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    const views = stepViews(stages, null, true, () => null);
-    // interactions (ran) → surface (ran): solid
-    expect(views[0]!.linkAfter).toBe('run');
-    expect(views[1]!.linkBefore).toBe('run');
-    // surface (ran) → conservation (never runs): the last stage that ran is
-    // `surface` at index 1, so the boundary at index 2 is past it
-    expect(views[1]!.linkAfter).toBe('far');
-    expect(views[2]!.linkBefore).toBe('far');
-    // the ends have no connector at all
-    expect(views[0]!.linkBefore).toBeNull();
-    expect(views[2]!.linkAfter).toBeNull();
-  });
+describe('THE STEP THAT LANDED BEFORE THE RECORD STARTED is a fourth kind of press', () => {
+  const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+  const search = stages.find((s) => s.stage === 'search')!;
 
-  it('dashes NEAR across a stage that did not run but sits before one that did', () => {
-    // the interactions stage never ran, the surface stage did — so both
-    // boundaries around the gap are "near", because the run reached past it
-    const surfaceOnly = [landedAct({ stage: 'surface', act: SURFACE_ACT, commit: 'c3', materialized: [SASA_COLUMN] })];
-    const stages = stepperStages(surfaceOnly, runWith({ outcomes: surfaceOnly }));
-    const views = stepViews(stages, null, true, () => null);
-    expect(stages[0]!.state).toBe('not-run');
-    expect(views[0]!.linkAfter).toBe('near');
-    expect(views[1]!.linkBefore).toBe('near');
-  });
-});
-
-describe('pressing a landed stage is the point', () => {
-  it('seeks to the commit the stage’s LAST act landed, and to no other', async () => {
-    const asked: string[] = [];
-    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }), asked);
-    await click(panel.byLabel(seekLabelOf(panel.stages[0]!)));
-    // the interactions stage dispatched c1 then c2: its state is c2
-    expect(asked).toEqual(['c2']);
-    await click(panel.byLabel(seekLabelOf(panel.stages[1]!)));
-    expect(asked).toEqual(['c2', 'c3']);
-    expect(panel.words()).not.toContain('the session refused that seek');
+  it('is LANDED — solid, not hatched, not struck through: it ran and it landed the whole table', async () => {
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    expect(search.state).toBe('landed');
+    expect(search.landsAtRoot).toBe(true);
+    const column = panel.column('search');
+    expect(column).toContain('var(--pw-accent)');
+    expect(column).not.toContain('var(--pw-mark-hatch)');
+    expect(column).not.toContain('var(--pw-strike)');
     await panel.unmount();
   });
 
-  it('prints the SESSION’s sentence when a seek is refused, rather than failing quietly', async () => {
+  it('has no commit, so its press takes the focus and says the cursor does not move', async () => {
+    const pressed: string[] = [];
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }), pressed);
+    expect(search.commit).toBeNull();
+    const control = panel.byLabel(focusLabelOf(search));
+    expect(control?.tagName).toBe('BUTTON');
+    expect(focusLabelOf(search)).toContain('the cursor does not move');
+    // and it is NOT a blocked sentence: this is the one step that certainly ran
+    expect(focusLabelOf(search)).not.toContain('will not run');
+    await click(control);
+    expect(pressed).toEqual(['search']);
+    await panel.unmount();
+  });
+
+  it('OWNS the pictures drawn from the columns no act landed — derived, not declared', () => {
+    const shown = { [STRUCTURE_VIEW]: { color: 'chain' }, [RAMA_VIEW]: { x: 'phi', y: 'psi' }, [INTERFACE_VIEW]: { category: 'residue_key', y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } };
+    const actColumns = actColumnsOf(stages);
+    // every column the acts landed is on that side of the intersection
+    expect([...actColumns].sort()).toEqual([SASA_COLUMN, 'contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation', 'relative_sasa'].sort());
+    // …so the parse owns the two pictures whose every bound column it read off
+    // the file, and neither of the two an act landed a column for
+    expect([...chartsOfStage(search, shown, actColumns)].sort()).toEqual([RAMA_VIEW, STRUCTURE_VIEW].sort());
+    expect(chartsOfStage(search, shown, actColumns)).not.toContain(SURFACE_VIEW);
+    expect(chartsOfStage(search, shown, actColumns)).not.toContain(INTERFACE_VIEW);
+  });
+
+  it('follows a RE-ENCODE, because it is an intersection and not a list', () => {
+    const actColumns = actColumnsOf(stages);
+    // a reader moves the run's y onto a file column: the picture stops being the
+    // surface stage's and becomes the parse's, with nobody editing a table
+    const reencoded = { [SURFACE_VIEW]: { x: 'resnum', y: 'phi', color: 'chain' } };
+    expect(chartsOfStage(search, reencoded, actColumns)).toEqual([SURFACE_VIEW]);
+    expect(chartsOfStage(stages.find((s) => s.stage === 'surface')!, reencoded, actColumns)).toEqual([]);
+  });
+});
+
+describe('NOTHING BETWEEN THE STEPPER AND THE CHARTS', () => {
+  it('prints no note, no sentence and no paragraph under the marks', async () => {
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const said = panel.words();
+    // the three sentences the note used to carry
+    expect(said).not.toContain('stages are DECLARED on this desk');
+    expect(said).not.toContain('A circle claims nothing');
+    expect(said).not.toContain('Press a landed stage');
+    // no <p> at all except the refused-seek status, and that one is absent here
+    expect(panel.host.querySelectorAll('p')).toHaveLength(0);
+    await panel.unmount();
+  });
+
+  it('offers no per-stage caret, because there is no prose left for one to open', async () => {
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    expect(panel.host.querySelectorAll('[aria-expanded]')).toHaveLength(0);
+    // ONE control per column, and that is all: six columns, six buttons
+    expect(panel.host.querySelectorAll('button')).toHaveLength(6);
+    await panel.unmount();
+  });
+
+  it('keeps the plan’s accounting IN THE MARKS, which is what a reader counts', async () => {
+    /*
+      The note's counts went to the facts strip for one round and were dropped
+      with it: THE SIX MARKS ARE THE ACCOUNTING. Three solid circles, one
+      hatched with NOT AVAILABLE HERE under it, one with NOT ON THIS BUILD and
+      one with NOT BUILT YET — countable, and in a better register than prose.
+    */
+    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    expect(panel.stages.filter((s) => s.state === 'landed')).toHaveLength(3);
+    expect(panel.stages.filter((s) => s.blockedBy !== null)).toHaveLength(3);
+    const said = panel.words();
+    expect(said).toContain('not available here');
+    expect(said).toContain('not on this build');
+    expect(said).toContain('not built yet');
+    // and no count is re-stated as prose anywhere near the marks
+    expect(said).not.toContain('steps declared');
+    expect(said).not.toContain('will not run on this build');
+    await panel.unmount();
+  });
+
+  it('prints the SESSION’s own sentence when a seek is refused, rather than failing quietly', async () => {
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }), [], { refuseWith: 'no commit "c2" to seek to' });
     expect(panel.words()).toContain('the session refused that seek, in its own words: no commit "c2" to seek to');
     await panel.unmount();
   });
 });
 
-describe('one list, not two: a stage expands to its acts', () => {
-  it('shows the stage’s own acts, in dispatch order, each one seeking to its own commit', async () => {
+describe('the connectors are a stated rule, not a guess', () => {
+  it('is solid between two steps that have both run, dashed near up to the last one, and dashed far past it', () => {
+    const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const views = stepViews(stages, null, true);
+    const at = (stage: string): number => stages.findIndex((s) => s.stage === stage);
+    // step 3 (surface, ran) → step 4 (interactions, ran): solid
+    expect(views[at('surface')]!.linkAfter).toBe('run');
+    expect(views[at('interactions')]!.linkBefore).toBe('run');
+    // step 4 is the last that ran, so every boundary past it is FAR
+    expect(views[at('interactions')]!.linkAfter).toBe('far');
+    expect(views[at('hotspots')]!.linkBefore).toBe('far');
+    // step 1 ran (at the root) and step 2 never will: the run reached past it,
+    // so the boundary is NEAR rather than far
+    expect(views[at('search')]!.linkAfter).toBe('near');
+    // the two ends have no connector at all
+    expect(views[0]!.linkBefore).toBeNull();
+    expect(views[views.length - 1]!.linkAfter).toBeNull();
+  });
+});
+
+describe('the act rows moved to the record, and are unchanged', () => {
+  const detail = (stage: StepperStage, asked: string[] = []) => (
+    <StageDetail stage={stage} run={runWith({ outcomes: ALL_LANDED })} onSeek={(id) => { asked.push(id); return Promise.resolve(null); }} say={() => undefined} />
+  );
+
+  it('shows a stage’s own acts, in dispatch order, each one seeking to its own commit', async () => {
     const asked: string[] = [];
-    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }), asked);
-    expect(panel.rows()).toHaveLength(0);
-    await click(panel.byLabel(expandLabelOf(panel.stages[0]!)));
+    const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const panel = await mount(detail(stages.find((s) => s.stage === 'interactions')!, asked));
     expect(panel.rows()).toHaveLength(2);
     const said = panel.words();
     expect(said.indexOf(`interactions · ${PAIRS_ACT}`)).toBeGreaterThan(-1);
     expect(said.indexOf(`interactions · ${CONTACTS_ACT}`)).toBeGreaterThan(said.indexOf(`interactions · ${PAIRS_ACT}`));
-    // AND THE NAME THE BROWSER SMOKE TEST FINDS IT BY — unchanged
+    // THE NAME THE BROWSER SMOKE TEST FINDS IT BY — unchanged, and it is the one
+    // test that proves the pictures follow the cursor
     expect(panel.byLabel(`seek the cursor to the commit act "${PAIRS_ACT}" landed`)).not.toBeNull();
     await click(panel.rowButtons()[0]!);
     expect(asked).toEqual(['c1']);
     await panel.unmount();
   });
 
-  it('opens one stage at a time, and says so through aria-expanded', async () => {
-    const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    expect([...panel.host.querySelectorAll('[aria-expanded="false"]')]).toHaveLength(3);
-    await click(panel.byLabel(expandLabelOf(panel.stages[0]!)));
-    expect(panel.byLabel(expandLabelOf(panel.stages[0]!))?.getAttribute('aria-expanded')).toBe('true');
-    await click(panel.byLabel(expandLabelOf(panel.stages[1]!)));
-    expect(panel.byLabel(expandLabelOf(panel.stages[0]!))?.getAttribute('aria-expanded')).toBe('false');
-    expect(panel.byLabel(expandLabelOf(panel.stages[1]!))?.getAttribute('aria-expanded')).toBe('true');
+  it('is named the way the caret that used to open it was named, because a name is a contract', () => {
+    const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const interactions = stages.find((s) => s.stage === 'interactions')!;
+    expect(actsLabelOf(interactions)).toBe(`show the acts of stage ${String(interactions.number)}, ${interactions.label}`);
+  });
+
+  it('carries no prose any more — the rows, and one Mono word for a stage that dispatched none', async () => {
+    const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const panel = await mount(detail(stages.find((s) => s.stage === 'conservation')!));
+    const said = panel.words();
+    expect(said).toBe('no act dispatched');
+    // the three sentences that used to sit above the rows are gone from here
+    expect(said).not.toContain('a greyed box would be a promise');
+    expect(said).not.toContain('the reason above is measured');
     await panel.unmount();
   });
 
   it('renders a refused act as a first-class row, not clickable, and says why', async () => {
-    const panel = await stepper(OUTCOMES, runWith());
-    await click(panel.byLabel(expandLabelOf(panel.stages[1]!)));
+    const stages = stepperStages(OUTCOMES, runWith());
+    const panel = await mount(<StageDetail stage={stages.find((s) => s.stage === 'surface')!} run={runWith()} onSeek={() => Promise.resolve(null)} say={() => undefined} />);
     expect(panel.rows()).toHaveLength(1);
     expect(panel.rowButtons()).toHaveLength(0);
     expect(panel.words()).toContain('no commit, so there is nothing to seek to: this act landed none');
-    await panel.unmount();
-  });
-
-  it('says in words when a stage dispatched nothing — a missing row, never a greyed promise', async () => {
-    const one = [OUTCOMES[0]!, OUTCOMES[1]!];
-    const panel = await stepper(one, runWith({ outcomes: one }));
-    await click(panel.byLabel(expandLabelOf(panel.stages[1]!)));
-    expect(panel.words()).toContain('no act of this stage was dispatched, so there is no row here — a row that is missing is an act that did not happen, and a greyed box would be a promise');
+    expect(panel.words()).toContain(OUTCOMES[2]!.refusal!);
     await panel.unmount();
   });
 });
@@ -380,9 +480,6 @@ describe('the recorder’s own account stays whole', () => {
   });
 
   it('hands its TITLE over separately, counted off the recorder, so one disclosure shape can carry it', () => {
-    // the list used to draw its own `<details>`; the desk now folds everything
-    // through `workbench/Chrome.tsx` · `Disclosure`, so this file supplies the
-    // words and the composition supplies the box
     expect(narrativeTitle(runWith({ outcomes: ALL_LANDED }))).toBe('What the run looked like from inside — the recorder’s own 2 sentences, in order and not re-worded here');
   });
 
@@ -398,7 +495,7 @@ describe('the recorder’s own account stays whole', () => {
 describe('the two folds are DERIVED, never a table anybody typed', () => {
   /** The encoding fold the real def declares, as the session serves it at the head. */
   const SHOWN = {
-    structure: { color: 'chain' },
+    [STRUCTURE_VIEW]: { color: 'chain' },
     [RAMA_VIEW]: { x: 'phi', y: 'psi' },
     [INTERFACE_VIEW]: { category: 'residue_key', y: INTERFACE_CONTACTS_COLUMN },
     [SURFACE_VIEW]: { x: 'resnum', y: SASA_COLUMN, color: 'chain' },
@@ -406,28 +503,27 @@ describe('the two folds are DERIVED, never a table anybody typed', () => {
 
   it('gives a stage exactly the charts that bind a column its acts landed', () => {
     const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const columns = actColumnsOf(stages);
     const interactions = stages.find((s) => s.stage === 'interactions')!;
     const surface = stages.find((s) => s.stage === 'surface')!;
     // the interactions stage landed `interface_contacts` (the bar's y) and cut
     // the pair table (its RECEIPT, which binds no column at all)
-    expect([...chartsOfStage(interactions, SHOWN)].sort()).toEqual([INTERFACE_VIEW, PAIRS_VIEW].sort());
-    // the surface stage landed `sasa` (the run's y)
-    expect(chartsOfStage(surface, SHOWN)).toEqual([SURFACE_VIEW]);
+    expect([...chartsOfStage(interactions, SHOWN, columns)].sort()).toEqual([INTERFACE_VIEW, PAIRS_VIEW].sort());
+    expect(chartsOfStage(surface, SHOWN, columns)).toEqual([SURFACE_VIEW]);
   });
 
   it('gives a stage NO chart when nothing on screen binds what it landed', () => {
     const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
     const surface = stages.find((s) => s.stage === 'surface')!;
-    // a reader who re-encoded the run's y onto another column has moved the
-    // picture off this stage's column, and the fold follows the SESSION rather
-    // than a constant — which is the whole reason it is an intersection
-    expect(chartsOfStage(surface, { ...SHOWN, [SURFACE_VIEW]: { x: 'resnum', y: 'phi', color: 'chain' } })).toEqual([]);
+    expect(chartsOfStage(surface, { ...SHOWN, [SURFACE_VIEW]: { x: 'resnum', y: 'phi', color: 'chain' } }, actColumnsOf(stages))).toEqual([]);
   });
 
-  it('gives an UNAVAILABLE stage no chart at all — it landed nothing to bind', () => {
+  it('gives a BLOCKED stage no chart at all — it landed nothing to bind', () => {
     const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    const declared = stages.find((s) => s.state === 'unavailable')!;
-    expect(chartsOfStage(declared, SHOWN)).toEqual([]);
+    for (const blocked of PROT_BLOCKED) {
+      const stage = stages.find((s) => s.stage === blocked.stage)!;
+      expect(chartsOfStage(stage, SHOWN, actColumnsOf(stages))).toEqual([]);
+    }
   });
 
   it('reads the stage the cursor is standing in off the active path — the last one that had landed by then', () => {
@@ -443,5 +539,14 @@ describe('the two folds are DERIVED, never a table anybody typed', () => {
     expect(stageAtCursor(stages, path, 'c0')).toBeNull();
     expect(stageAtCursor(stages, path, 'somewhere-else')).toBeNull();
     expect(stageAtCursor(stages, path, null)).toBeNull();
+  });
+
+  it('never stands the cursor in a step that landed no commit, whichever kind it is', () => {
+    const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
+    const path = ['c1', 'c2', 'c3'];
+    for (const cursor of path) {
+      const standing = stageAtCursor(stages, path, cursor);
+      expect(standing?.commit, 'the cursor is standing in a stage with no commit').not.toBeNull();
+    }
   });
 });

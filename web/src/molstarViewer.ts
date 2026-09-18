@@ -120,6 +120,20 @@ export async function molstarViewer(el: HTMLElement, options: MolstarViewerOptio
       const data = await plugin.builders.data.rawData({ data: text, label: FORMAT });
       const trajectory = await plugin.builders.structure.parseTrajectory(data, FORMAT);
       await plugin.builders.structure.hierarchy.applyPreset(trajectory, 'default');
+      /*
+        FIT THE CAMERA TO WHAT WAS JUST LOADED.
+
+        Without this the molecule sat tiny in the middle of a large well: the
+        preset builds the representation but leaves the camera where the plugin
+        initialised it, which frames a default volume rather than THIS
+        structure. `managers.camera.reset()` is Mol*'s own call for it
+        (`mol-plugin-state/manager/camera.d.ts` — the same one its UI's reset
+        button uses), and it is the adapter's business and not the renderer
+        protocol's: the protocol carries data and paint, and where the camera
+        stands is this port's own job. It runs once per load; a reader's own
+        orbit afterwards is never undone.
+      */
+      plugin.managers.camera.reset();
     },
     async paint(buckets: readonly PaintBucket[]): Promise<void> {
       const components = plugin.managers.structure.hierarchy.current.structures.flatMap((s) => s.components);

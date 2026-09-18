@@ -29,18 +29,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ReactElement } from 'react';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
-import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { INTERFACE_VIEW, PAIRS_VIEW, PROT_ENCODINGS, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { entryCredit, protTables } from '../src/prot/etl.js';
 import { ARCHIVE_LICENCE } from '../src/prot/archive.js';
 import { PROT_FILES } from '../src/data/files.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
 import { useProtCells, type ProtCell, type ProtDeskData } from '../web/src/protCells.js';
 import type { Row } from '../web/src/derive.js';
-import { stepperStages } from '../web/src/protStages.js';
-import { ChartCard, ViewerBox } from '../web/src/workbench/ChartCard.js';
-import { FactsStrip, WorkbenchHeader } from '../web/src/workbench/Chrome.js';
-import { factsStrip, methodLine } from '../web/src/workbench/bands.js';
-import { chainChips, chainColorOf, chainInk, ownerLine, splitByFocus, stageOfChart } from '../web/src/workbench/charts.js';
+import { actColumnsOf, stepperStages } from '../web/src/protStages.js';
+import { ChartCard, ChartTile, ViewerBox } from '../web/src/workbench/ChartCard.js';
+import { WorkbenchHeader } from '../web/src/workbench/Chrome.js';
+import { methodLine } from '../web/src/workbench/bands.js';
+import { byPlanStep, chainChips, chainColorOf, chainInk, ownerLine, promoteChartLabel, shapeOfView, splitByFocus, stageOfChart } from '../web/src/workbench/charts.js';
 import { CHAIN_INK, VIEWER_BG } from '../web/src/workbench/tokens.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -172,7 +172,7 @@ const card = (cell: ProtCell, howToRead: string | null = 'higher is more exposed
     howToRead={howToRead}
     legend={[]}
     footLeft={cell.foot}
-    footRight={ownerLine(stageOfChart(stepperStages(OUTCOMES, RUN), cell.id, { [INTERFACE_VIEW]: { y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { y: SASA_COLUMN } }), 'from the file’s own columns — no act landed these')}
+    footRight={ownerLine(stageOfChart(stepperStages(OUTCOMES, RUN), cell.id, { [INTERFACE_VIEW]: { y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { y: SASA_COLUMN } }, actColumnsOf(stepperStages(OUTCOMES, RUN))), 'a picture no step on this desk produced')}
     note={cell.caption ?? null}
     noteLabel="Full note"
     noteAria={`the full note for ${cell.id}`}
@@ -271,14 +271,32 @@ describe('the footer names what was plotted and which stage owns it', () => {
     expect(cellOf(PAIRS_VIEW).foot).toContain(`${String(RUN.pairs!.counts.crossing)} cross-chain`);
   });
 
-  it('credits the stage whose acts landed the column the view binds — and the FILE where no act did', () => {
+  it('credits the stage whose acts landed the column the view binds — and THE PARSE where no act did', () => {
     const stages = stepperStages(OUTCOMES, RUN);
-    const shown = { [INTERFACE_VIEW]: { y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { y: SASA_COLUMN } };
-    expect(stageOfChart(stages, SURFACE_VIEW, shown)?.stage).toBe('surface');
-    expect(stageOfChart(stages, INTERFACE_VIEW, shown)?.stage).toBe('interactions');
-    // the 3D view and the scatter draw the file's own columns: no stage put them there
-    expect(stageOfChart(stages, STRUCTURE_VIEW, shown)).toBeNull();
-    expect(ownerLine(stageOfChart(stages, SURFACE_VIEW, shown), 'from the file')).toBe(`Stage 2 · ${stages[1]!.label}`);
+    const at = (stage: string) => stages.find((s) => s.stage === stage)!;
+    const shown = { [INTERFACE_VIEW]: { y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { y: SASA_COLUMN }, [STRUCTURE_VIEW]: { color: 'chain' } };
+    const columns = actColumnsOf(stages);
+    expect(stageOfChart(stages, SURFACE_VIEW, shown, columns)?.stage).toBe('surface');
+    expect(stageOfChart(stages, INTERFACE_VIEW, shown, columns)?.stage).toBe('interactions');
+    /*
+      THE 3D VIEW IS STEP 1'S, and this is the half-truth the packet fixed: the
+      foot used to say *"from the file's own columns — no act landed these"*,
+      which reads as an absence, as though nobody were responsible for those
+      columns. The parse is — and the parse is step 1 of the published plan.
+    */
+    expect(stageOfChart(stages, STRUCTURE_VIEW, shown, columns)?.stage).toBe('search');
+    // THE SHORT DECLARED NAME, not the sentence: a footer is a Mono line of
+    // counts and an owner, and the sentence wrapped it to two lines
+    expect(ownerLine(stageOfChart(stages, SURFACE_VIEW, shown, columns), 'from the file')).toBe(`Stage ${String(at('surface').number)} · ${at('surface').name}`);
+    expect(at('surface').name).toBe('Structure Analysis');
+    // …and its line says why it carries no act and no commit, which is the fact
+    // a reader needs when the number they pressed does not move the cursor
+    const parse = ownerLine(stageOfChart(stages, STRUCTURE_VIEW, shown, columns), 'from the file');
+    expect(parse).toBe(`Stage ${String(at('search').number)} · ${at('search').name} · no act, no commit`);
+    expect(parse).not.toContain('no act landed these');
+    // …and the explanation is NOT in the footer: it is behind `Full note`
+    expect(parse.split(/\s+/).length).toBeLessThan(11);
+    // the fallback is left for a picture that binds nothing and is nobody's receipt
     expect(ownerLine(null, 'from the file')).toBe('from the file');
   });
 
@@ -307,41 +325,68 @@ describe('WHICH CARD IS BIG is derived, so moving the stepper moves the hero', (
   });
 });
 
-describe('the two top bands are read off the run, never typed', () => {
-  it('the facts strip counts residues and chains off the PARSE, and contacts off the ACT', () => {
-    const items = factsStrip(TABLES.counts, RUN);
-    expect(items.map((i) => i.id)).toEqual(['residues', 'chains', 'contacts', 'kinds']);
-    expect(items[0]!.parts[0]!.value).toBe(TABLES.counts.residues.toLocaleString('en-US'));
-    expect(items[1]!.parts[0]!.value).toBe(String(TABLES.counts.chains.length));
-    // one part per chain, each carrying that chain's own count
-    expect(items[1]!.parts.slice(1).map((p) => p.value)).toEqual(TABLES.counts.chains.map((c) => c.residues.toLocaleString('en-US')));
-    expect(items[2]!.parts.map((p) => p.value)).toEqual([RUN.pairs!.counts.rows.toLocaleString('en-US'), RUN.pairs!.counts.crossing.toLocaleString('en-US')]);
-    expect(items[3]!.parts.map((p) => p.after)).toEqual(RUN.pairs!.counts.byKind.map((k) => k.kind));
+describe('THE COUNTED-FACTS BAND IS GONE, because every line of it was a second copy', () => {
+  /**
+   * `factsStrip` folded the entry's counts into a band under the header and
+   * `FactsStrip` drew it. Both are deleted, and the reason is not the height
+   * budget: EVERY LINE OF IT WAS ALREADY ON THE CARD IT BELONGED TO, and a
+   * count stated twice is a count that can disagree with itself. This block is
+   * the proof that dropping the band dropped no number.
+   */
+  it('has no fold and no component left to draw one', () => {
+    const chrome = readFileSync(join(process.cwd(), 'web', 'src', 'workbench', 'Chrome.tsx'), 'utf8');
+    const bands = readFileSync(join(process.cwd(), 'web', 'src', 'workbench', 'bands.ts'), 'utf8');
+    expect(chrome).not.toContain('export function FactsStrip');
+    expect(bands).not.toContain('export function factsStrip');
+    // and the composition draws no band between the stepper and the charts
+    expect(readFileSync(join(process.cwd(), 'web', 'src', 'protDesk.tsx'), 'utf8')).not.toContain('<FactsStrip');
   });
 
-  it('shows NO contact fact at all before the interactions act has landed — absent, never a zero', () => {
-    const items = factsStrip(TABLES.counts, null);
-    expect(items.map((i) => i.id)).toEqual(['residues', 'chains']);
+  it('keeps the residue and chain counts on the STRUCTURE card’s own foot', () => {
+    const foot = cellOf(STRUCTURE_VIEW).foot ?? '';
+    expect(foot).toContain(TABLES.counts.residues.toLocaleString('en-US'));
+    expect(foot).toContain(`${String(TABLES.counts.chains.length)} chains drawn`);
   });
 
-  it('puts every one of those numbers on screen', async () => {
-    const panel = await mount(<FactsStrip label="what this entry is, counted" items={factsStrip(TABLES.counts, RUN)} />);
-    const said = panel.words();
-    for (const value of [TABLES.counts.residues, RUN.pairs!.counts.rows, RUN.pairs!.counts.crossing]) expect(said).toContain(value.toLocaleString('en-US'));
-    for (const chain of TABLES.counts.chains) expect(said).toContain(`${chain.chain} ${chain.residues.toLocaleString('en-US')}`);
-    await panel.unmount();
+  it('keeps the contact counts on the PAIR TABLE’s foot, and the kinds in the interface card’s note', () => {
+    // the foot counts THE ROWS THIS CELL DREW (the fixture hands it one) and the
+    // act's own crossing count beside them — never a number typed twice
+    expect(cellOf(PAIRS_VIEW).foot ?? '').toContain('rows');
+    expect(cellOf(PAIRS_VIEW).foot ?? '').toContain(`${RUN.pairs!.counts.crossing.toLocaleString('en-US')} cross-chain`);
+    // the kinds, with the engine's own words and counts
+    const note = renderToStaticMarkup(<>{cellOf(INTERFACE_VIEW).caption}</>).replace(/<[^>]+>/g, ' ');
+    for (const kind of RUN.pairs!.counts.byKind) expect(note).toContain(`${kind.contacts.toLocaleString('en-US')} ${kind.kind}`);
   });
+});
 
+describe('the header band is read off the run, never typed', () => {
   it('the header’s method line is the FILE’s own records plus the one licence constant', async () => {
     const line = methodLine(CREDIT);
     expect(line).toBe(`${CREDIT.experiment.toLowerCase()} · ${CREDIT.resolution!} Å · ${ARCHIVE_LICENCE.split(' ')[0]!}`);
     // the resolution is the file's own digits, not a rounded copy
     expect(CREDIT.resolution).toBe('1.70');
-    const panel = await mount(<WorkbenchHeader title="t" entry={CREDIT.entry} entryTitle={CREDIT.title.toLowerCase()} method={line} searchAgain="New search" onSearchAgain={() => undefined} />);
+    const panel = await mount(
+      <WorkbenchHeader
+        title="t"
+        entry={CREDIT.entry}
+        entryTitle={CREDIT.title.toLowerCase()}
+        method={line}
+        at={<span role="status">every picture below is drawn from the 185 residue rows as they stand at commit s4</span>}
+        searchAgain="New search"
+        onSearchAgain={() => undefined}
+      />,
+    );
     const said = panel.words();
     expect(said).toContain(CREDIT.entry);
     expect(said).toContain(CREDIT.title.toLowerCase());
     expect(said).toContain(line!);
+    /*
+      AND WHICH POINT IN THE RUN the pictures come from. It is the only thing on
+      screen that says so and the stepper exists to move it, so it sits in the
+      band that answers *what am I looking at* — the same question about time.
+    */
+    expect(said).toContain('as they stand at commit s4');
+    expect(panel.host.querySelector('[role="status"]')).not.toBeNull();
     await panel.unmount();
   });
 
@@ -379,6 +424,136 @@ describe('the chain colours come from the theme and are told to the library, nev
       </ViewerBox>,
     );
     for (const chip of chips) expect(panel.words()).toContain(chip.name);
+    await panel.unmount();
+  });
+});
+
+describe('THE L: a focus that fills its slot, a strip of wide tiles, a column of square ones', () => {
+  /**
+   * The layout is ASPECT RATIO and nothing else — the design's own artboards:
+   * the surface run at 3.4 : 1 and the cross-chain bars at 3.9 : 1 want width,
+   * the Ramachandran at 1 : 1 and the molecule want a square, and the contact
+   * table wants height and scrolls itself. Which is which is read off the DEF's
+   * declared `chartKind`, so a new view lands in the right place without this
+   * desk being told about it.
+   */
+  it('reads the shape each picture wants off the def’s own declared chart kind', () => {
+    expect(shapeOfView(SURFACE_VIEW)).toBe('wide');
+    expect(shapeOfView(INTERFACE_VIEW)).toBe('wide');
+    expect(shapeOfView(RAMA_VIEW)).toBe('square');
+    expect(shapeOfView(STRUCTURE_VIEW)).toBe('square');
+    // a view the def gives no encoding surface shows ROWS, and rows want height
+    expect(shapeOfView(PAIRS_VIEW)).toBe('tall');
+    // …and it is the DEF's own `chartKind` that decides it, which is why a view
+    // the def gives no encoding surface falls to `tall` rather than to a guess
+    expect(PROT_ENCODINGS.map((e) => e.chartKind).sort()).toEqual(['bar', 'line', 'scatter', 'structure']);
+  });
+
+  it('orders what waits by the PLAN’s own steps, with a picture no step produced last', () => {
+    const stages = stepperStages(OUTCOMES, RUN);
+    const step = (id: string): number | null => stages.find((s) => s.stage === id)?.number ?? null;
+    const ordered = byPlanStep([
+      { step: step('interactions'), item: 'the contacts stage’s' },
+      { step: null, item: 'nobody’s' },
+      { step: step('surface'), item: 'the surface stage’s' },
+      { step: step('search'), item: 'the parse’s' },
+    ]);
+    expect(ordered).toEqual(['the parse’s', 'the surface stage’s', 'the contacts stage’s', 'nobody’s']);
+  });
+
+  it('gives the focused card a DEFINITE box and lets the picture fill it', () => {
+    /*
+      READ OFF THE STATIC MARKUP rather than the mounted DOM: jsdom's CSSOM
+      does not serialise the `flex` shorthand at all, so a mounted card's own
+      `style` attribute cannot be asked about the one declaration that matters
+      here. The markup React writes is what a browser parses.
+    */
+    const html = renderToStaticMarkup(
+      <ChartCard id={SURFACE_VIEW} label="the run" focused howToRead={null} legend={[]} footLeft={null} footRight={null} note={null} noteLabel="Full note" noteAria="the note" clear={null} height="fill">
+        <div>the picture</div>
+      </ChartCard>,
+    );
+    // the card takes the whole height its slot gives it…
+    expect(html).toContain('height:100%;min-height:0;overflow:hidden');
+    // …and the box the library's frame measures is `flex: 1 1 0` inside it,
+    // which is the definite height `ChartFrame`'s ResizeObserver needs before
+    // it can hand a size to the chart
+    expect(html).toContain('flex:1 1 0;min-height:0');
+    // a card given a NUMBER keeps the old fixed box, which is what a card in a
+    // scrolling band wants
+    const fixed = renderToStaticMarkup(
+      <ChartCard id={SURFACE_VIEW} label="the run" focused howToRead={null} legend={[]} footLeft={null} footRight={null} note={null} noteLabel="Full note" noteAria="the note" clear={null} height={280}>
+        <div>the picture</div>
+      </ChartCard>,
+    );
+    expect(fixed).toContain('height:280px');
+    expect(fixed).not.toContain('flex:1 1 0');
+  });
+
+  it('draws a TILE as a name, a count and ITS OWN MARKS — because a card cannot show a selection', async () => {
+    let promoted: string | null = null;
+    const panel = await mount(
+      <ChartTile
+        id={SURFACE_VIEW}
+        label="How much of each residue the solvent can reach"
+        said="185 residues plotted · 17 at exactly 0 Å²"
+        promote={{ label: promoteChartLabel('How much of each residue the solvent can reach'), onPress: () => (promoted = SURFACE_VIEW) }}
+      >
+        <svg aria-hidden="true">
+          <circle className="vzf-line-dot" />
+        </svg>
+      </ChartTile>,
+    );
+    const said = panel.words();
+    expect(said).toContain('How much of each residue the solvent can reach');
+    expect(said).toContain('185 residues plotted');
+    /*
+      IT DRAWS. For one round a tile was words only, on the ground that a
+      library chart at 150px is a texture rather than a reading — and what
+      overturned that is the REASON focus mode exists: these views are
+      crossfiltered, so a pick in one narrows the others, and a tile that shows
+      no marks cannot show that. 185 marks dropping to 12 is perfectly legible
+      at tile size, because it is a change in DENSITY and not a value read off
+      an axis.
+    */
+    expect(panel.host.querySelector('circle.vzf-line-dot')).not.toBeNull();
+    // THE HEADER IS THE CONTROL, not the whole tile: the picture inside is the
+    // library's and is LIVE, and a button may not contain its axis controls —
+    // nor swallow the gesture that makes the tile worth drawing.
+    const buttons = [...panel.host.querySelectorAll('button')];
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.getAttribute('aria-label')).toBe(promoteChartLabel('How much of each residue the solvent can reach'));
+    expect(panel.host.querySelector('[data-chart]')?.getAttribute('data-chart')).toBe(SURFACE_VIEW);
+    await act(async () => {
+      buttons[0]?.click();
+    });
+    expect(promoted).toBe(SURFACE_VIEW);
+    await panel.unmount();
+  });
+
+  it('draws NO picture for a step that will not run here — it has nothing to filter', async () => {
+    const panel = await mount(<ChartTile id="stage:hotspots" label="Hot Spot Prediction — not on this build" said="this stage needs a model, and a static page cannot hold the key that would call one" promote={{ label: 'bring it into the focus', onPress: () => undefined }} />);
+    expect(panel.words()).toContain('not on this build');
+    expect(panel.host.querySelector('svg:not([aria-hidden])')).toBeNull();
+    expect(panel.host.querySelector('.vzf-chart-frame')).toBeNull();
+    await panel.unmount();
+  });
+
+  it('says what comes WITH the picture when it is promoted, because the tile carries none of it', () => {
+    const label = promoteChartLabel('the run');
+    expect(label).toContain('into the focus');
+    expect(label).toContain('its full note');
+    expect(label).toContain('its own numbers');
+    expect(label).toContain('the stage that landed it');
+  });
+
+  it('puts the LIBRARY’S OWN refusal in the tile when there is nothing to draw at this cursor', async () => {
+    // a cell whose column no act has landed counts nothing, and at that cursor
+    // the refusal is the truth about that picture — it needs no marks to say
+    const panel = await mount(
+      <ChartTile id={SURFACE_VIEW} label="the run" said={`no column "${SASA_COLUMN}" in table "residues"`} promote={{ label: 'bring the run into the focus', onPress: () => undefined }} />,
+    );
+    expect(panel.words()).toContain(`no column "${SASA_COLUMN}" in table "residues"`);
     await panel.unmount();
   });
 });

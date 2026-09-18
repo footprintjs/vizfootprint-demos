@@ -79,7 +79,11 @@ describe('the workbench folder holds the layers it says it holds', () => {
     const logic = modules.filter((f) => !isComponent(f) && !isTheme(f));
     // the names are asserted so that a module ADDED to the folder cannot slip
     // past the rules below by being classified as something nobody checks
-    expect(components.sort()).toEqual(['ChartCard.tsx', 'Chrome.tsx', 'Search.tsx', 'StagePanel.tsx', 'Stepper.tsx']);
+    // `StagePanel.tsx` is GONE, with the prose band it drew: the author's
+    // ruling — *no paragraphs below the stepper* — left it with nothing to
+    // draw, and its every field moved to the thing it was about
+    // (`panel.ts` · the file header has the field-by-field map).
+    expect(components.sort()).toEqual(['ChartCard.tsx', 'Chrome.tsx', 'Search.tsx', 'Stepper.tsx']);
     expect(logic.sort()).toEqual(['bands.ts', 'charts.ts', 'panel.ts', 'results.ts', 'steps.ts']);
     expect(modules.filter(isTheme)).toEqual(['tokens.ts']);
   });
@@ -171,14 +175,17 @@ describe('and the composition is the only file that knows all four exist', () =>
     // LAYER 3 — the folds
     for (const fold of ['./workbench/bands.js', './workbench/charts.js', './workbench/panel.js', './workbench/steps.js']) expect(composition).toContain(`from '${fold}'`);
     // LAYER 2 — the components
-    for (const part of ['./workbench/Chrome.js', './workbench/ChartCard.js', './workbench/StagePanel.js', './workbench/Stepper.js']) expect(composition).toContain(`from '${part}'`);
+    for (const part of ['./workbench/Chrome.js', './workbench/ChartCard.js', './workbench/Stepper.js']) expect(composition).toContain(`from '${part}'`);
   });
 
   it('does its own counting nowhere: every number on the two top bands comes from a fold', () => {
-    // the header's method line and the facts strip are both folded, never assembled here
+    // the header's method line is folded, never assembled here — and the facts
+    // STRIP is gone with its fold, because every line of it was a second copy
+    // of a count the card it belonged to already carried
     expect(composition).toContain('methodLine(credit)');
-    expect(composition).toContain('factsStrip(counts, run)');
-    // and the panel's words likewise
-    expect(composition).toContain('stagePanel({');
+    expect(composition).not.toContain('factsStrip(');
+    // and the STAGE's words likewise — folded, never assembled here, even now
+    // that they are read on the focused card instead of in a band
+    expect(composition).toContain('stageWords({');
   });
 });

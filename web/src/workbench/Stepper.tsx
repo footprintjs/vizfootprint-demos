@@ -1,11 +1,13 @@
 /**
- * THE STAGE STEPPER — LAYER 2, and the design's five marks over the code's five
- * states.
+ * THE STAGE STEPPER — LAYER 2, and the design's marks over the code's states.
  *
  * ```
- *   ①————————②╌╌╌╌╌╌╌╌③
- *   Contacts  Surface   Conservation
- *             running   not available here
+ *   ①————————②╌╌╌╌╌╌╌╌③————————④╌╌╌╌╌╌╌╌⑤╌╌╌╌╌╌╌╌⑥
+ *   Structure Sequence  Structure Interact. Hot Spot  Functional
+ *   Search    Analysis  Analysis  Mapping   Predict.  Annotation
+ *             NOT                           NOT ON    NOT BUILT
+ *             AVAILABLE                     THIS      YET
+ *             HERE                          BUILD
  * ```
  *
  * It is presentational: it takes a {@link StepView} per column — plain data,
@@ -13,7 +15,7 @@
  * import the session and cannot reach one. What a press MEANS is the
  * composition's business (`web/src/protDesk.tsx` hands it a seek).
  *
- * ── THE FIVE MARKS, in the designer's own words from the board ──────────────
+ * ── THE MARKS, in the designer's own words from the board ──────────────────
  *   `not-run`       hollow, dashed, grey — "it promises nothing and offers no
  *                   click", so the name is text and not a control.
  *   `running`       the only state that moves: a 2px accent ring, a soft halo,
@@ -22,24 +24,41 @@
  *                   is a REAL button whose press moves the whole screen.
  *   `refused`       as committed as landed, in rust instead of blue, with a
  *                   badge at the corner; the panel carries the sentence.
- *   `unavailable`   hatched, struck through with a diagonal — declared before
- *                   the run started, and never a spinner.
+ *   `declared-not-here`
+ *                   hatched, struck through with a diagonal — DECLARED and not
+ *                   going to happen here, and never a spinner. ONE mark for the
+ *                   whole family: a stage the world blocks, a stage this build
+ *                   blocks and a stage WE have not built yet all wear it, and
+ *                   what tells them apart is the word beneath (`./steps.ts`,
+ *                   from `src/prot/plan.ts` · `BLOCKED_TAG`) and the paragraph
+ *                   behind the panel's fold — the sentence, never the paint.
  *
- * ── THREE THINGS HERE ARE LOAD-BEARING ─────────────────────────────────────
- *   1. `aria-current="step"` on the column the cursor stands in;
- *   2. a real `<button>` for a stage that can be seeked to, and a
- *      NON-INTERACTIVE element for every other state — a control that answered
- *      nothing is worse than no control;
- *   3. the per-stage EXPANDER, which is how the act rows are reached at all.
- *      `tests/prot-cursor.smoke.test.ts` opens whatever is closed and then
- *      finds one act's seek control by its accessible name; that is the one
- *      test proving the pictures follow the cursor, so the expander stays even
- *      though the design does not draw it.
+ * ── WHAT IS LOAD-BEARING HERE ──────────────────────────────────────────────
+ *   1. `aria-current="step"` on the column the cursor stands in, and the blue
+ *      bar across its foot for the eye: *this is the stage you are looking at*.
+ *      Whether the CURSOR moved is a different fact and a different line says
+ *      it (the rows note in the chrome) — the bar must never be read as a seek
+ *      that did not happen.
+ *   2. ONE CONTROL PER COLUMN — the mark and the name inside a single
+ *      `<button>` with a single accessible name (see {@link Column}) — and a
+ *      NON-INTERACTIVE element for a column with nothing to answer, because a
+ *      control that answered nothing is worse than no control.
+ *
+ * ── AND WHAT IS GONE ───────────────────────────────────────────────────────
+ * The note under the marks and the per-stage expander. The author's ruling:
+ * *no paragraphs between the stepper and the charts.* The note's COUNTS were
+ * not prose and are not lost — they are in the facts strip, in Mono, where
+ * counted facts on this page live (`./steps.ts` · `stepperTally`). The
+ * expander's act rows moved to the record drawer, whole
+ * (`web/src/protDesk.tsx` · `ActsOfTheRun`), which is also how
+ * `tests/prot-cursor.smoke.test.ts` still reaches an act's own seek control.
  */
-import { useState, type ReactNode } from 'react';
+// NO REACT STATE AND NO CHILDREN: every column is one control over plain data,
+// and what a press MEANS is the composition's business.
 
-/** The five states, as the fold names them (`web/src/protStages.ts` · `StageState`). */
-export type StageLook = 'not-run' | 'running' | 'landed' | 'refused' | 'unavailable';
+
+/** The marks, as the fold names them. FEWER than there are states: `unavailable` and `blocked` are one family and share one (`web/src/protStages.ts` · `StageState`). */
+export type StageLook = 'not-run' | 'running' | 'landed' | 'refused' | 'declared-not-here';
 
 /** How far past the run a connector reaches — the design fades the dash with the distance. */
 export type LinkReach = 'run' | 'near' | 'far';
@@ -57,25 +76,30 @@ export interface StepView {
   readonly look: StageLook;
   /** The column the cursor is standing in. */
   readonly here: boolean;
-  /** The accessible name of the seek control, or `null` when this stage has no commit to move to. */
-  readonly seekLabel: string | null;
+  /**
+   * The accessible name of THIS COLUMN'S CONTROL, or `null` when the column
+   * has nothing to offer.
+   *
+   * Two different presses arrive through it and the NAME is what tells them
+   * apart: a landed stage's press seeks the cursor to the commit its last act
+   * landed; a stage that will not run here has no commit to seek to and its
+   * press brings its CARD into the focus, where the reason is (`./steps.ts` ·
+   * `seekLabelOf` / `showLabelOf`, and the composition decides which act a key
+   * means). A stage that is merely un-run still gets `null`: a control that
+   * answered nothing is worse than no control.
+   */
+  readonly pressLabel: string | null;
   /** The connector to the left and to the right, or `null` at the two ends. */
   readonly linkBefore: LinkReach | null;
   readonly linkAfter: LinkReach | null;
   /** The running state's own share, `0`–`1`. `null` in every other state, and only this one draws a hairline. */
   readonly progress: number | null;
-  /** What the expander is called. */
-  readonly expandLabel: string;
-  /** What the expander opens — built by the composition, because it is made of the run's own rows. */
-  readonly detail: ReactNode;
 }
 
 export interface StageStepperProps {
   readonly steps: readonly StepView[];
   /** The nav's accessible name. */
   readonly label: string;
-  /** The sentence under the marks that says the plan is DECLARED — never a promise. */
-  readonly note: ReactNode;
   /** What a refused seek said, printed beside the control that asked for it. `null` when nothing was refused. */
   readonly refusedSeek: string | null;
   onSeek(key: string): void;
@@ -83,7 +107,7 @@ export interface StageStepperProps {
 
 const MARK = 28;
 
-/** The ring, the ink and the fill of one mark — the whole visual difference between the five states, in one table. */
+/** The ring, the ink and the fill of one mark — the whole visual difference between the marks, in one table. */
 const LOOK: Readonly<
   Record<
     StageLook,
@@ -101,7 +125,7 @@ const LOOK: Readonly<
   running: { background: 'var(--pw-glass-mark-live)', color: 'var(--pw-accent)', border: '2px solid var(--pw-accent)', shadow: '0 0 0 4px var(--pw-accent-ring-soft)', weight: 500 },
   landed: { background: 'var(--pw-accent)', color: 'var(--pw-on-accent)', border: '0 none transparent', shadow: 'var(--pw-mark-shadow)', weight: 500 },
   refused: { background: 'var(--pw-refuse)', color: 'var(--pw-on-accent)', border: '0 none transparent', shadow: 'var(--pw-refuse-shadow)', weight: 500 },
-  unavailable: { background: 'var(--pw-glass-mark-hatch)', backgroundImage: 'var(--pw-mark-hatch)', color: 'var(--pw-mid-2)', border: '1.5px solid var(--pw-mark-edge-solid)', weight: 400 },
+  'declared-not-here': { background: 'var(--pw-glass-mark-hatch)', backgroundImage: 'var(--pw-mark-hatch)', color: 'var(--pw-mid-2)', border: '1.5px solid var(--pw-mark-edge-solid)', weight: 400 },
 };
 
 /** Which paint a connector wears: solid accent where the run has been, and a dash that fades with the distance past it. */
@@ -134,8 +158,8 @@ function Mark({ step }: { readonly step: StepView }): JSX.Element {
         color: look.color,
         border: look.border,
         boxShadow: step.here ? 'var(--pw-mark-shadow-here)' : look.shadow,
-        backdropFilter: step.look === 'unavailable' ? 'var(--pw-blur-hatch)' : 'var(--pw-blur-mark)',
-        WebkitBackdropFilter: step.look === 'unavailable' ? 'var(--pw-blur-hatch)' : 'var(--pw-blur-mark)',
+        backdropFilter: step.look === 'declared-not-here' ? 'var(--pw-blur-hatch)' : 'var(--pw-blur-mark)',
+        WebkitBackdropFilter: step.look === 'declared-not-here' ? 'var(--pw-blur-hatch)' : 'var(--pw-blur-mark)',
       }}
     >
       {step.number}
@@ -147,7 +171,7 @@ function Mark({ step }: { readonly step: StepView }): JSX.Element {
         </svg>
       ) : null}
       {/* UNAVAILABLE — struck through, so it can never be read as still working */}
-      {step.look === 'unavailable' ? (
+      {step.look === 'declared-not-here' ? (
         <svg viewBox="0 0 28 28" width={MARK} height={MARK} aria-hidden="true" style={{ position: 'absolute', left: -1.5, top: -1.5 }}>
           <line x1={5.5} y1={22.5} x2={22.5} y2={5.5} stroke="var(--pw-strike)" strokeWidth={1.5} />
         </svg>
@@ -181,48 +205,76 @@ function Mark({ step }: { readonly step: StepView }): JSX.Element {
   );
 }
 
-/** The name under a mark: a real button when the stage can be seeked to, plain text when it cannot. */
-function Name({ step, onSeek }: { readonly step: StepView; onSeek(): void }): JSX.Element {
-  const ink = step.look === 'unavailable' || step.look === 'not-run' ? 'var(--pw-soft-2)' : 'var(--pw-ink)';
-  // `fontFamily: inherit` and NOT the `font` shorthand: a shorthand resets
-  // every longhand after it, so the weight this state is drawn at would depend
-  // on the order the declarations happen to serialise in.
-  const shared: React.CSSProperties = { fontFamily: 'inherit', fontSize: 13, fontWeight: step.here ? 600 : 500, color: ink, display: 'block' };
-  if (step.seekLabel === null) return <span style={{ ...shared, fontWeight: step.here ? 600 : 400 }}>{step.name}</span>;
+/**
+ * ONE COLUMN, ONE CONTROL — the circle AND the name, pressed together.
+ *
+ * The author asked to press the NUMBER, and the answer is not a second button:
+ * two controls in one cell compete for the same gesture, give a reader two
+ * focus stops for one thing and force a choice about which one carries the
+ * name. So the mark, the name and the word beneath are the inside of a single
+ * `<button>` with a single accessible name — the one it already had, unchanged,
+ * because a name a test finds a control by is a contract.
+ *
+ * A column with nothing to answer is a `<div>` with the same contents. That is
+ * the law this stepper has kept since it became a cursor: a control that
+ * answered nothing is worse than no control.
+ */
+function Column({ step, onPress }: { readonly step: StepView; onPress(): void }): JSX.Element {
+  const ink = step.look === 'declared-not-here' || step.look === 'not-run' ? 'var(--pw-soft-2)' : 'var(--pw-ink)';
+  const inside = (
+    <>
+      <span style={{ display: 'flex', justifyContent: 'center' }}>
+        <Mark step={step} />
+      </span>
+      {/* `fontFamily: inherit` and NOT the `font` shorthand: a shorthand resets
+          every longhand after it, so the weight this state is drawn at would
+          depend on the order the declarations happen to serialise in. */}
+      <span style={{ display: 'block', marginTop: 6, fontFamily: 'inherit', fontSize: 12.5, fontWeight: step.here ? 600 : 400, lineHeight: 1.25, color: ink }}>{step.name}</span>
+      {step.tag === null ? null : (
+        <span
+          style={{
+            display: 'block',
+            marginTop: 2,
+            fontFamily: 'var(--pw-font-mono)',
+            fontSize: 9.5,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            color: step.look === 'refused' ? 'var(--pw-refuse-ink)' : 'var(--pw-soft-2)',
+          }}
+        >
+          {step.tag}
+        </span>
+      )}
+      {/* THE ONLY STATE THAT MOVES gets the only hairline */}
+      {step.progress === null ? null : (
+        <span aria-hidden style={{ display: 'block', margin: '6px auto 0', width: 56, height: 3, borderRadius: 'var(--pw-r-track)', background: 'var(--pw-track)', overflow: 'hidden' }}>
+          <span style={{ display: 'block', width: `${String(Math.round(Math.min(Math.max(step.progress, 0), 1) * 100))}%`, height: 3, background: 'var(--pw-accent)' }} />
+        </span>
+      )}
+    </>
+  );
+  const shape: React.CSSProperties = { position: 'relative', display: 'block', width: '100%', textAlign: 'center', minWidth: 0 };
+  if (step.pressLabel === null) return <div style={shape}>{inside}</div>;
   return (
     <button
       type="button"
-      onClick={onSeek}
-      aria-label={step.seekLabel}
+      onClick={onPress}
+      aria-label={step.pressLabel}
       {...(step.here ? { 'aria-current': 'step' as const } : {})}
-      style={{
-        ...shared,
-        background: 'none',
-        border: 0,
-        padding: 0,
-        margin: '0 auto',
-        cursor: 'pointer',
-        textAlign: 'center',
-        textDecoration: 'underline',
-        textDecorationColor: 'var(--pw-underline)',
-        textUnderlineOffset: 3,
-      }}
+      style={{ ...shape, font: 'inherit', fontFamily: 'var(--pw-font-sans)', background: 'none', border: 0, padding: 0, margin: 0, cursor: 'pointer' }}
     >
-      {step.name}
+      {inside}
     </button>
   );
 }
 
-/** The stepper. See the file header for the five marks and the three load-bearing details. */
-export function StageStepper({ steps, label, note, refusedSeek, onSeek }: StageStepperProps): JSX.Element {
-  /** Which stage a reader has opened — one at a time, because its acts are what the mark above it is made of. */
-  const [open, setOpen] = useState<string | null>(null);
-  const shown = steps.find((s) => s.key === open) ?? null;
+/** The stepper. See the file header for the marks and what is load-bearing. */
+export function StageStepper({ steps, label, refusedSeek, onSeek }: StageStepperProps): JSX.Element {
   return (
     <nav
       aria-label={label}
       style={{
-        padding: '20px 24px 0',
+        padding: '10px 24px 8px',
         background: 'var(--pw-glass-nav)',
         backdropFilter: 'var(--pw-blur-nav)',
         WebkitBackdropFilter: 'var(--pw-blur-nav)',
@@ -234,58 +286,18 @@ export function StageStepper({ steps, label, note, refusedSeek, onSeek }: StageS
           <li
             key={step.key}
             {...(step.here ? { 'aria-current': 'step' as const } : {})}
-            style={{ position: 'relative', paddingBottom: 14, minWidth: 0 }}
+            style={{ position: 'relative', paddingBottom: 6, minWidth: 0 }}
           >
             {step.linkBefore === null ? null : <span aria-hidden style={{ position: 'absolute', left: 0, right: '50%', top: 13, height: 1.5, marginRight: 20, ...LINK[step.linkBefore] }} />}
             {step.linkAfter === null ? null : <span aria-hidden style={{ position: 'absolute', left: '50%', right: 0, top: 13, height: 1.5, marginLeft: 20, ...LINK[step.linkAfter] }} />}
-            <span style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-              <Mark step={step} />
-            </span>
-            <div style={{ marginTop: 10, textAlign: 'center' }}>
-              <Name step={step} onSeek={() => onSeek(step.key)} />
-              {step.tag === null ? null : (
-                <span
-                  style={{
-                    display: 'block',
-                    marginTop: 3,
-                    fontFamily: 'var(--pw-font-mono)',
-                    fontSize: 10,
-                    letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                    color: step.look === 'refused' ? 'var(--pw-refuse-ink)' : 'var(--pw-soft-2)',
-                  }}
-                >
-                  {step.tag}
-                </span>
-              )}
-              {/* THE ONLY STATE THAT MOVES gets the only hairline */}
-              {step.progress === null ? null : (
-                <span aria-hidden style={{ display: 'block', margin: '8px auto 0', width: 56, height: 3, borderRadius: 'var(--pw-r-track)', background: 'var(--pw-track)', overflow: 'hidden' }}>
-                  <span style={{ display: 'block', width: `${String(Math.round(Math.min(Math.max(step.progress, 0), 1) * 100))}%`, height: 3, background: 'var(--pw-accent)' }} />
-                </span>
-              )}
-              {/* THE EXPANDER — quiet, and load-bearing (see the file header) */}
-              <button
-                type="button"
-                onClick={() => setOpen(open === step.key ? null : step.key)}
-                aria-expanded={open === step.key}
-                aria-label={step.expandLabel}
-                style={{ font: 'inherit', fontFamily: 'var(--pw-font-mono)', fontSize: 10, background: 'none', border: 0, color: 'var(--pw-soft)', cursor: 'pointer', padding: '4px 6px', marginTop: 2 }}
-              >
-                {open === step.key ? '▾' : '▸'}
-              </button>
-            </div>
+            <Column step={step} onPress={() => onSeek(step.key)} />
             {/* WHERE THE CURSOR IS, for the eye as well as for a screen reader */}
             {step.here ? <span aria-hidden style={{ position: 'absolute', left: 22, right: 22, bottom: 0, height: 3, background: 'var(--pw-accent)' }} /> : null}
           </li>
         ))}
       </ol>
-      <p style={{ margin: '4px 0 0', fontSize: 12, lineHeight: 1.55, color: 'var(--pw-mid-2)' }}>{note}</p>
-      {shown === null ? null : (
-        <div style={{ borderTop: '1px solid var(--pw-rule-faint)', margin: '10px 0 0', padding: '10px 0 14px' }}>{shown.detail}</div>
-      )}
       {refusedSeek === null ? null : (
-        <p role="status" style={{ margin: '4px 0 12px', fontSize: 12, color: 'var(--pw-refuse-ink)' }}>
+        <p role="status" style={{ margin: '2px 0 4px', fontSize: 11.5, color: 'var(--pw-refuse-ink)' }}>
           the session refused that seek, in its own words: {refusedSeek}
         </p>
       )}
