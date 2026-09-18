@@ -568,6 +568,26 @@ export interface RecommendationProps {
   /** The sentence, when the stage ran and there is no ranking. */
   readonly said: string | null;
   /**
+   * WHICH KIND of *no ranking* this is, in the stage's own declared word —
+   * shown BESIDE the sentence, never instead of it.
+   *
+   * It is what makes the stepper's REFUSED mark and this card legibly the same
+   * fact: the mark says refused, and the card says `refused · timeout` with
+   * the whole sentence under it. `null` for a ranking and for a stage in
+   * flight.
+   */
+  readonly kind?: string | null;
+  /**
+   * ASK AGAIN — present only where a re-ask could honestly answer differently
+   * (`src/prot/hotspots.ts` · `RETRYABLE` decides; this component never does).
+   *
+   * `busy` is the ask already in flight: the control is not pressable a second
+   * time mid-ask, and it says so rather than looking idle.
+   */
+  readonly retry?: { readonly label: string; readonly busy: boolean; onPress(): void };
+  /** How many times the stage has been asked in this run — shown only once it is more than once. */
+  readonly asked?: number;
+  /**
    * WHICH CURSOR THIS ANSWER IS ABOUT — the one line on this card that is not
    * about the protein.
    *
@@ -582,6 +602,20 @@ export interface RecommendationProps {
   readonly focused: boolean;
   /** The control that puts the model's own picks into the desk's live selection. Absent where the page wires none. */
   readonly select?: { readonly label: string; onPress(): void };
+  /**
+   * The control that BINDS a declared colour channel to the column the ranking
+   * landed — and unbinds it again.
+   *
+   * It is a second slot rather than a second meaning for {@link select}
+   * because the two are different acts on different records: one lands a
+   * CLAUSE (the picks as a selection) and the other lands an ENCODING (a
+   * channel pointing at a column). A reader can want either without the other,
+   * and the labels say which.
+   *
+   * This component draws a button and nothing more; what the press MEANS is
+   * the composition's business, exactly as it is for every other control here.
+   */
+  readonly paint?: { readonly label: string; onPress(): void };
 }
 
 /**
@@ -604,15 +638,47 @@ export interface RecommendationProps {
  * counted and hidden is the silent omission this desk is built against, and a
  * disagreement is a fact of the record that nothing here resolves.
  */
-export function Recommendation({ tag, figures, rows, refused, judge, verdicts, disagreements, said, where, behind = null, focused, select }: RecommendationProps): JSX.Element {
+export function Recommendation({ tag, figures, rows, refused, judge, verdicts, disagreements, said, kind = null, retry, asked = 1, where, behind = null, focused, select, paint }: RecommendationProps): JSX.Element {
   const MONO: CSSProperties = { fontFamily: 'var(--pw-font-mono)', fontSize: focused ? 10 : 9, letterSpacing: '0.03em', color: 'var(--pw-soft-2)' };
   if (rows.length === 0) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, flex: '1 1 0', minHeight: 0, padding: '6px 0' }}>
         <span style={{ ...MONO, textTransform: 'uppercase' }}>{tag}</span>
+        {/* THE REASON, IN THE CARD — the declared word in the rust the stepper's
+            refused mark is drawn in, and the stage's own SENTENCE under it,
+            verbatim. Before this the mark said REFUSED and the card said
+            nothing a reader could act on. */}
+        {kind === null ? null : (
+          <span style={{ ...MONO, textTransform: 'uppercase', color: 'var(--pw-refuse-ink)' }}>
+            refused &middot; {kind}
+          </span>
+        )}
         <p role="status" style={{ margin: 0, fontFamily: 'var(--pw-font-serif)', fontSize: focused ? 15 : 12, lineHeight: 1.45, color: 'var(--pw-prose)' }}>
           {said ?? 'the stage has not answered yet'}
         </p>
+        {asked < 2 ? null : <span style={{ ...MONO }}>asked {asked} times in this run</span>}
+        {retry === undefined ? null : (
+          <button
+            type="button"
+            onClick={retry.onPress}
+            disabled={retry.busy}
+            aria-busy={retry.busy}
+            style={{
+              font: 'inherit',
+              fontFamily: 'var(--pw-font-sans)',
+              fontSize: focused ? 11 : 10,
+              alignSelf: 'flex-start',
+              cursor: retry.busy ? 'progress' : 'pointer',
+              color: retry.busy ? 'var(--pw-soft-2)' : 'var(--pw-accent)',
+              background: 'none',
+              border: 0,
+              padding: 0,
+              textAlign: 'left',
+            }}
+          >
+            {retry.label}
+          </button>
+        )}
         {verdicts.length === 0 ? null : <p style={{ margin: 0, fontSize: focused ? 11.5 : 10, lineHeight: 1.4, color: 'var(--pw-mid-2)' }}>{judge}</p>}
       </div>
     );
@@ -631,7 +697,7 @@ export function Recommendation({ tag, figures, rows, refused, judge, verdicts, d
           </li>
         ))}
       </ol>
-      <span style={{ ...MONO, color: 'var(--pw-soft)' }}>{figures}</span>
+      <span style={{ ...MONO, color: 'var(--pw-soft)' }}>{figures}{asked < 2 ? '' : ` \u00b7 asked ${String(asked)} times in this run`}</span>
       {/* WHICH CURSOR THE ANSWER IS ABOUT, and — when they have parted company
           — that the rows underneath carry no rank. Both plain text in a line a
           reader is already reading, never a live region: the desk announces
@@ -642,14 +708,19 @@ export function Recommendation({ tag, figures, rows, refused, judge, verdicts, d
           {behind}
         </span>
       )}
-      {select === undefined ? null : (
-        <button
-          type="button"
-          onClick={select.onPress}
-          style={{ font: 'inherit', fontFamily: 'var(--pw-font-sans)', fontSize: focused ? 11 : 10, alignSelf: 'flex-start', cursor: 'pointer', color: 'var(--pw-accent)', background: 'none', border: 0, padding: 0, textAlign: 'left' }}
-        >
-          {select.label}
-        </button>
+      {/* THE TWO CONTROLS, each its own act: one lands a clause, the other an
+          encoding. Same shape, same ink, two names. */}
+      {[select, paint].map((control, at) =>
+        control === undefined ? null : (
+          <button
+            key={at}
+            type="button"
+            onClick={control.onPress}
+            style={{ font: 'inherit', fontFamily: 'var(--pw-font-sans)', fontSize: focused ? 11 : 10, alignSelf: 'flex-start', cursor: 'pointer', color: 'var(--pw-accent)', background: 'none', border: 0, padding: 0, textAlign: 'left' }}
+          >
+            {control.label}
+          </button>
+        ),
       )}
       {refused.length === 0 ? null : (
         <ul aria-label="what the model said that was refused, and why" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 }}>

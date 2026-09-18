@@ -33,85 +33,51 @@
  * a ranking that landed, a stage that ran and was refused, or a process with no
  * key — which is a different reason from the published build's and is shown as
  * its own (`server/prot-doors.ts` · `chooseHotspotDriver`).
+ *
+ * ── AND THE PAGE SAYS WHAT IT IS DOING WHILE IT DOES IT ────────────────────
+ * The author's question, watching this page boot: *"why is this not live status
+ * support instead of this static text?"* It was one paragraph, over a boot that
+ * really performs six http reads, an ETL, a dashboard build, three probe
+ * gestures, four stages and a model call — every one of them a fact this
+ * function held and threw away.
+ *
+ * It reports all of them now ({@link BootWatch} → `./workbench/boot.ts` →
+ * `./workbench/BootReport.tsx`), under one law: **progress is a REPORT —
+ * transient, reaching no commit, never evidence, and nothing computes from it.
+ * A stage's STATE is a fact and belongs on screen; a PAYLOAD never does.**
+ *
+ * For stage 5 that law has a sharp edge and it is the author's decision rather
+ * than a question left open: **SHOW THE ACT, NEVER THE ANSWER.** No partial
+ * ranking text reaches this screen at any point, and the reason is measured
+ * rather than reasoned — `src/prot/streamReports.ts` carries it.
  */
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createSessionView, sessionSource } from 'vizfootprint-ui';
 import 'vizfootprint-ui/styles.css';
-import { loadStructureOverHttp, readCommittedOverHttp } from '../../src/prot/http.js';
+import { loadStructureOverHttp, readCommittedOverHttp, PROT_COMMITTED_READS, type HttpWatch } from '../../src/prot/http.js';
 import { conservationEvidenceFor } from '../../src/prot/conservationEvidence.js';
 import { entryCredit, protTables, type EntryCredit } from '../../src/prot/etl.js';
-import { INTERFACE_VIEW, PROT_WORDS, RESIDUES_TABLE, RESIDUE_KEY } from '../../src/prot/def.js';
-import { landHotspots, openProtSurfaceAsync, protSurfaceProblems, residuesAt, type ProtSurface } from '../../src/prot/session.js';
+import { INTERFACE_VIEW, PROT_WORDS, RESIDUES_TABLE, RESIDUE_KEY, STRUCTURE_VIEW } from '../../src/prot/def.js';
+import { landHotspots, openProtSurfaceAsync, protSurfaceProblems, residuesAt, type ProtBootWatch, type ProtSurface } from '../../src/prot/session.js';
 import { ARCHIVE_LICENCE, EXAMPLE_ENTRY, browserArchive, openEntryBytes } from '../../src/prot/archive.js';
 import { blockingSentence, entryNotes, readEntryBytes, type EntryNote } from '../../src/prot/entryNotes.js';
-import { HOTSPOTS_ACT, HOTSPOTS_STAGE, coverRefusal, hotspotLedger, hotspotSlot, landedThrough, notTheEndOfTheRun, type HotspotFailure, type HotspotLedger, type HotspotOutcome } from '../../src/prot/hotspots.js';
+import { HOTSPOTS_ACT, HOTSPOTS_STAGE, HOTSPOT_RANK_COLUMN, STREAM_DIED, coverRefusal, hotspotLedger, hotspotSlot, landedThrough, notTheEndOfTheRun, type HotspotFailure, type HotspotLedger, type HotspotOutcome } from '../../src/prot/hotspots.js';
+import type { HotspotReport } from '../../src/prot/streamReports.js';
 import type { ActOutcome } from '../../src/prot/orchestrator.js';
+// THE DOOR, in the one module that reaches outside this browser — and the one
+// a test can import without mounting a page (`./protDoor.ts` says why).
+import { DOOR, askDoorForHotspots, askDoorState, type DoorState } from './protDoor.js';
 import { EntryNotes, ProtLanding, entryInUrl, urlForEntry } from './protLanding.js';
 import { useResiduesAtCursor } from './protRows.js';
 import { ProtDesk, RunStepper } from './protDesk.js';
 import type { HotspotCardInput } from './workbench/panel.js';
+import { NOTHING_REPORTED, bootNow, bootSteps, type BootReport as BootReported } from './workbench/boot.js';
+import { BootLine } from './workbench/BootReport.js';
 import type { ProtDeskData } from './protCells.js';
 import './workbench/theme.css';
 import type { Row } from './derive.js';
 import { Broken, Reading, sentenceOf } from '../site/boot.js';
-
-/**
- * WHERE THE DOOR IS, and it is also where the committed bytes are.
- *
- * `src/prot/http.ts`'s loaders take a BASE and resolve every declared path
- * against it (`src/data/files.ts` holds the paths, and the static build copies
- * the same names beside the published page). So one base answers both halves:
- * `/api/prot/data/prot/1ay7.pdb` is the door serving the file this repository
- * committed, and `/api/prot/hotspots` is the door asking a model — the same
- * prefix, proxied in dev and same-origin in a build.
- */
-const DOOR = (): URL => new URL('/api/prot/', window.location.href);
-
-/** What the door says about itself — `server/prot-doors.ts` · `ProtStateWire`, read defensively because a wire is a boundary. */
-interface DoorState {
-  readonly mode: 'live' | 'scripted' | 'none';
-  readonly model?: string;
-  readonly reason?: string;
-  readonly judge?: { readonly said: string; readonly weaker: boolean };
-  readonly tag: string;
-}
-
-async function askDoorState(): Promise<DoorState> {
-  const at = new URL('state', DOOR()).href;
-  const res = await fetch(at);
-  if (!res.ok) throw new Error(`the demo API at ${at} answered ${String(res.status)} ${res.statusText} — this page is the SERVED protein desk and needs it: run \`npm run serve\` beside it, or open the published desk, which performs stages 1 to 4 with no server at all`);
-  return (await res.json()) as DoorState;
-}
-
-/** ONE ASK — the run's own evidence up, the ranked list with its citations and the judge's verdicts down. */
-async function askDoorForHotspots(ledger: HotspotLedger): Promise<HotspotOutcome> {
-  const res = await fetch(new URL('hotspots', DOOR()).href, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    // THE LEDGER'S OWN FIELDS AND NOTHING INVENTED FOR THE REQUEST: the facts,
-    // the residue keys the door judges a named residue against, the sentence
-    // about which residues it covers, and which acts it was read off
-    body: JSON.stringify({ facts: ledger.facts, residues: ledger.residues, basis: ledger.basis, from: ledger.from, at: ledger.at }),
-  });
-  const said = (await res.json()) as Partial<{ readonly ok: boolean; readonly kind: string; readonly sentence: string }> & Record<string, unknown>;
-  if (said.ok === true) return said as unknown as HotspotOutcome;
-  /**
-   * A REFUSAL OFF THE WIRE, read defensively — the door's own `kind` when it is
-   * one of the failures this stage has a vocabulary for, and `threw` when it is
-   * not. A kind nobody declared would let the screen branch on a word the
-   * library has never heard of; the SENTENCE is what a reader sees either way,
-   * and it is the door's, verbatim.
-   */
-  const kinds: readonly HotspotFailure[] = ['no-key', 'no-evidence', 'unreachable', 'timeout', 'refused', 'threw', 'malformed', 'cites-nothing', 'nothing-left'];
-  const kind = kinds.find((one) => one === said.kind) ?? 'threw';
-  return {
-    ok: false,
-    kind,
-    sentence: typeof said.sentence === 'string' ? said.sentence : `the demo API answered ${String(res.status)} and no sentence — stage 5 did not run, and the door said nothing this page can print`,
-    verdicts: [],
-  };
-}
 
 /**
  * STAGE 5, ATTEMPTED AND REFUSED — an outcome the PAGE writes, because there is
@@ -137,9 +103,52 @@ interface Booted {
   readonly hotspotOutcome: ActOutcome | null;
   /** What the card shows, folded by `workbench/panel.ts`. */
   readonly hotspots: HotspotCardInput | null;
+  /**
+   * THE LEDGER THE ASK WAS MADE FROM — kept so a RETRY asks the SAME QUESTION.
+   *
+   * It is the one the boot folded at the end of the run
+   * (`src/prot/hotspots.ts` · `notTheEndOfTheRun` refuses any other read), and
+   * re-folding it later would be a different question: a reader's own
+   * selection has moved the cursor by then. `null` where nothing was ever
+   * asked, and the retry control is then absent for want of a question.
+   */
+  readonly ledger: HotspotLedger | null;
+  /** What the boot reported, whole — for the record drawer, where the detail lives (`./workbench/boot.ts` · `bootSteps`). */
+  readonly report: BootReported;
 }
 
 type Opened = { readonly ok: true; readonly booted: Booted } | { readonly ok: false; readonly sentence: string };
+
+/**
+ * SOMEBODY WATCHING THE WHOLE BOOT — every hook the boot can report through,
+ * in one shape.
+ *
+ * ── WHY THE PAGE REPORTS ITS BOOT AT ALL ───────────────────────────────────
+ * It was a static paragraph (`web/site/boot.tsx` · `Reading`) saying the page
+ * *is fetching the committed files over http and running the same ETL the
+ * server runs* — true, and true for the whole of a boot in which this page
+ * performs six http reads, an ETL, a dashboard build, three probe gestures,
+ * four stages and a model call. The author asked why that was not live status,
+ * and the answer was that every one of those was a fact the page held and threw
+ * away.
+ *
+ * Every hook here carries a STATE or a COUNT and never a payload: no row, no
+ * value of the data, and — for stage 5 — no part of an answer
+ * (`src/prot/streamReports.ts` has the measured reason that is the sharpest
+ * case of the same law).
+ */
+interface BootWatch extends ProtBootWatch {
+  /** The committed files, as each is asked for and comes back. */
+  readonly http: HttpWatch;
+  /** The ETL's own counts. */
+  onParsed?(parsed: { readonly residues: number; readonly chains: number }): void;
+  /** What stage 5's ask is doing, act by act — a count or a declared word, never a word the model wrote. */
+  onAsking?(report: HotspotReport): void;
+  /** Stage 5's own outcome, once it has one — so the boot's last row stops being *in flight*. */
+  onHotspots?(outcome: ActOutcome): void;
+  /** The report as it stands, for the two places the boot hands it back. */
+  reported(): BootReported;
+}
 
 /**
  * ONE ENTRY, OPENED — the published page's own six steps (`web/site/prot/
@@ -153,18 +162,33 @@ type Opened = { readonly ok: true; readonly booted: Booted } | { readonly ok: fa
  * all — an act declared for a stage nothing can perform is the lie
  * `src/prot/plan.ts` refuses.
  */
-async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Promise<Opened> {
+async function boot(entry: string, watch: BootWatch): Promise<Opened> {
+  const onOutcome = watch.onOutcome;
   const door = await askDoorState();
   const base = DOOR();
-  const opened = await openEntryBytes(entry, { committed: () => loadStructureOverHttp(base), archive: browserArchive });
+  /**
+   * THE READS, WATCHED — and the watcher is handed to the two loaders rather
+   * than wrapped around them, because the loaders are the only code holding the
+   * `Response`: whether a total is KNOWN is a question only they can answer
+   * (`src/prot/http.ts` · `FileRead.total`).
+   *
+   * The PUBLISHED page passes none and reads exactly the same bytes the same
+   * way (`web/site/prot/entry.tsx`).
+   */
+  const http = watch.http;
+  const opened = await openEntryBytes(entry, { committed: () => loadStructureOverHttp(base, http), archive: browserArchive });
   if (!opened.ok) return opened;
   const read = readEntryBytes(opened.value.bytes.at, opened.value.bytes.text);
-  const notes = entryNotes(read, protTables(read.artifact.text));
+  // THE ETL, REPORTED — off the tables it produced, which this boot was folding
+  // and throwing away
+  const tables = protTables(read.artifact.text);
+  watch.onParsed?.({ residues: tables.counts.residues, chains: tables.counts.chains.length });
+  const notes = entryNotes(read, tables);
   const blocked = blockingSentence(notes);
   if (blocked !== null) return { ok: false, sentence: blocked };
-  const evidence = await conservationEvidenceFor(entry, { committed: readCommittedOverHttp(base), archive: browserArchive });
+  const evidence = await conservationEvidenceFor(entry, { committed: readCommittedOverHttp(base, http), archive: browserArchive });
   const slot = door.mode === 'none' ? null : hotspotSlot();
-  const surface = await openProtSurfaceAsync(read.artifact, { onOutcome }, evidence, slot);
+  const surface = await openProtSurfaceAsync(read.artifact, watch, evidence, slot);
   const common = {
     entry,
     surface,
@@ -181,9 +205,10 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
    * closure, three callers below, so the stepper and the card are told by the
    * same line and cannot disagree about why.
    */
-  const notAsked = async (outcome: HotspotOutcome & { readonly ok: false }): Promise<Opened> => {
+  const notAsked = async (outcome: HotspotOutcome & { readonly ok: false }, ledger: HotspotLedger | null = null): Promise<Opened> => {
     const refused = refusedHere(outcome.sentence);
-    onOutcome(refused);
+    onOutcome?.(refused);
+    watch.onHotspots?.(refused);
     return {
       ok: true,
       booted: {
@@ -191,6 +216,8 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
         checks: [...(await surface.dashboard.lintData()), ...protSurfaceProblems(surface)],
         hotspotOutcome: refused,
         hotspots: { outcome, judge: door.judge?.said ?? 'no second source read anything: nothing was asked of a model, so nothing was judged', at: null, landed: null },
+        ledger,
+        report: watch.reported(),
       },
     };
   };
@@ -224,12 +251,13 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
    * it could already read. One owner (`coverRefusal`), two callers.
    */
   const doomed = coverRefusal(ledger);
-  if (doomed !== null) return notAsked(doomed);
-  const answer = await askDoorForHotspots(ledger);
+  if (doomed !== null) return notAsked(doomed, ledger);
+  const answer = await askDoorForHotspots(ledger, watch.onAsking);
   // FROZEN THE MOMENT IT ARRIVES: the act lands before anything on this page
   // compares the ranking to anything else
   const outcome = answer.ok ? await landHotspots(surface, answer) : refusedHere(answer.sentence);
-  onOutcome(outcome);
+  onOutcome?.(outcome);
+  watch.onHotspots?.(outcome);
   return {
     ok: true,
     booted: {
@@ -242,6 +270,10 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
       // card prints both, so it declares which cursor it is about rather than
       // being taken for a picture of wherever the reader is standing.
       hotspots: { outcome: answer, judge: door.judge?.said ?? 'the door named no judge', at: ledger.at ?? landedThrough(surface.run), landed: outcome.commit },
+      // THE LEDGER IS KEPT so a retry asks the SAME question, and the report so
+      // the record drawer can carry the boot's own account
+      ledger,
+      report: watch.reported(),
     },
   };
 }
@@ -250,10 +282,45 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
   const { surface, checks, notes } = booted;
   /** What the session said if it refused the picks as a selection — shown with the desk's other checks, never swallowed. */
   const [pickRefusal, setPickRefusal] = useState<string | null>(null);
+  /**
+   * EVERY RETRY'S OWN ANSWER AND ACT, in the order they were asked — and NOTHING
+   * is overwritten.
+   *
+   * The boot's own attempt is on `booted`; these are the ones a reader asked
+   * for. Both halves are kept per attempt because they are two records: the
+   * ANSWER is what the card shows, and the OUTCOME is what the stepper and the
+   * record drawer fold.
+   */
+  const [attempts, setAttempts] = useState<readonly { readonly answer: HotspotOutcome; readonly outcome: ActOutcome }[]>([]);
+  /** `true` while a retry is on the wire — the card's fourth state, and a control that is not pressable again. */
+  const [asking, setAsking] = useState(false);
+  /** What that ask is DOING, act by act — the report, never the answer (`src/prot/streamReports.ts`). */
+  const [report, setReport] = useState<HotspotReport | null>(null);
   const view = useMemo(() => createSessionView(sessionSource(surface.session), { as: 'user', defaultLayout: 'grid' }), [surface.session]);
   const residues = useResiduesAtCursor(view, surface.session, surface.tables, surface.residues);
   /** The outcomes the stepper folds: the run's own, plus stage 5's. */
-  const outcomes = useMemo(() => [...(surface.run?.outcomes ?? []), ...(booted.hotspotOutcome === null ? [] : [booted.hotspotOutcome])], [surface.run, booted.hotspotOutcome]);
+  const outcomes = useMemo(
+    () => [...(surface.run?.outcomes ?? []), ...(booted.hotspotOutcome === null ? [] : [booted.hotspotOutcome]), ...attempts.map((one) => one.outcome)],
+    [surface.run, booted.hotspotOutcome, attempts],
+  );
+  /**
+   * WHAT THE CARD SHOWS — the LATEST attempt, with every earlier one still on
+   * the stepper's act rows and in the record drawer.
+   *
+   * `asked` is how many times the stage has been asked in this run: the boot's
+   * one plus the reader's. It is deliberately NOT the library's own corrective
+   * re-ask count — *the library judged 2 answers against the declared shape* is
+   * a different fact from *a reader pressed retry twice*, and one number
+   * answering two questions is one of them lost.
+   */
+  const hotspots = useMemo((): HotspotCardInput | null => {
+    if (booted.hotspots === null) return null;
+    const asked = 1 + attempts.length;
+    if (asking) return { ...booted.hotspots, outcome: null, asking: report, asked };
+    const latest = attempts[attempts.length - 1];
+    if (latest === undefined) return { ...booted.hotspots, asked };
+    return { ...booted.hotspots, outcome: latest.answer, landed: latest.outcome.commit, asked };
+  }, [booted.hotspots, attempts, asking, report]);
   /**
    * THE PAYOFF — the model's picks as a live selection on the desk's own
    * crossfilter, and it is ONE dispatch at a view the def already declares.
@@ -302,6 +369,91 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
     },
     [view],
   );
+  /**
+   * THE PICKS AS MARKS IN THE STRUCTURE — and it is a BINDING, never a paint.
+   *
+   * The ranking landed `hotspot_rank` on `residues` like any other stage's
+   * column (`src/prot/hotspots.ts` · `hotspotsAnalysis`), and the 3D view
+   * declares a colour channel (`src/prot/def.ts` · `PROT_ENCODINGS`). So the
+   * whole of this feature is one REENCODE at a view the def already declares,
+   * through the same door every picture on this desk re-encodes through
+   * (`./protCells.tsx` · `reencode`): no new chart kind, no new emission kind,
+   * no hand-placed highlight, and nothing marked from a literal.
+   *
+   * ── WHAT THE DECLARATION HAD TO SAY FIRST ──────────────────────────────────
+   * The rebind was REFUSED until the column was declared. The structure view's
+   * colour takes a column with distinct values, the engine reads a landed `int`
+   * as a magnitude, and the door said so by name — *hotspot_rank is not one*.
+   * The answer was a declaration of what the column IS (`src/prot/def.ts` ·
+   * `RANK_DECLARED`: a rank is a PLACE, like `resnum`), never a widened house
+   * rule.
+   *
+   * ── AND THE REFUSAL IS NOT SWALLOWED, WHICH TOOK A READ-BACK ───────────────
+   * `view.reencode` answers `Promise<void>` and drops the session's own
+   * rejection (a FINDING, reported: a host cannot learn from that door that its
+   * rebind was refused). So this asks the RECORD afterwards — the encoding fold
+   * at the cursor — and if the channel is not carrying what was asked for, the
+   * page says so beside its other checks rather than leaving a control that
+   * looks like it worked.
+   */
+  const onPaintByRank = useCallback(
+    (bound: boolean): void => {
+      const field = bound ? 'chain' : HOTSPOT_RANK_COLUMN;
+      void view
+        .reencode(STRUCTURE_VIEW, 'color', field)
+        .then(async () => {
+          const over = await surface.session.overview();
+          const now = (over.encodings as Readonly<Record<string, Readonly<Record<string, string>>>> | undefined)?.[STRUCTURE_VIEW]?.['color'];
+          if (now !== field) {
+            setPickRefusal(
+              `the 3D view's colour channel was asked for "${field}" and is carrying "${now ?? 'nothing'}" — the session refused the rebind, and the door this page rebinds through does not hand back the sentence it refused with`,
+            );
+          }
+        })
+        .catch((error: unknown) => setPickRefusal(error instanceof Error ? error.message : String(error)));
+    },
+    [view, surface.session],
+  );
+  /**
+   * ASK THE MODEL AGAIN — on the LIVE session, and the earlier refusal STAYS.
+   *
+   * ── THE ONE LAW THIS IS BUILT AROUND ──────────────────────────────────────
+   * **The record must survive the retry.** A page reload re-runs stages 1 to 4
+   * and mints a fresh log, which destroys the record the ranking is
+   * pre-registered against — *you cannot retry your way to a cleaner history*,
+   * and that discipline is the whole reason stage 5 lands a commit before
+   * anything checks it (`src/prot/session.ts` · `landHotspots`). So this
+   * re-asks on the session that is already open, lands its own act, and the
+   * first attempt's outcome is kept beside it: two asks, two entries, neither
+   * overwriting the other, both on the stepper's act rows.
+   *
+   * ── AND IT ASKS THE SAME QUESTION ─────────────────────────────────────────
+   * The LEDGER is the one the boot folded at the end of the run, kept on
+   * {@link Booted.ledger}. Re-folding it now would be a different question: a
+   * reader's own selection has moved the cursor since, and stage 5 is asked
+   * once from the rows at the end of what stages 1 to 4 landed
+   * (`src/prot/hotspots.ts` · `notTheEndOfTheRun`).
+   */
+  const onRetryHotspots = useCallback((): void => {
+    if (asking || booted.ledger === null) return;
+    setAsking(true);
+    setReport(null);
+    void askDoorForHotspots(booted.ledger, setReport)
+      .then(async (answer) => {
+        const landed = answer.ok ? await landHotspots(surface, answer) : refusedHere(answer.sentence);
+        // KEPT, NOT REPLACED: the attempts accumulate, so the stepper's act
+        // rows and the record drawer hold every one of them
+        setAttempts((was) => [...was, { answer, outcome: landed }]);
+      })
+      .catch((error: unknown) => {
+        const sentence = error instanceof Error ? error.message : String(error);
+        setAttempts((was) => [...was, { answer: { ok: false, kind: 'threw', sentence: `the retry threw before the door answered: ${sentence}`, verdicts: [] }, outcome: refusedHere(sentence) }]);
+      })
+      .finally(() => {
+        setAsking(false);
+        setReport(null);
+      });
+  }, [asking, booted.ledger, surface]);
   const data: ProtDeskData = {
     residues: (residues.refused === null ? residues.rows : surface.tables.residues) as readonly Row[],
     counts: surface.tables.counts,
@@ -317,7 +469,12 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
       data={data}
       run={surface.run}
       outcomes={outcomes}
-      checks={pickRefusal === null ? checks : [...checks, `the model's picks were refused as a selection, in the library's own words: ${pickRefusal}`]}
+      // A REFUSED GESTURE IS NEVER SWALLOWED, and the sentence no longer names
+      // WHICH gesture: two controls arrive through this slot now (the picks as
+      // a selection, and the rank on the 3D view's colour), and a line that
+      // said "as a selection" over a refused rebind would be the page naming
+      // the wrong act.
+      checks={pickRefusal === null ? checks : [...checks, `a gesture this page made on the model's answer was refused, in the library's own words: ${pickRefusal}`]}
       session={surface.session}
       table={RESIDUES_TABLE}
       rowsNote={{ quiet: true, line: <ServedRowsNote rows={residues.rows.length} cursor={residues.cursor} refused={residues.refused} /> }}
@@ -325,8 +482,12 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
       claim={PROT_WORDS.title}
       credit={booted.credit}
       counts={surface.tables.counts}
-      hotspots={booted.hotspots}
+      hotspots={hotspots}
       onSelectPicks={onSelectPicks}
+      onPaintByRank={onPaintByRank}
+      onRetryHotspots={onRetryHotspots}
+      asking={asking}
+      boot={bootSteps(booted.report)}
       onSearchAgain={onSearchAgain}
       record={<ServedFoot booted={booted} onSearchAgain={onSearchAgain} />}
     />
@@ -398,7 +559,18 @@ function ServedFoot({ booted, onSearchAgain }: { readonly booted: Booted; onSear
 
 type Phase =
   | { readonly status: 'landing'; readonly sentence: string | null }
-  | { readonly status: 'reading'; readonly entry: string; readonly outcomes: readonly ActOutcome[] }
+  /**
+   * THE BOOT, WITH WHAT IT HAS REPORTED SO FAR.
+   *
+   * `outcomes` is the stepper's copy of the acts, unchanged. `report` is
+   * everything else the boot does and used to throw away — the reads, the ETL,
+   * the build, the probes and stage 5's ask — folded by
+   * `./workbench/boot.ts` and drawn by `./workbench/BootReport.tsx`.
+   *
+   * Both live on the PHASE rather than in a ref, because a report nobody
+   * re-renders for is a report nobody sees.
+   */
+  | { readonly status: 'reading'; readonly entry: string; readonly outcomes: readonly ActOutcome[]; readonly report: BootReported }
   | { readonly status: 'ready'; readonly booted: Booted }
   | { readonly status: 'broken'; readonly sentence: string };
 
@@ -420,11 +592,50 @@ function Page(): JSX.Element {
   const run = useCallback((entry: string): void => {
     if (opening.current === entry) return;
     opening.current = entry;
-    setPhase({ status: 'reading', entry, outcomes: [] });
+    /**
+     * THE TOTAL IS KNOWN BEFORE THE FIRST READ, for the committed entry and
+     * only for it: its six files are DECLARED (`src/data/files.ts`, counted by
+     * `PROT_COMMITTED_READS`). For any other entry the archive names the
+     * accessions and the accessions name the families, so how many reads this
+     * boot will make is not a fact anybody holds yet — and the report says
+     * *unknown* rather than borrowing this entry's number
+     * (`./workbench/boot.ts` · `ReadsReport.total`).
+     */
+    const total = entry.toUpperCase() === EXAMPLE_ENTRY ? PROT_COMMITTED_READS : null;
+    setPhase({ status: 'reading', entry, outcomes: [], report: { ...NOTHING_REPORTED, reads: { ...NOTHING_REPORTED.reads, total } } });
     const live: ActOutcome[] = [];
-    void boot(entry, (outcome) => {
-      live.push(outcome);
-      setPhase((was) => (was.status === 'reading' && was.entry === entry ? { ...was, outcomes: [...live] } : was));
+    /**
+     * THE REPORT IS ACCUMULATED HERE and handed to the phase on every change —
+     * one object, so a page holds one piece of state for the whole boot.
+     *
+     * It is a closure rather than a ref because it is written and read in the
+     * same pass: a `setPhase` that folded the reports itself would be batching
+     * a hundred token reports into whatever React chose to keep.
+     */
+    let reported: BootReported = { ...NOTHING_REPORTED, reads: { ...NOTHING_REPORTED.reads, total } };
+    const say = (next: BootReported): void => {
+      reported = next;
+      setPhase((was) => (was.status === 'reading' && was.entry === entry ? { ...was, report: next } : was));
+    };
+    void boot(entry, {
+      onOutcome: (outcome) => {
+        live.push(outcome);
+        const outcomes = [...live];
+        setPhase((was) => (was.status === 'reading' && was.entry === entry ? { ...was, outcomes, report: { ...reported, outcomes } } : was));
+        reported = { ...reported, outcomes };
+      },
+      http: {
+        onFileAsked: (file) => say({ ...reported, reads: { ...reported.reads, asking: file } }),
+        onFileRead: (read) => say({ ...reported, reads: { ...reported.reads, asking: null, done: [...reported.reads.done, read] } }),
+      },
+      onParsed: (parsed) => say({ ...reported, parsed }),
+      onBuilt: (built) => say({ ...reported, built }),
+      onProbed: (probed) => say({ ...reported, probed }),
+      onAsking: (asking) => say({ ...reported, asking }),
+      onHotspots: (outcome) => say({ ...reported, hotspots: outcome, asking: null }),
+      // THE REPORT AS IT STANDS — handed back with the boot, so the record
+      // drawer on the desk that follows carries the boot's own account
+      reported: () => reported,
     })
       .then((opened) => {
         if (opening.current !== entry) return;
@@ -471,7 +682,32 @@ function Page(): JSX.Element {
     return (
       <Reading
         what={`entry ${phase.entry}${phase.entry === EXAMPLE_ENTRY ? " from this repository's own committed bytes, through the demo API" : ' from the archive'}, the 3D viewer that draws it, the four stages that run in this browser, and the fifth one this process can ask a model for`}
-        extra={<RunStepper outcomes={phase.outcomes} />}
+        /**
+         * THE STEPPER CARRIES THE PROGRESS, AND ONE CENTRED LINE SITS UNDER IT
+         * — the author's ruling, and it is this desk's own law rather than
+         * taste: *the stage stepper IS the cursor*, so a list narrating the
+         * same progression beside it would be a second answer to one question.
+         *
+         * BOTH HALVES COME FROM ONE FOLD. `bootNow` says which step is live and
+         * what the line reads; the stepper spins exactly that mark and the line
+         * says exactly that act (`./workbench/boot.ts` · `BootNow`). Nothing
+         * here derives either for itself.
+         *
+         * AND THE STEPPER SAYS STAGE 5 IS PENDING rather than NOT ON THIS BUILD
+         * — the bug in the author's own screenshot, on the very build that was
+         * about to run it. This page is never the build the plan's blocker is
+         * about, from its first paint: it asked the door before it opened the
+         * entry (`./protStages.ts` · `AwaitedSteps`).
+         *
+         * The boot's own DETAIL is not lost with the list: it is in the record
+         * drawer on the desk that follows (`bootSteps`, drawn by `BootLog`).
+         */
+        instead={
+          <>
+            <RunStepper outcomes={phase.outcomes} host={{ awaiting: { [HOTSPOTS_STAGE]: 'not-run' }, live: bootNow(phase.report).stage }} />
+            <BootLine line={bootNow(phase.report).line} running={bootNow(phase.report).stage !== null} />
+          </>
+        }
       />
     );
   }

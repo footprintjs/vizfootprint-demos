@@ -69,6 +69,7 @@ import {
   libraryChart,
 } from './analyses.js';
 import type { ActOutcome, ProtRun } from './orchestrator.js';
+import { watchTheAsk, type ReportAsk } from './streamReports.js';
 
 // ── the names, once ──────────────────────────────────────────────────────────
 
@@ -448,8 +449,81 @@ export interface HotspotVerdict {
   readonly failed?: string;
 }
 
-/** Why a run of this stage produced no ranking. Each one is a different sentence, and none of them is a silent empty list. */
-export type HotspotFailure = 'no-key' | 'not-the-end' | 'no-evidence' | 'no-cover' | 'unreachable' | 'timeout' | 'refused' | 'threw' | 'malformed' | 'cites-nothing' | 'nothing-left';
+/**
+ * Why a run of this stage produced no ranking. Each one is a different
+ * sentence, and none of them is a silent empty list.
+ *
+ * `stream-died` is the one a STREAMED door can produce and a blocking one
+ * cannot: the reports arrived, the answer frame never did, and the connection
+ * ended. It is its own word rather than `unreachable` because it names a
+ * different hop — the model was reached, and it is the page's own read of the
+ * door that broke — and rather than `threw`, because nothing threw: a body
+ * simply ended. *A stream that dies must be a stated outcome rather than a
+ * spinner that never stops* is the whole reason it exists
+ * ({@link STREAM_DIED}).
+ */
+export type HotspotFailure = 'no-key' | 'not-the-end' | 'no-evidence' | 'no-cover' | 'unreachable' | 'timeout' | 'refused' | 'threw' | 'malformed' | 'cites-nothing' | 'nothing-left' | 'stream-died';
+
+/**
+ * A DOOR'S ANSWER STREAM THAT ENDED BEFORE ITS ANSWER — the sentence, with the
+ * count of what did arrive.
+ *
+ * It borrows the TIMEOUT's own clause deliberately: *the answer, if one arrives
+ * now, is dropped rather than landed late*. That is the precedent this packet
+ * was pointed at, and it is the same fact — the page has stopped listening, and
+ * a ranking that turned up afterwards would be landing at a cursor nobody asked
+ * it about.
+ */
+/**
+ * WHICH FAILURES A RE-ASK COULD HONESTLY ANSWER DIFFERENTLY — the one table the
+ * retry control is offered from, so no screen works out its own eligibility.
+ *
+ * ── THE RULE ───────────────────────────────────────────────────────────────
+ * A retry is offered where the SAME QUESTION could get a different answer, and
+ * is ABSENT otherwise rather than present-and-dead. Each `false` below is its
+ * own reason and none of them is *we did not get round to it*:
+ *
+ *   `no-key`       nothing has changed. A button implying a second press might
+ *                  find a key is a lie about the environment.
+ *   `no-evidence`
+ *   `no-cover`     the evidence is what it is. A retry asks the same
+ *                  unanswerable question and spends a real model call to
+ *                  arrive at the same sentence — which is the rule
+ *                  {@link coverRefusal} already wrote down: *an ask nobody can
+ *                  answer is worse than one that was never made*.
+ *   `not-the-end`  the read was not the end of the run, and pressing again
+ *                  does not move the cursor. What would fix it is a different
+ *                  read, not a second ask.
+ *   `refused`      the model itself declined, and this stage cannot tell an
+ *                  invalid key from a rate limit (`failureOf` matches both) —
+ *                  so the button would be a promise about the environment in
+ *                  exactly the way `no-key`'s would.
+ *
+ * Everything else is a network, a clock, a throw, an unreadable answer, an
+ * answer that cited nothing, an answer every part of which was refused, or a
+ * door whose stream died — and every one of those can go differently.
+ */
+export const RETRYABLE: Readonly<Record<HotspotFailure, boolean>> = {
+  'no-key': false,
+  'not-the-end': false,
+  'no-evidence': false,
+  'no-cover': false,
+  refused: false,
+  unreachable: true,
+  timeout: true,
+  threw: true,
+  malformed: true,
+  'cites-nothing': true,
+  'nothing-left': true,
+  'stream-died': true,
+};
+
+/** Could asking the same question again honestly answer differently? See {@link RETRYABLE}. */
+export const retryable = (kind: HotspotFailure): boolean => RETRYABLE[kind];
+
+export const STREAM_DIED = (reports: number): string =>
+  `the door's answer stream ended after ${String(reports)} ${reports === 1 ? 'report' : 'reports'} and before the answer itself — so stage 5 landed nothing. ` +
+  `The reports said what the stage was doing and none of them was a ranking, which is why there is nothing here to show: the answer, if one arrives now, is dropped rather than landed late.`;
 
 export interface HotspotAnswered {
   readonly ok: true;
@@ -678,6 +752,15 @@ export interface HotspotAsk {
   /** How long the whole ask may take before the stage reports a timeout. Default 60 s. */
   readonly timeoutMs?: number;
   readonly maxIterations?: number;
+  /**
+   * SOMEBODY WATCHING THE ASK — the act, reported as it happens, and never the
+   * answer (`./streamReports.ts` carries the whole argument and the
+   * measurement behind it).
+   *
+   * Absent ⇒ no listener is subscribed and this run is byte-identical to every
+   * earlier one: the library's own dispatcher drops what nobody asked for.
+   */
+  readonly report?: ReportAsk;
 }
 
 /**
@@ -740,6 +823,15 @@ export async function askHotspots(ask: HotspotAsk): Promise<HotspotOutcome> {
     .build();
   let reply: string;
   const clock = startTheClock(ask.timeoutMs ?? 60_000);
+  /**
+   * THE ACT, REPORTED WHILE IT HAPPENS — and the listeners come off on every
+   * exit, beside the clock, for the same reason: the runner outlives one ask.
+   *
+   * A caller with no `report` subscribes nothing at all
+   * (`./streamReports.ts` · `watchTheAsk` is never entered), so an unwatched
+   * ask spends exactly what it spent before this channel existed.
+   */
+  const unwatch = ask.report === undefined ? (): void => {} : watchTheAsk(agent, { model: ask.model ?? 'scripted (no model)', facts: ledger.facts.length, residues: ledger.covered }, ask.report);
   try {
     const raced = await Promise.race([agent.run({ message: HOTSPOT_QUESTION }), clock.expires]);
     if (raced === TIMED_OUT) {
@@ -756,7 +848,17 @@ export async function askHotspots(ask: HotspotAsk): Promise<HotspotOutcome> {
     // ask on a server that answered in two seconds — and on this side of the
     // wire that is a process that will not shut down when it is asked to.
     clock.cancel();
+    unwatch();
   }
+  /**
+   * THE JUDGE'S OWN STEP, REPORTED — and it is honest because of WHERE it is.
+   *
+   * `agent.findings()` is read after the run, and the scoring the standing
+   * judge did happened inside it; this line says the step is now being read
+   * off the record, between the answer arriving and the verdict existing. No
+   * part of the answer is in it.
+   */
+  ask.report?.({ act: 'scoring' });
   const ledgerRows = agent.findings();
   const verdicts = verdictsIn(ledgerRows);
   const disagreements = disagreementsIn(ledgerRows);

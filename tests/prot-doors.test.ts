@@ -35,6 +35,7 @@ import {
   createProtDesk,
   driverFromEnvironment,
   ledgerOf,
+  NDJSON_TYPE,
   protModel,
   protStateOf,
   scriptedHotspotDriver,
@@ -90,11 +91,32 @@ const wire = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
 
 interface Answered {
   readonly status: number;
+  /** Every byte the door wrote, in order — what the key test searches. */
   readonly text: string;
+  /**
+   * THE ANSWER, whichever way the door delivered it: the one JSON body of a
+   * status answer (a 400, a 404, a 405, a served file) or the `answer` frame of
+   * a streamed one — which carries exactly what the non-streaming
+   * {@link answerHotspots} answers.
+   */
   readonly body: Record<string, unknown>;
+  /** The REPORTS the streamed door wrote ahead of the answer, in order. Empty for every non-streamed door. */
+  readonly reports: readonly Record<string, unknown>[];
+  /** Every frame, whole — so a test can assert the answer is LAST and appears exactly once. */
+  readonly frames: readonly Record<string, unknown>[];
+  readonly contentType: string;
 }
 
-/** One request/response pair through the real door — buffers in, the way node's http server yields a body. */
+/**
+ * One request/response pair through the real door — buffers in, the way node's
+ * http server yields a body.
+ *
+ * `write` IS COLLECTED BESIDE `end`, because the hot spots door STREAMS: one
+ * `HotspotFrame` per line, the answer always last
+ * (`server/prot-doors.ts` · `HotspotFrame`). Everything else answers with one
+ * body through `end` exactly as it always did, and the parse below handles both
+ * out of the same bytes rather than by branching on the door.
+ */
 async function ask(desk: ProtDesk, method: string, path: string, body?: unknown, expectHandled = true): Promise<Answered> {
   const req = Readable.from([Buffer.from(body === undefined ? '' : JSON.stringify(body))]) as unknown as IncomingMessage;
   req.method = method;
@@ -102,24 +124,45 @@ async function ask(desk: ProtDesk, method: string, path: string, body?: unknown,
   req.headers = {};
   let status = 0;
   let text = '';
+  let contentType = '';
   const res = {
-    writeHead: (code: number) => {
+    writeHead: (code: number, headers?: Record<string, string>) => {
       status = code;
+      contentType = headers?.['content-type'] ?? '';
       return res;
     },
+    write: (chunk: string | Buffer) => {
+      text += String(chunk);
+      return true;
+    },
     end: (chunk?: string | Buffer) => {
-      text = chunk === undefined ? '' : String(chunk);
+      if (chunk !== undefined) text += String(chunk);
     },
   } as unknown as ServerResponse;
   expect(await serveProtDoors(desk, req, res, process.cwd())).toBe(expectHandled);
-  let parsed: Record<string, unknown> = {};
-  try {
-    const maybe: unknown = JSON.parse(text);
-    if (typeof maybe === 'object' && maybe !== null && !Array.isArray(maybe)) parsed = maybe as Record<string, unknown>;
-  } catch {
-    parsed = {};
-  }
-  return { status, text, body: parsed };
+  /** Every line that parses as an object — one for a status answer, N for a streamed one. */
+  const frames = text
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .flatMap((line) => {
+      try {
+        const maybe: unknown = JSON.parse(line);
+        return typeof maybe === 'object' && maybe !== null && !Array.isArray(maybe) ? [maybe as Record<string, unknown>] : [];
+      } catch {
+        return [];
+      }
+    });
+  const answered = frames.filter((frame) => 'answer' in frame);
+  const last = frames[frames.length - 1];
+  return {
+    status,
+    text,
+    // the streamed door's `answer` frame, or the one body every other door writes
+    body: (answered[0]?.['answer'] as Record<string, unknown> | undefined) ?? (last !== undefined && !('report' in last) ? last : {}),
+    reports: frames.flatMap((frame) => ('report' in frame ? [frame['report'] as Record<string, unknown>] : [])),
+    frames,
+    contentType,
+  };
 }
 
 // ── the driver ───────────────────────────────────────────────────────────────
@@ -223,6 +266,89 @@ describe('GET /api/prot/state says whether the stage can run here, and if not wh
 });
 
 // ── POST /api/prot/hotspots ──────────────────────────────────────────────────
+
+/**
+ * THE DOOR IS STREAMED, and the two things that makes it responsible for.
+ *
+ * The status has to travel, so the reports are framed AHEAD of the answer on
+ * the same response (`server/prot-doors.ts` · `HotspotFrame` argues the choice
+ * against a second progress door and against SSE). What that must never cost:
+ *
+ *  1. **THE ANSWER IS STILL THE ANSWER.** The last frame carries exactly what
+ *     the non-streaming {@link answerHotspots} answers, byte for byte — so
+ *     every other test in this file goes on asserting the same object.
+ *  2. **NO REPORT CARRIES A WORD OF IT.** Progress is a state, so every field
+ *     of every report is a count or a declared word, and the whole report
+ *     stream is searched for the answer's own residues and reasons.
+ */
+describe('the door reports what the stage is DOING, ahead of what it answered', () => {
+  it('frames reports first and the answer LAST, exactly once, as newline-delimited JSON', async () => {
+    const desk = createProtDesk(scriptedHotspotDriver());
+    const answered = await ask(desk, 'POST', '/api/prot/hotspots', wire());
+    expect(answered.status).toBe(200);
+    expect(answered.contentType).toBe(NDJSON_TYPE);
+    // one frame per line, and the file ends with a newline rather than mid-line
+    expect(answered.text.endsWith('\n')).toBe(true);
+    expect(answered.frames.length).toBe(answered.text.trim().split('\n').length);
+    // THE ANSWER IS LAST AND THERE IS ONE OF IT
+    expect(answered.frames.filter((frame) => 'answer' in frame)).toHaveLength(1);
+    expect(Object.keys(answered.frames[answered.frames.length - 1]!)).toEqual(['answer']);
+    // and reports really arrived ahead of it
+    expect(answered.reports.length).toBeGreaterThan(0);
+    // the LAST FRAME is what the non-streaming door answers — one owner, two
+    // deliveries (`server/prot-doors.ts` · `askOnThisDesk`)
+    const blocking = await answerHotspots(createProtDesk(scriptedHotspotDriver()), wire());
+    expect(blocking.status).toBe(200);
+    const streamed = answered.body as Record<string, unknown>;
+    const direct = blocking.body as Record<string, unknown>;
+    expect(streamed['ok']).toBe(direct['ok']);
+    expect(streamed['picks']).toEqual(direct['picks']);
+    expect(streamed['served']).toEqual(direct['served']);
+  });
+
+  it('EVERY REPORT IS THE ACT — a count or a declared word, and never a word of the answer', async () => {
+    const desk = createProtDesk(scriptedHotspotDriver());
+    const answered = await ask(desk, 'POST', '/api/prot/hotspots', wire());
+    const picks = (answered.body['picks'] ?? []) as readonly { readonly residue: string; readonly reason: string; readonly cites: readonly string[] }[];
+    expect(picks.length).toBeGreaterThan(0);
+    /**
+     * THE HONESTY ASSERTION, over the reports as BYTES: nothing the answer
+     * carries — not a residue key, not a reason, not a cited fact id — appears
+     * anywhere in the progress stream.
+     */
+    const progress = JSON.stringify(answered.reports);
+    for (const pick of picks) {
+      expect(progress).not.toContain(pick.residue);
+      expect(progress).not.toContain(pick.reason);
+      for (const id of pick.cites) expect(progress).not.toContain(id);
+    }
+    // and every report's own act is one of the declared words
+    const acts = new Set(answered.reports.map((report) => report['act']));
+    for (const act of acts) expect(['asking', 'reading-evidence', 'read-evidence', 'answering', 'thinking', 're-asking', 'retrying', 'scoring']).toContain(act);
+    // the ask says what it is asking and out of how much — both known before the call
+    const asking = answered.reports.find((report) => report['act'] === 'asking');
+    expect(asking?.['facts']).toBe(LEDGER.facts.length);
+    expect(asking?.['residues']).toBe(LEDGER.covered);
+    // and the judge's own step is reported, after the answer and before the verdict
+    expect(answered.reports.some((report) => report['act'] === 'scoring')).toBe(true);
+  });
+
+  it('a process with no key reports NOTHING and answers its own sentence — there is no ask to report on', async () => {
+    const desk = createProtDesk(chooseHotspotDriver(undefined));
+    const answered = await ask(desk, 'POST', '/api/prot/hotspots', wire());
+    expect(answered.reports).toEqual([]);
+    expect(answered.body['kind']).toBe('no-key');
+  });
+
+  it('a malformed request is NOT a stream — the status has to be written before any frame could be', async () => {
+    const desk = createProtDesk(scriptedHotspotDriver());
+    const answered = await ask(desk, 'POST', '/api/prot/hotspots', { facts: LEDGER.facts });
+    expect(answered.status).toBe(400);
+    expect(answered.contentType).toContain('application/json');
+    expect(answered.reports).toEqual([]);
+    expect(answered.body['kind']).toBe('malformed-request');
+  });
+});
 
 describe('POST /api/prot/hotspots answers the ranked list with its citations and the judge’s verdicts', () => {
   it('answers picks that cite ids the ledger holds, and records a verdict beside them', async () => {
@@ -429,6 +555,16 @@ describe('the key reaches the provider and nothing else', () => {
     expect(said.text).not.toContain(FAKE_KEY);
     expect(said.text).not.toContain('sk-ant');
     expect(JSON.stringify(desk.asks)).not.toContain(FAKE_KEY);
+    /*
+      AND EVERY STATUS LINE THE STREAM WROTE, which is new bytes on this door
+      and therefore a new place a key could have leaked. `said.text` above is
+      the whole NDJSON body, so it already covers them — this asserts the
+      REPORTS on their own so the coverage is legible rather than incidental,
+      and because a failing live call is exactly where the reports are written.
+    */
+    expect(JSON.stringify(said.reports)).not.toContain(FAKE_KEY);
+    expect(JSON.stringify(said.reports)).not.toContain('sk-ant');
+    expect(JSON.stringify(said.frames)).not.toContain(FAKE_KEY);
     // and the whole desk, driver included, does not serialise it into anything
     // a caller could hand onward
     expect(JSON.stringify(protStateOf(desk))).not.toContain('sk-ant');

@@ -7,9 +7,9 @@ That is the author's ruling and it is the shape of this folder, not a preference
 | layer | files here | one job | may import |
 |---|---|---|---|
 | 1 · **theme** | `theme.css`, `tokens.ts` | every colour, radius, shadow, blur and font family, once | `tokens.ts`: `react`, nothing else |
-| 2 · **components** | `Chrome.tsx`, `Stepper.tsx`, `ChartCard.tsx`, `Search.tsx` | **props in, markup out** | `react` + sibling components |
-| 3 · **business logic** | `bands.ts`, `steps.ts`, `panel.ts`, `charts.ts`, `results.ts` (and `../protStages.ts`, which was already this) | the rules, as **pure functions**: input is the run, output is the props | the run's own declarations (`src/prot/`), sibling types |
-| 4 · **data logic** | *not here* — `../protRows.ts`, `../protProjection.tsx`, `src/prot/session.ts` | the only code that touches the session | anything |
+| 2 · **components** | `Chrome.tsx`, `Stepper.tsx`, `ChartCard.tsx`, `Search.tsx`, `BootReport.tsx` | **props in, markup out** | `react` + sibling components |
+| 3 · **business logic** | `bands.ts`, `steps.ts`, `panel.ts`, `charts.ts`, `results.ts`, `boot.ts` (and `../protStages.ts`, which was already this) | the rules, as **pure functions**: input is the run, output is the props | the run's own declarations (`src/prot/`), sibling types |
+| 4 · **data logic** | *not here* — `../protRows.ts`, `../protProjection.tsx`, `../protDoor.ts`, `src/prot/session.ts` | the only code that touches the session, and the only code that reaches outside the browser | anything |
 
 `../protDesk.tsx` is the one thin composition that wires 4 → 3 → 2, and the only file that knows all four exist. `../protLanding.tsx` is the same shape for screen one.
 
@@ -447,3 +447,193 @@ The sentence still counts, off `agent.outputContractUnmet()` rather than a tally
 ### The published desk is untouched, and that is asserted rather than intended
 
 `ProtDesk`'s `hotspots` prop is ABSENT on the static page, `railCards(null)` hands back `BLOCKED_CARDS` itself, and stage 5's mark still says *not on this build* with its whole measured reason behind its `Full note`. A static page cannot hold the key that would call a model — **that is the architecture and not a shortfall** — and `tests/prot-hotspot-card.test.tsx` and `tests/prot-plan.test.ts` are what stop a later edit making the Pages build claim otherwise. The served page (`web/src/protServed.tsx`, local only) is where the prop is filled.
+
+## PROGRESS IS A REPORT. A STAGE'S STATE IS A FACT. A PAYLOAD IS NEITHER.
+
+> Why is this not live status support instead of this static text?
+
+The author's question, asked while watching the served desk boot behind one paragraph (`web/site/boot.tsx · Reading`) that said the page *is fetching the committed files over http and running the same ETL the server runs*. True — and true for the whole of a boot in which the page really performs **six http reads, an ETL, a dashboard build, three probe gestures, four stages and a model call**. Every one of those was a fact the page held and threw away.
+
+The law it is all built on is the library's own arrival law (`vizfootprint/docs/proposals/data-arrival.md` §2) and it is the same law at this tier:
+
+**Progress is a REPORT: transient, reaching no commit, never evidence, and nothing computes from it. A stage's STATE is a fact and belongs on screen. A PAYLOAD never does.**
+
+| the rule | how it is kept | what breaks it |
+|---|---|---|
+| a report is a state or a count, never a value of the data | `web/src/workbench/boot.ts` folds counts and declared names; nothing on `BootReport` is a row, a cell or a model's words | a line that quotes a value "so the reader can see it working" |
+| the status is a **prop** computed in layer 3 | `bootSteps` / `askingSaid` / `recommendationOf` are pure; `BootReport.tsx` and `ChartCard.tsx · Recommendation` take props and draw them | a component that derives its own status — the boundary breaking, and a component that can no longer move into the library |
+| a step that has not happened is not a step that failed | four states, four marks, four words: `pending · doing · landed · refused` (`boot.ts · BootStepState`) | a boolean `done`; a spinner that looks the same as an error |
+| a refusal is shown, verbatim, and never re-worded | `BootStepView.refusal` carries the sentence whatever refused it wrote (`src/prot/orchestrator.ts · landAct`) | a summary; a count of refusals with the sentences behind a fold |
+| a total is reported only when it is known | `src/prot/http.ts · FileRead.total` keeps `content-length` only where it AGREES with the decoded bytes counted; `boot.ts · bytesSaid` says *no total* otherwise | a percentage of the compressed size against the decoded count — it runs past 100 and then stops |
+| a count of files may be a total because the list is DECLARED | `PROT_COMMITTED_READS` is `src/data/files.ts` counted, so *file 4 of 6* is known before the first read | using that six for an entry read from the archive, where the accessions name the families and nobody knows yet |
+
+`tests/prot-boot.test.tsx` walks all of it, and `tests/prot-served.smoke.test.ts` reads it off the real page in a real browser.
+
+### THE STEPPER CARRIES THE PROGRESS. ONE CENTRED LINE SITS UNDER IT. THE LIST IS THE RECORD'S.
+
+The author saw the boot live and reshaped it: *"can we take the update below the stage steps row, sort of centred — we don't want detail of lists, just status update, a small spinner around that stage."* It is this desk's own law rather than taste — **the stage stepper IS the cursor** — so an eight-row list narrating the same progression beside it is a SECOND ANSWER to one question.
+
+| the rule | how it is kept | what breaks it |
+|---|---|---|
+| the spinner and the line are two faces of ONE fact | `boot.ts · bootNow` answers both — `stage` is the mark that spins, `line` is the sentence under it — and nothing derives either anywhere else | a component working out what is running; two owners that will eventually disagree |
+| the spinner is on a step that is GENUINELY running | `protStages.ts · HostSteps.live`: given a live step, exactly that one runs and every other unfinished one is `not-run` | the old derivation, which spun the SECOND stage's mark from the first paint through six http reads and a dashboard build — this desk's forbidden promise one state along |
+| the reads, the ETL, the build and the probes spin STEP 1 | the residues table is what step 1 lands (`src/prot/plan.ts` · step 1), so the mark is step 1's and the LINE says which of the four is happening | a mark for a phase the plan has no step for; a stepper column invented for the build |
+| reduced motion keeps a distinct mark | `theme.css` drops the `animation` under `prefers-reduced-motion: reduce` and keeps the arc, the 2px accent ring and the halo — no other state has them | a silent drop to looking `pending`, which is the state that claims nothing |
+| the line is present tense, one act, no explanatory clause | `askingSaid` and `bootNow`; the explanations are `askingLogged`'s and `bootSteps`' | *a fact, an em-dash, an explanation* — a log entry under a stepper |
+| a number appears only where it is the point | `6 of 6` yes; `335,217 bytes` is the record's business | a byte count in a status line |
+| a step that produced a refusal is never dressed as progress | a read that could not be made says so; the probes' own *3 gestures, 3 refused by the library* is the RECORD's line, because the probes and the first stage are the same tick (`openProtSurfaceAsync` makes the gestures and dispatches with nothing between) and a status line reporting a result while something else is happening is wrong | a green tick over three refusals; a count on the line while a stage is running |
+| **the detail MOVES, it does not vanish** | `BootLog` in the record drawer, where detail already lives: the bytes, the measured gzip sentence, the probe counts, every column a stage landed, every refusal verbatim | *we simplified the screen* — which is how honesty gets quietly dropped |
+
+**MEASURED, and worth knowing before anybody "fixes" it:** three of the boot's phases — the parse, the dashboard build and the probe gestures — **never paint.** The conservation reads resolve, `buildDashboardAsync` and the three probe dispatches are already-resolved promises, and nothing yields to the renderer until the first stage awaits, so React coalesces the lot into one batch. The fold produces a line for every one of them (`tests/prot-boot.test.tsx` walks all three); the screen goes from *reading the committed files · 6 of 6* to *placing 185 residues in their family's alignment*. **Forcing a paint so the screen looked busier would be this desk inventing a moment it did not have**, so the browser test asserts what the page really shows and the fold's own test covers the rest.
+
+### A PRESS ON A LANDED STAGE THAT OWNS NO PICTURE SAYS SO
+
+Which pictures a stage owns is an INTERSECTION of the columns its acts landed with the columns each view binds (`../protStages.ts · chartsOfStage`), and it has no fallback on purpose: the layout follows it, and a card hard-coded as the big one is what it exists to prevent. Stage 5 lands three columns, no view bound any of them, and stage 5 is nobody's receipt — so the intersection was empty and **the press died quietly.** The author found it: *clicking on the cursor stage nothing happens.*
+
+**Part 3's binding fixes it, and that is worth knowing: one binding, two symptoms.** Binding `hotspot_rank` to the structure view's colour puts a landed stage-5 column into `shown`, which gives stage 5 a non-empty intersection and makes the stepper's press work.
+
+**And the empty case is now a STATED outcome** (`panel.ts · emptyFocusSaid`, said in the stepper's own `refusedSeek` slot), because it will recur for any future stage whose columns no chart has taken up — stage 6 will be exactly that on the day it lands. It names the real reason rather than apologising: *it landed `hotspot_rank`, `hotspot_cites`, `hotspot_reason` onto the rows, and no picture on this desk is bound to any of them.* A reader learns a fact — the columns exist and nothing reads them, and the Sheet shows them.
+
+Three cases, three answers, and they stay distinct because they are different facts:
+
+| the press | what happens | why |
+|---|---|---|
+| a stage with **no commit** | the FOCUS moves to its card or its picture; the cursor does not | there is nowhere to seek to |
+| a stage with a commit and **a picture** | the cursor moves and the layout promotes that picture | both halves answered |
+| a stage with a commit and **no picture** | the cursor moves, the layout does not, and the line says which columns exist and that nothing is drawn from them | *empty is an answer; say it* — never a fallback view, which would be the layout guessing |
+
+### THE BUG IN THE AUTHOR'S OWN SCREENSHOT: the stepper marked stage 5 *NOT ON THIS BUILD* on the build that was about to run it
+
+During boot the served page's stepper wore the published build's blocker for step 5, and only learned the truth when the ask came back. `outcomes` held nothing for a plan-only step until then, so the fold fell through to `planOnly` and printed the plan's reason — which is **true of a static page and false of the page drawing it**.
+
+What was missing is a statement only the HOST can make. The served page knows from its first paint that it is not the build the blocker is about: it asked the door before it opened the entry, and it holds a slot for the act. So it says so, per step, with what that step is doing — `web/src/protStages.ts · AwaitedSteps`:
+
+| what the host says | the mark | the word beneath |
+|---|---|---|
+| `not-run` — declared, nothing asked yet | the hollow dashed circle | none: pending is the mark's own meaning |
+| `running` — the ask is in flight | the accent ring, the one moving mark | none |
+| *nothing at all* (the published build) | the hatched struck-through circle | `not on this build`, with the whole measured reason behind the card's `Full note` |
+
+An OUTCOME still wins over both, exactly as a landed act wins over a not-run circle everywhere else. **Both directions are pinned**: the served boot never says the static-build sentence at any point, and the published build still does, untouched.
+
+## SHOW THE ACT, NEVER THE ANSWER — and this is the sharp case, decided by a measurement
+
+Stage 5 streams. What it may say while it is in flight is **the act**, and the reason no part of the answer may appear is not taste:
+
+> Stage 5's discipline is that the ranking is frozen as a commit *before* anything checks it. Streaming a partial ranking would put residues on screen before the hallucination door had refused any of them — and when a residue absent from the run's table was planted, the model ranked it **first**. The screen would have shown it as the top hot spot and the refusal would have arrived after. The record would stay correct and the screen would have lied.
+
+So the law is a property of the TYPE and not of anybody's discipline: every field of `src/prot/streamReports.ts · HotspotReport` is a count, a declared word, or the caller's own name for the model asked. There is no string on it that a model wrote.
+
+| shown | the event it comes from | why it is honest |
+|---|---|---|
+| *asking claude-sonnet-5 — 71 facts about 18 residues served* | `stream.llm_start` / `agent.turn_start` (said once, whichever fires) | the stage's state; both counts were known before the call |
+| *the model called the evidence tool — the one tool it has* | `stream.tool_start` | the act, named |
+| *it read the evidence: 71 facts, one per id* | `stream.tool_end` | the count is OURS: `tool_end.result` is the JSON we served, and it is not carried |
+| *answering… 400 tokens — a count of the act* | counted `stream.token` | a measure of the ACT. `token.content` is the token's text and is **not** carried |
+| *thinking… 9 blocks of reasoning, counted and not shown* | counted `stream.thinking_delta` | the same: a count, never the text |
+| *the answer did not parse — asking once more with the library's own validator quoted back, attempt 1, 1 correction left* | `agent.output_schema_retry` | **the re-ask we built, made visible instead of hidden** |
+| *the call failed and was retried — attempt 2* | `error.retried` / `reliability.retried` | the library's own resilience, which is a different fact from a re-ask |
+| *scoring against the ledger* | after the reply, before the verdict exists | the judge's own step |
+| the ranking, its citations, its refusals, the judge | the landed commit | the answer, after it is frozen and checked |
+
+**The retry row matters most.** It was invisible: the attempt count only ever appeared inside a FAILURE sentence, so a reader of a successful run never learned the model had been asked twice — and a reader who never learns that has been told less than the record knows.
+
+### The card's fourth state, and why it is the boot screen that shows it
+
+The card has four states now: a ranking, the stage's own failure sentence, no key, and **IN FLIGHT**. In flight is `outcome: null` with a report beside it (`panel.ts · HotspotCardInput`) — `null` rather than a fourth `HotspotFailure`, because *in flight* is not an outcome and a failure vocabulary that could spell *still going* would let a screen draw a pending stage as a refused one. Its rows are empty, its refusals and verdicts are empty, its figures are the words `in flight`, and its `Full note` is its own paragraph rather than the answered one in the past tense.
+
+**Where a reader meets it is the boot screen**, and that is a consequence of a law rather than a gap: stage 5 is asked ONCE, from the rows at the end of the run (`src/prot/hotspots.ts · notTheEndOfTheRun` refuses any other read), so the desk does not mount until the ask has returned. The boot report's stage-5 row and the card's in-flight state are the **same fold** — `boot.ts · askingSaid` is the one owner — so the two can never describe that moment two ways, and a host that mounted the desk first would get the card with no new code.
+
+### The transport: the door is streamed, and there is no second door
+
+The choice was between framing the reports ahead of the answer on the response and standing up a progress door the page polls. **The door is streamed** — newline-delimited JSON, one `server/prot-doors.ts · HotspotFrame` per line, `answer` exactly once and last — and the argument against the second door is this file's own first law about the server: **it holds no session.**
+
+A progress door has to remember an ask — which ask, how far along, for whom — and a door that remembers an ask *is* a session, with an id to correlate, a lifetime to expire, and a second answer to *what is stage 5 doing*. It would also make a dead connection two indistinguishable facts (a poll that 404s because the ask is gone, and one that 404s because it never existed) where the stream makes it one. SSE was the other half of the offer and does not fit: `EventSource` is GET-only and this ask carries a seventy-kilobyte findings ledger in its body.
+
+Two things the framing must not cost, and both are asserted:
+
+- **the answer is still the answer.** The last frame carries exactly what the non-streaming `answerHotspots` answers — one owner, two deliveries (`askOnThisDesk`).
+- **a malformed request is not a stream.** The status is written before any frame could be, so a request the door cannot read gets the one JSON body it always got.
+
+**And a stream that dies is a stated outcome, never a spinner that never stops.** `src/prot/hotspots.ts · STREAM_DIED` names how many reports arrived and borrows the timeout's own clause, because it is the same fact: *the answer, if one arrives now, is dropped rather than landed late.* It is its own failure kind (`stream-died`) and not `unreachable` — the model was reached — and not `threw` — nothing threw; a body ended.
+
+#### The defect that shipped with the framing, and the measurement that found it
+
+The card read *the door's answer stream ended after 0 reports and before the answer itself* on the author's own page, and the stepper marked stage 5 REFUSED — on a run whose door had answered six ranked residues. **Zero reports AND no answer is the signature**, and it is not the last chunk being mis-cut: it is a body with NEITHER key in it. The reader took an `answer` frame or nothing, so an outcome delivered UNFRAMED — which is what a process started before this packet answers, and what anything else in front of the door might — was read as a dead stream.
+
+What the failure got right is worth keeping: the card distinguished *the stage ran and reported* from *the stage produced a ranking*, and said so in its own sentence rather than showing an empty list.
+
+`protDoor.ts · readAnswer` accepts either now — a framed answer, or an unframed one carrying `ok`, this stage's own discriminant — which is the discipline this page keeps everywhere else: *a wire is a boundary, read defensively*. **The test pins the whole trip**, because a test that asserted only the reports would have passed through exactly this: the stream carries its reports AND the answer arrives AND the column is on the rows.
+
+### THE REASON IS IN THE CARD, AND A RETRY MAY NOT RELOAD THE PAGE
+
+The author: *"I like that it says refused — can we add the reason for the refusal in the hot spot widget?"* and *"if it is retryable can we add a retry button that doesn't change the page?"*
+
+| the rule | how it is kept | what breaks it |
+|---|---|---|
+| the card says WHICH KIND, beside the sentence | `RecommendationView.kind` → `refused · timeout` in the rust the stepper's mark is drawn in, with the stage's own sentence verbatim under it | a card that is silent while the stepper says refused; a summary in place of the sentence |
+| **the record survives the retry** | the re-ask happens on the LIVE session (`protServed.tsx · onRetryHotspots`), lands its own act, and every earlier attempt stays on the act rows and in the record drawer | a reload — which re-runs stages 1 to 4 and mints a fresh log, destroying the record the ranking is pre-registered against. *You cannot retry your way to a cleaner history.* |
+| it asks the SAME question | the ledger the boot folded is kept (`Booted.ledger`); re-folding it later would be a different question, because a reader's selection has moved the cursor | folding a new ledger at the retry, which `notTheEndOfTheRun` would refuse anyway |
+| the mark follows the LATEST attempt and hides none | `protStages.ts · performed` reads the last act's state; `detail` still carries every refusal sentence | a successful retry that leaves the stage reading refused; a refusal a retry erased |
+| offered only where a re-ask could honestly differ | `src/prot/hotspots.ts · RETRYABLE`, one table, decided by the KIND — and every kind has an answer, so a new one cannot slip through undecided | a button on `no-key` (a lie about the environment), on `no-evidence`/`no-cover` (the same unanswerable question, and a real call spent to reach the same sentence), on `not-the-end` (what is needed is a different READ), or on `refused` (which cannot tell an invalid key from a rate limit) |
+| the count is a fact the reader is owed | `RecommendationView.asked` — *asked 3 times in this run*, BESIDE the library's own *judged 2 answers and paid for 1 corrective re-ask* | one number answering two questions, which loses one of them |
+| while it runs it is the IN-FLIGHT state | the card's fourth state, and the button is `disabled` with `aria-busy` rather than looking idle | a second ask mid-ask; a partial ranking on screen, which the law above forbids anyway |
+
+## THE PICKS ARE MARKS IN THE STRUCTURE — bound, not painted
+
+The ranking lands three columns on `residues`, so the viewer needs no new machinery: **`hotspot_rank` is a column like any other and the structure view's colour channel can bind it.** The whole feature is one reencode at a view the def already declares, through the door every picture on this desk re-encodes through — no new chart kind, no new emission kind, no hand-placed highlight, and nothing marked from a literal.
+
+### A rank had to be DECLARED before it could be bound — measured
+
+The rebind was **refused** until then, and the sentence is the fix's own justification: the structure view's colour takes a column with distinct values (`src/prot/def.ts · STRUCTURE_COLOR_RULE`), the engine reads a landed `int` as `number/continuous`, and the door answered *hotspot_rank is not one*. The answer is a DECLARATION of what the column IS — `src/prot/def.ts · RANK_DECLARED`, `role: 'dimension', scale: 'discrete'`, the `resnum` argument one ranking along: **rank 6 is not six times rank 1, it is a place** — and never a widened house rule.
+
+It is declared exactly where its ACT is (gated on the same slot), so the published def is byte-identical: a build that cannot ask a model declares no column for the answer it cannot have.
+
+### ABSENCE IS THE HARD PART AND IT IS THE POINT
+
+179 of 185 residues carry no rank. `paintOf` had **no precedent for an absent bound value** — that is the finding — and the defect was real rather than cosmetic: the fold read the bound value as `String(row[field])`, so a row with no value landed in a bucket named `"undefined"` with a palette hue of its own, beside the real ranks and indistinguishable from one. It had never shown, because every column bound there until now was the file's own and every residue has a `chain`.
+
+`web/src/molstarRenderer.ts` has a fifth paint word now:
+
+| the rule | how it is kept | what breaks it |
+|---|---|---|
+| an absent bound value gets its own bucket and its own word | `PaintWord = … | 'absent'`, `PAINT_MEANING.absent` = *absent in the bound column — no value there, which is not a zero and not a last place* | `String(undefined)`; folding the absence into `kept` |
+| the colour cannot read as *ranked last* | `PAINT_COLOR.absent` is an unsaturated slate that is on no ramp through `VALUE_PALETTE` and is not its last hue — **absence is not the end of an order; it is not in the order at all** | a sequential ramp with a seventh step; a darker shade of the sixth rank |
+| the legend reads the same constants the paint does, and names only what the picture CONTAINS | `protCells.tsx` folds `PAINT_WORDS` and drops `absent` where the bound column has no absence in these rows; the viewer's own status line counts the bucket (`saidOf`) | a standing `absent` entry over a picture of `chain` — a legend naming a colour the picture does not contain, which is the same law `kept` already keeps |
+| nothing changes for a column with no absence | the bucket is empty, the status line does not mention it, and `chain` paints exactly as it did | a standing *absent* entry over a picture of the file's own labels |
+
+**Named, not fixed, and measured:** the file's own no-angle absence is painted AHEAD of the bound column's, because those residues are absent from the Ramachandran plot entirely and the 3D view is the only place a reader can see them. So a residue that is both ranked and missing a backbone angle would be painted for the angle. On the committed entry that cannot arise: the four residues with no angle are the four chain termini (A:1, A:96, B:1, B:89) and **not one of them is in the 18-residue cover the model is ever served**. Both captions count both absences either way.
+
+### THE REGISTER, which is the honesty cost of this feature
+
+Painting a model's opinion onto measured geometry puts a recommendation in the same visual language as the crystallography — the same well, the same swatches, the same kind of legend `chain` and `resname` get, and those are facts read off the file. So:
+
+**While the colour channel is bound to the rank, the viewer's own caption carries the CARD'S WORDS** — `a recommendation, not a measurement`, from `src/prot/hotspots.ts · HOTSPOT_TAG` — and counts the residues the column says nothing about. **When it is not bound, it says none of it**, because a standing disclaimer over a picture of `chain` would be this desk calling the file's own labels a recommendation.
+
+The rule follows the RECORD and not a press: the binding is read from the encoding fold at the cursor (`desk.bound`), so the caption and the control's own name are right after a reload, after a seek behind the rebind's commit, and after a rebind made from anywhere else.
+
+### EVERYTHING IN THE VIEWER STAYS CLICKABLE, and the argument is worth recording
+
+The phrasing that arrived with this packet — *show the recommended hot spots as clickable bits* — invites restricting the gesture to the top few. **It is refused**, and here is why:
+
+**A reader inspecting a residue the model did NOT pick is doing exactly what this desk is for.** The desk exists so somebody can check a claim against the evidence; the residues that are most worth clicking are often the ones a ranking passed over — the buried one it missed, the conserved one it did not cite, the neighbour that explains why the pick is a pick. Taking the click away from 179 of 185 residues would trade a real capability for a highlight, and it would do it in the one pane where the reader has no other way in: the 3D view is the only picture where a residue with no backbone angle appears at all.
+
+**The picks are MARKED; the structure stays a structure.** A mark is an addition to a picture. Narrowing the gesture would be a subtraction from it, made in the name of the addition — which is the same mistake as trimming a ledger to a size a model can hold, one tier up.
+
+So there are two controls on the card, each its own act on its own record, and neither takes anything away:
+
+- **select these N residues across the desk** — one `MatchValue` at `interface`, which lands a clause and narrows every pane to the short list at once;
+- **colour the 3D structure by the model's rank** — one reencode at `structure`, which lands an ENCODING and marks the picks in place.
+
+`tests/prot-hotspot-marks.test.tsx` pins that an unranked residue emits the same point as a ranked one and really does narrow the desk, and `tests/prot-served.smoke.test.ts` counts the marks in a real browser.
+
+## What this packet found in the library, reported rather than worked around
+
+Four, and each is named where it bites:
+
+| the finding | measured where | what this desk does instead |
+|---|---|---|
+| **`sessionView.reencode` swallows the session's refusal.** It answers `Promise<void>` and never hands back the rejection, so a host cannot learn from that door that its rebind was refused — while `emit` does, which is what this desk's *a refused gesture is never swallowed* law rests on. | `vizfootprint/ui · sessionView.ts · reencode`, and it is how the first `hotspot_rank` rebind looked like it had worked | `protServed.tsx · onPaintByRank` asks the RECORD afterwards — the encoding fold at the cursor — and says so beside the desk's other checks when the channel is not carrying what was asked for |
+| **an act-landed column carries only a `type`.** `ColumnsOutput.columns` is `{ type }` and nothing else, so a column's ROLE and SCALE are inferred from that type — and a landed `int` is read as a magnitude. A rank is a place, so the structure view's colour refused it by name until the def declared it. | `vizfootprint · src/analysis/types.ts · ColumnsOutput`, against `src/encoding/facets.ts · facetOf` | `src/prot/def.ts · RANK_DECLARED` declares the column in the table's own `columns` map, gated on the same slot as the act. An act that could declare what it lands would not need the def's help |
+| **a renderer's `color` channel has no vocabulary for an absence.** `RenderState` gives the bound field and the rows; what an absent value MEANS in a colour scale is the renderer's own invention, and this one had no answer for it (`String(undefined)`). Every first-party chart has the same gap the day a column with an absence is bound to its colour. | `web/src/molstarRenderer.ts · paintOf`, on the first bound column that has an absence in it | a fifth paint word, `absent`, off a ramp and out of the series — and the legend names it only when the picture contains it |
+| **a bound renderer cannot be asked what it painted.** `BoundRenderer.update` answers `{ ok: true }`, so the absence count in the caption is folded from the same rows and the same predicate rather than read back off the picture. | recorded twice before; this is its third consumer | the fold is honest because it is the same predicate on the same rows, not because the renderer confirmed it |

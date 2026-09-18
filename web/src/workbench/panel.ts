@@ -83,7 +83,12 @@ import { CONSERVATION_ACT, CONTACTS_ACT, PAIRS_ACT, SURFACE_ACT } from '../../..
 import { SCORE_IS, SCORE_IS_NOT } from '../../../src/prot/conservation.js';
 import { PLACEMENT_HERE, PLACEMENT_STRATEGIES } from '../../../src/prot/placement.js';
 import { PROT_BLOCKED, type Blocker } from '../../../src/prot/plan.js';
-import { HOTSPOTS_STAGE, HOTSPOT_TAG, type HotspotOutcome } from '../../../src/prot/hotspots.js';
+import { HOTSPOTS_STAGE, HOTSPOT_TAG, retryable, type HotspotOutcome } from '../../../src/prot/hotspots.js';
+import type { HotspotReport } from '../../../src/prot/streamReports.js';
+// THE IN-FLIGHT LINE HAS ONE OWNER and it is the boot's fold: the card's fourth
+// state and the boot report's stage-5 row are the same moment, so they are the
+// same sentence.
+import { askingSaid } from './boot.js';
 import type { ProtCounts } from '../../../src/prot/etl.js';
 import type { ProtRun } from '../../../src/prot/orchestrator.js';
 import type { StageState, StepperStage } from '../protStages.js';
@@ -271,6 +276,37 @@ export interface RecommendationView {
   /** The sentence, when there is no ranking to show. `null` when there is one. */
   readonly said: string | null;
   /**
+   * WHICH KIND OF *no ranking* this is, in the stage's own declared word —
+   * `timeout`, `malformed`, `no-key`, `stream-died` (`src/prot/hotspots.ts` ·
+   * `HotspotFailure`). `null` for a ranking and for a stage in flight.
+   *
+   * It rides BESIDE {@link said} rather than instead of it: the sentence is
+   * what a reader reads, and the word is what tells a reader scanning the card
+   * that the stepper's REFUSED mark and this card are about the same thing.
+   * The author asked for exactly that — *I like that it says refused, can we
+   * add the reason for the refusal in the hot spot widget* — and before it the
+   * stepper said refused while the card's own corner was the only place the
+   * reason was.
+   */
+  readonly kind: string | null;
+  /**
+   * Could asking the same question again honestly answer differently? Decided
+   * by the KIND, in one table (`src/prot/hotspots.ts` · `RETRYABLE`), so the
+   * card never works out its own eligibility — and `false` means the control
+   * is ABSENT rather than present and dead.
+   */
+  readonly retryable: boolean;
+  /**
+   * HOW MANY TIMES THE STAGE HAS BEEN ASKED IN THIS RUN — a fact the reader is
+   * owed once they have pressed retry.
+   *
+   * It is deliberately NOT the library's own corrective re-ask count: *the
+   * library judged 2 answers against the declared shape and paid for 1
+   * corrective re-ask* is a different fact from *a reader pressed retry twice*,
+   * and one number answering two questions is one of them lost.
+   */
+  readonly asked: number;
+  /**
    * WHICH CURSOR THIS ANSWER IS ABOUT — one line, always present when there is
    * a ranking.
    *
@@ -286,13 +322,33 @@ export interface RecommendationView {
 
 /** What the page hands the fold: the stage's own answer, what the door said about the judge behind it, and the two commits the answer sits between. */
 export interface HotspotCardInput {
-  readonly outcome: HotspotOutcome;
+  /**
+   * The answer, or `null` WHILE THE ASK IS STILL IN FLIGHT — the card's fourth
+   * state, beside a ranking, the stage's own failure sentence and no key.
+   *
+   * It is `null` rather than a fourth `kind` on {@link HotspotOutcome} because
+   * *in flight* is not an outcome: nothing has happened yet, and a failure
+   * vocabulary that could spell *still going* would let a screen draw a pending
+   * stage as a refused one.
+   */
+  readonly outcome: HotspotOutcome | null;
+  /**
+   * WHAT THE ASK IS DOING, while it is doing it — the report, never the answer
+   * (`src/prot/streamReports.ts` carries the law and the measurement behind
+   * it). `null` for a card whose stage is not in flight.
+   *
+   * An OUTCOME WINS over it: once the answer is frozen, what the stage was
+   * doing a moment ago is no longer the interesting fact.
+   */
+  readonly asking?: HotspotReport | null;
   /** The door's own sentence about which judge ran (`server/prot-doors.ts` · `ProtStateWire.judge`). */
   readonly judge: string;
   /** The commit the evidence was read AT — the end of the run, by construction (`src/prot/hotspots.ts` · `notTheEndOfTheRun`). */
   readonly at: string | null;
   /** The commit the ranking itself landed as, or `null` where nothing landed. */
   readonly landed: string | null;
+  /** How many times the stage has been asked in this run, counting the boot's own ask. Default 1. */
+  readonly asked?: number;
 }
 
 /**
@@ -323,20 +379,72 @@ export function hotspotCard(step: { readonly name: string; readonly label: strin
     // one press away, and the `Full note` under it. Never re-worded, never cut
     // mid-word, and never the only copy.
     short: view.said === null ? view.figures : firstClause(view.said),
-    why:
-      `A MODEL WAS ASKED, and what it said is a recommendation rather than a measurement. ${view.model === null ? '' : `The model asked was ${view.model}. `}` +
+    why: input.outcome === null ? IN_FLIGHT_NOTE(view.said ?? '') : whyOf(view),
+    recommendation: view,
+  };
+}
+
+/**
+ * THE `Full note` OF A CARD WHOSE STAGE IS STILL RUNNING — and it is its own
+ * paragraph rather than the answered one with the tenses bent.
+ *
+ * The answered note explains what was refused, what the judge read and what
+ * every rank cites. NONE of that has happened yet, and a note that said it in
+ * the past tense over a stage in flight would be the card claiming a record it
+ * does not have. So this one says what is true: the ask is out, and no part of
+ * the answer will be shown until the whole of it is frozen and checked.
+ */
+const IN_FLIGHT_NOTE = (line: string): string =>
+  `THE STAGE IS RUNNING. ${line} ` +
+  'NOTHING OF THE ANSWER IS SHOWN YET, and that is a decision rather than a delay: the ranking is frozen as a commit before anything checks it, and every ranking then goes through the hallucination door — ' +
+  'a residue this run\'s table has no row for is refused BY NAME, and so is a citation naming a fact the findings ledger does not hold. ' +
+  'A partial ranking on this card would put residues on screen before that door had refused any of them, and when a residue absent from the run\'s table was planted in the evidence the model ranked it FIRST: the record would have stayed correct and this card would have lied. ' +
+  'So what is above is a count of the ACT and never a word of the answer.';
+
+/** The answered card's own note — the paragraph this card has carried since stage 5 first landed. */
+function whyOf(view: RecommendationView): string {
+  return (
+    `A MODEL WAS ASKED, and what it said is a recommendation rather than a measurement. ${view.model === null ? '' : `The model asked was ${view.model}. `}` +
       `${view.said === null ? '' : `WHAT HAPPENED ON THIS RUN: ${view.said} `}` +
       `Every rank below cites the ids of the facts its reason rests on — facts this run's own stages established, served to the model one per id, never computed a second time for its benefit. ` +
       `A residue it named that this run's residue table has no row for was refused by name, and so was a citation naming a fact the ledger does not hold. ` +
       `${view.verdicts.length === 0 ? 'No second source read the evidence on this run.' : `A standing judge read the evidence as a second source: ${view.judge}`} ` +
       `${view.disagreements.length === 0 ? 'It agreed with the model about what the evidence was worth.' : `IT DID NOT AGREE WITH THE MODEL, and both readings are on the record: ${view.disagreements.join(' · ')}`} ` +
-      `${view.refused.length === 0 ? 'Nothing it said was refused.' : `${num(view.refused.length)} of the things it said were refused: ${view.refused.join(' · ')}`}`,
-    recommendation: view,
-  };
+      `${view.refused.length === 0 ? 'Nothing it said was refused.' : `${num(view.refused.length)} of the things it said were refused: ${view.refused.join(' · ')}`}`
+  );
 }
 
 /** The answer, folded — one function, so the card and the record drawer cannot say it two ways. */
-export function recommendationOf({ outcome, judge, at, landed }: HotspotCardInput): RecommendationView {
+export function recommendationOf({ outcome, asking = null, judge, at, landed, asked = 1 }: HotspotCardInput): RecommendationView {
+  /**
+   * IN FLIGHT — the fourth state, and every word of it is the ACT.
+   *
+   * `rows` is empty, `said` is the status line, and there is nothing else: no
+   * partial ranking, no residue, no reason, no fragment of anything the model
+   * has said. That is not this function being careful — it is the only shape
+   * the input allows, because {@link HotspotReport} has no field a model wrote.
+   *
+   * The line comes from `./boot.ts` · `askingSaid`, which is also what the boot
+   * screen's stage-5 row prints: ONE OWNER, so the card and the boot cannot
+   * describe the same moment two ways.
+   */
+  if (outcome === null) {
+    return {
+      tag: HOTSPOT_TAG,
+      model: null,
+      figures: 'in flight',
+      rows: [],
+      refused: [],
+      judge,
+      verdicts: [],
+      disagreements: [],
+      said: asking === null ? 'the stage is running and has not reported anything yet' : askingSaid(asking),
+      where: null,
+      kind: null,
+      retryable: false,
+      asked,
+    };
+  }
   if (!outcome.ok) {
     return {
       tag: HOTSPOT_TAG,
@@ -349,6 +457,11 @@ export function recommendationOf({ outcome, judge, at, landed }: HotspotCardInpu
       disagreements: [],
       said: outcome.sentence,
       where: null,
+      // THE REASON, IN THE CARD: the declared word beside the sentence, and
+      // whether a second ask could differ — both off the KIND, neither guessed
+      kind: outcome.kind,
+      retryable: retryable(outcome.kind),
+      asked,
     };
   }
   return {
@@ -368,6 +481,9 @@ export function recommendationOf({ outcome, judge, at, landed }: HotspotCardInpu
     verdicts: outcome.verdicts,
     disagreements: outcome.disagreements,
     said: null,
+    kind: null,
+    retryable: false,
+    asked,
     // BOTH COMMITS, because they are two different facts: the one the evidence
     // was read at, and the one the ranking itself landed as. Either can be
     // absent — a run that landed nothing to read from, or an answer nothing
@@ -399,6 +515,82 @@ export function rankingVsCursor(landed: string | null, activePathIds: readonly s
   const ranked = activePathIds.indexOf(landed);
   if (standing < 0 || ranked < 0 || standing >= ranked) return null;
   return `The cursor is standing behind commit ${landed}, which is where this ranking landed — so the rows on this desk carry no rank at all, and what is below is the answer as it was given rather than anything these rows hold.`;
+}
+
+/**
+ * WHAT A PRESS ON A LANDED STAGE THAT OWNS NO PICTURE SAYS — and it names the
+ * real reason rather than apologising.
+ *
+ * ── WHY THIS SENTENCE EXISTS ───────────────────────────────────────────────
+ * Which pictures a stage owns is an INTERSECTION of the columns its acts landed
+ * with the columns each view binds (`../protStages.ts` · `chartsOfStage`), and
+ * that intersection has no fallback on purpose: the layout follows it, and a
+ * card hard-coded as the big one is what it exists to prevent. So a stage that
+ * landed columns NO CHART IS DRAWN FROM owns nothing — a true answer, and until
+ * now a silent one. The author found it: *clicking on the cursor stage nothing
+ * happens.*
+ *
+ * What a reader learns from this line is a FACT: these columns exist on the
+ * rows, and no picture on this desk reads them. That is worth knowing — it is
+ * how a reader discovers that stage 5's rank is in the data space before
+ * anything has bound it — and it is not an apology for a missing feature.
+ *
+ * `null` where the stage does own a picture, because then the press answered by
+ * moving the layout and there is nothing to say.
+ */
+export function emptyFocusSaid(stage: { readonly number: number; readonly name: string; readonly materialized: readonly string[] }, owns: readonly string[]): string | null {
+  if (owns.length > 0) return null;
+  if (stage.materialized.length === 0) {
+    return `the cursor moved to stage ${num(stage.number)}, ${stage.name} — which landed no column into the data space, so no picture on this desk is drawn from it and the layout did not change`;
+  }
+  return (
+    `the cursor moved to stage ${num(stage.number)}, ${stage.name} — it landed ${stage.materialized.join(', ')} onto the rows, and no picture on this desk is bound to any of them, ` +
+    `so there is nothing for the layout to promote. The columns are in the data space all the same: the Sheet shows them, and a chart bound to one would become this stage's picture.`
+  );
+}
+
+/**
+ * WHAT THE RETRY CONTROL IS CALLED — and the name is what stops a reader
+ * expecting the wrong thing from it.
+ *
+ * ── THE ONE FACT THE NAME HAS TO CARRY ─────────────────────────────────────
+ * **The record survives the retry.** A reload would re-run stages 1 to 4 and
+ * mint a fresh log, which destroys the record the ranking is pre-registered
+ * against — *you cannot retry your way to a cleaner history*, and that
+ * discipline is the whole reason stage 5 lands a commit before anything checks
+ * it. So this re-asks on the LIVE session, lands its own act, and the earlier
+ * refusal stays on the ledger: two asks, two entries, neither overwriting the
+ * other.
+ *
+ * The name says so, because a control named *retry* alone invites the reading
+ * where the page starts over.
+ */
+export const retryLabelOf = (busy: boolean): string =>
+  busy ? 'asking again…' : 'ask the model again — on this same run, keeping this refusal on the record';
+
+/**
+ * WHAT THE CARD'S SECOND CONTROL IS CALLED — the one that binds the 3D view's
+ * colour channel to the column the ranking landed, and unbinds it again.
+ *
+ * ── THE NAME SAYS *BIND*, BECAUSE THAT IS THE ACT ──────────────────────────
+ * The picks become visible in the molecule because a DECLARED CHANNEL is bound
+ * to a LANDED COLUMN, through the reencode door every other picture on this
+ * desk already has. Nothing is painted, nothing is highlighted by hand, and
+ * there is no new chart kind and no new emission kind — so the control is named
+ * for the binding rather than for the colours, and a reader pressing it learns
+ * which of the desk's own machinery it is about to use.
+ *
+ * ── AND IT NAMES THE ABSENCE, BOTH WAYS ────────────────────────────────────
+ * `absent` is the hard half of the column: most residues carry no rank, and
+ * the only honest thing the legend, the caption and this label can all say is
+ * the word. So the label counts the ranked residues and says what the rest are
+ * — never *the other 179 are ranked last*, which is what a colour ramp would
+ * have implied all on its own.
+ */
+export function paintLabelOf(bound: boolean, ranked: number, absent: number): string {
+  return bound
+    ? 'colour the 3D structure by chain again — back to a label read off the file'
+    : `colour the 3D structure by the model’s rank — ${num(ranked)} ranked, and the other ${num(absent)} shown as absent rather than as a rank of their own`;
 }
 
 /**

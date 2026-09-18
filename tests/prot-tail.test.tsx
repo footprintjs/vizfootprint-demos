@@ -282,7 +282,12 @@ describe('the composition really wires the tail that way', () => {
     // the acts of each stage that dispatched any, the four record panels, the
     // recorder's account, the dashboard's own words and the omissions — and no
     // panel of its own for the band that no longer exists
-    expect((desk.match(/<Disclosure/g) ?? []).length).toBe(8);
+    // NINE since the boot's own account joined them: the author's reshape put
+    // one centred line under the stepper and took the eight-row list off the
+    // boot screen, and the DETAIL moved here rather than vanishing — the bytes,
+    // the measured gzip sentence, the probe counts (`workbench/BootReport.tsx` ·
+    // `BootLog`). "We simplified the screen" is how honesty gets quietly dropped.
+    expect((desk.match(/<Disclosure/g) ?? []).length).toBe(9);
     expect(desk).toContain('<RecordDrawer');
   });
 

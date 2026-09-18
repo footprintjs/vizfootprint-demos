@@ -2,8 +2,12 @@
  * THE PROTEIN DESK'S DOORS — stage 5, and the reason this file exists at all.
  *
  *   GET  /api/prot/state           whether stage 5 can run here, and if not WHY
- *   POST /api/prot/hotspots        the run's evidence in, the ranked list with
- *                                  its citations and the judge's verdicts out
+ *   POST /api/prot/hotspots        the run's evidence in; what the stage is
+ *                                  DOING out as it happens, and then the ranked
+ *                                  list with its citations and the judge's
+ *                                  verdicts — newline-delimited JSON, one
+ *                                  {@link HotspotFrame} per line, the answer
+ *                                  always last ({@link NDJSON_TYPE})
  *   GET  /api/prot/<declared file> one committed file — the bytes a served page
  *                                  reads, from the one list the static build
  *                                  copies (`src/data/files.ts`)
@@ -68,6 +72,7 @@ import {
   type HotspotOutcome,
   type LedgerFact,
 } from '../src/prot/hotspots.js';
+import type { HotspotReport, ReportAsk } from '../src/prot/streamReports.js';
 
 /** Where this desk's doors live — a prefix, so the other two demos keep theirs. */
 export const PROT_API_ROOT = '/api/prot';
@@ -267,18 +272,18 @@ export function ledgerOf(body: Record<string, unknown>): HotspotLedger | { reado
  * ONE ASK — and the whole of the door's own logic, which is two lines: no
  * driver is a sentence, a driver is a run. Everything else about judging the
  * answer lives in `src/prot/hotspots.ts`, where the law is written down.
+ *
+ * It takes the ledger ALREADY READ, because the two callers read it at
+ * different moments: {@link answerHotspots} reads it to decide a status code,
+ * and the streaming handler reads it BEFORE it writes a header, since a
+ * malformed request is not a stream (see {@link serveProtDoors}).
  */
-export async function answerHotspots(desk: ProtDesk, body: Record<string, unknown>): Promise<{ readonly status: number; readonly body: unknown }> {
-  const ledger = ledgerOf(body);
-  if ('error' in ledger) return { status: 400, body: { ok: false, kind: 'malformed-request', sentence: ledger.error } };
+export async function askOnThisDesk(desk: ProtDesk, ledger: HotspotLedger, options: { readonly timeoutMs?: number; readonly report?: ReportAsk } = {}): Promise<HotspotOutcome> {
   const { driver } = desk;
   if (driver.mode === 'none') {
-    // 200 AND NOT AN ERROR STATUS, deliberately: the door answered, and what it
-    // answered is a fact about this process that the page must be able to show
-    // as the stage's own reason. A 5xx would make it look like a fault.
     const said = { ok: false as const, kind: 'no-key' as const, sentence: driver.reason, verdicts: [] };
     desk.asks.push(said);
-    return { status: 200, body: said };
+    return said;
   }
   const outcome = await askHotspots({
     provider: driver.provider,
@@ -286,11 +291,58 @@ export async function answerHotspots(desk: ProtDesk, body: Record<string, unknow
     model: driver.model,
     ledger,
     want: desk.want,
-    ...(typeof body['timeoutMs'] === 'number' ? { timeoutMs: body['timeoutMs'] } : {}),
+    ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    ...(options.report === undefined ? {} : { report: options.report }),
   });
   desk.asks.push(outcome);
-  return { status: 200, body: outcome };
+  return outcome;
 }
+
+/**
+ * ONE ASK, AS ONE BODY — the non-streaming door, kept because a caller that
+ * wants the answer and no progress should not have to read a stream to get it.
+ *
+ * `tests/prot-doors.test.ts` drives every door of this file through it, and the
+ * streamed handler's LAST FRAME carries exactly what this answers.
+ */
+export async function answerHotspots(desk: ProtDesk, body: Record<string, unknown>): Promise<{ readonly status: number; readonly body: unknown }> {
+  const ledger = ledgerOf(body);
+  if ('error' in ledger) return { status: 400, body: { ok: false, kind: 'malformed-request', sentence: ledger.error } };
+  // 200 AND NOT AN ERROR STATUS for a process with no key, deliberately: the
+  // door answered, and what it answered is a fact about this process that the
+  // page must be able to show as the stage's own reason. A 5xx would make it
+  // look like a fault.
+  return { status: 200, body: await askOnThisDesk(desk, ledger, typeof body['timeoutMs'] === 'number' ? { timeoutMs: body['timeoutMs'] } : {}) };
+}
+
+/**
+ * ONE LINE OF THE STREAMED ANSWER — a REPORT of what the stage is doing, or the
+ * ANSWER itself, and the answer is always last.
+ *
+ * ── WHY THE DOOR IS STREAMED AND THERE IS NO SECOND DOOR ───────────────────
+ * The choice was between framing the reports ahead of the answer on THIS
+ * response and standing up a second door a page polls for progress. The second
+ * one is refused, and the reason is this file's own first law: **it holds no
+ * session.** A progress door has to remember an ask — which ask, how far along,
+ * for whom — and a door that remembers an ask IS a session, with an id to
+ * correlate, a lifetime to expire and a second answer to *what is stage 5
+ * doing*. It would also make a dead connection into two indistinguishable
+ * facts (a poll that 404s because the ask is gone, and a poll that 404s because
+ * it never existed) where the stream makes it one: the body ended and no answer
+ * frame came (`src/prot/hotspots.ts` · `STREAM_DIED`).
+ *
+ * SSE was the other half of the offer and does not fit: `EventSource` is
+ * GET-only, and this ask carries a findings ledger of about seventy kilobytes
+ * in its body. Keeping the POST and framing the response is the same delivery
+ * with none of that.
+ *
+ * ── AND WHY A DISCRIMINANT RATHER THAN A BARE OBJECT LAST ──────────────────
+ * A reader of this stream must never have to guess whether a line is a report
+ * or an answer — a guess is exactly how a report would end up drawn as an
+ * answer, which is the one thing this whole feature may not do. So each line
+ * says which it is, and `answer` appears exactly once, at the end.
+ */
+export type HotspotFrame = { readonly report: HotspotReport } | { readonly answer: HotspotOutcome };
 
 // ── the committed files ──────────────────────────────────────────────────────
 
@@ -314,6 +366,15 @@ const TYPES: Readonly<Record<string, string>> = {
   '.txt': 'text/plain; charset=utf-8',
   '.csv': 'text/csv; charset=utf-8',
 };
+
+/**
+ * WHAT A STREAMED ANSWER IS, on the wire — newline-delimited JSON, one
+ * {@link HotspotFrame} per line.
+ *
+ * Declared here and read by the page (`web/src/protServed.tsx`), because a
+ * media type spelled twice is a media type that can drift.
+ */
+export const NDJSON_TYPE = 'application/x-ndjson; charset=utf-8';
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -382,8 +443,23 @@ export async function serveProtDoors(desk: ProtDesk, req: IncomingMessage, res: 
     }
     const body = await readJson(req);
     if (door === 'hotspots') {
-      const answer = await answerHotspots(desk, body);
-      return sendJson(res, answer.status, answer.body), true;
+      /**
+       * A MALFORMED REQUEST IS NOT A STREAM. The status has to be written
+       * before any frame can be, and `ledgerOf` is what decides between 400
+       * and 200 — so it is asked FIRST, and a request this door cannot read
+       * gets exactly the one JSON body it always got.
+       */
+      const ledger = ledgerOf(body);
+      if ('error' in ledger) return sendJson(res, 400, { ok: false, kind: 'malformed-request', sentence: ledger.error }), true;
+      res.writeHead(200, { 'content-type': NDJSON_TYPE, 'cache-control': 'no-store' });
+      const write = (frame: HotspotFrame): void => void res.write(`${JSON.stringify(frame)}\n`);
+      const answer = await askOnThisDesk(desk, ledger, {
+        ...(typeof body['timeoutMs'] === 'number' ? { timeoutMs: body['timeoutMs'] } : {}),
+        report: (report) => write({ report }),
+      });
+      write({ answer });
+      res.end();
+      return true;
     }
     return sendJson(res, 404, { error: `no door "${door}"` }), true;
   } catch (error) {

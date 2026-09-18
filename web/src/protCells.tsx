@@ -82,6 +82,10 @@ import type { DeskChart, DeskProjection } from 'vizfootprint-studio/desk';
 import { PAINT_COLOR, PAINT_MEANING, PAINT_WORDS, VALUE_PALETTE, molstarRenderer, type PaintWord } from './molstarRenderer.js';
 import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
 import { CONSERVATION_COLUMN, INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from '../../src/prot/analyses.js';
+// STAGE 5's COLUMN AND ITS REGISTER — the column name so the caption can ask
+// what the channel is bound to, and the words so no literal about a
+// recommendation lives in this file (`src/prot/hotspots.ts` owns both).
+import { HOTSPOT_RANK_COLUMN, HOTSPOT_TAG } from '../../src/prot/hotspots.js';
 import { SCORE_IS, SCORE_IS_NOT } from '../../src/prot/conservation.js';
 import { PLACEMENT_HERE, PLACEMENT_STRATEGIES } from '../../src/prot/placement.js';
 import type { ProtCounts, SkippedRecords } from '../../src/prot/etl.js';
@@ -831,9 +835,42 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
    * on screen is painted in. A legend that showed one would be naming a colour
    * the picture does not contain.
    */
+  /**
+   * IS THE COLOUR CHANNEL CARRYING A MODEL'S OPINION RIGHT NOW? — read off the
+   * ENCODING FOLD at the cursor, never off a flag this page sets when a button
+   * is pressed.
+   *
+   * That is what makes the register rule below right after a reload, after a
+   * seek, and after a rebind made from anywhere else: the question is *what is
+   * the channel bound to*, and the record answers it.
+   */
+  const structureColor = desk.bound(STRUCTURE_VIEW, 'color', 'chain');
+  const rankBound = structureColor === HOTSPOT_RANK_COLUMN;
+  /**
+   * HOW MANY RESIDUES THE BOUND COLUMN SAYS NOTHING ABOUT — counted off the
+   * rows the picture is drawn from, so the caption cannot outrun the picture.
+   *
+   * It is the hard half of binding a rank to a colour: 179 of 185 on the
+   * committed entry, and the word for them is `absent`
+   * (`./molstarRenderer.ts` · `PAINT_MEANING`). It is asked of whatever the
+   * channel CARRIES rather than of the rank, so a rebind to any other column
+   * with an absence is counted the same way and one to `chain` answers zero.
+   */
+  const boundAbsent = useMemo(() => structureRows.filter((row) => row[structureColor] === null || row[structureColor] === undefined).length, [structureColor, structureRows]);
+  /**
+   * The legend — the same constants the paint uses, in the same order, and
+   * naming only the words the PICTURE CONTAINS.
+   *
+   * `absent` is dropped where the bound column has no absence in these rows,
+   * which is the desk's own law one word further along: *a legend may not name
+   * a colour the picture does not contain* (`kept` carries the same argument,
+   * which is why it shows the value palette rather than a swatch). Bound to
+   * `chain` there is no absent residue at all, and an `absent` entry there
+   * would be the legend advertising a state of a picture that has none.
+   */
   const legend = (
     <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '.6rem', verticalAlign: 'middle' }}>
-      {PAINT_WORDS.map((word) => (
+      {PAINT_WORDS.filter((word) => word !== 'absent' || boundAbsent > 0).map((word) => (
         <span key={word} style={{ display: 'inline-flex', alignItems: 'center', gap: '.25rem' }}>
           {(word === 'kept' ? valueSwatches() : [swatchOf(word)]).map((color) => (
             <span key={color} aria-hidden style={{ width: 9, height: 9, borderRadius: 2, background: color, display: 'inline-block' }} />
@@ -870,7 +907,33 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
             'you can orbit this molecule with the mouse and nothing here records it: the camera is Mol*’s own, no call in this contract moves it, and the view declares that (`canPanZoom: false`) rather than pretending a viewport is on the trace',
             // SILENCE FOUR — the finding, in front of the reader
             `the bytes this picture is drawn from (${count(structure.characters)} characters of ${structure.at.split('/').pop() ?? 'the structure file'}) reach the viewer as an argument, not as a declared table: the library's source port carries rows, CSV and JSON, and a structure file is none of them — so every other number on this desk is stamped with the version it was true of, and this picture is not`,
+            /*
+              THE REGISTER, AND IT IS THE HONESTY COST OF PAINTING THE PICKS —
+              the one clause on this desk that appears and disappears with a
+              BINDING.
+
+              Colouring measured geometry by a model's rank puts a
+              recommendation into the same visual language as the
+              crystallography: the same well, the same swatches, the same kind
+              of legend `chain` and `resname` get, and those are facts read off
+              the file. So while the channel carries the rank, the viewer's own
+              caption carries THE CARD'S WORDS — `HOTSPOT_TAG`, from the one
+              module that owns them — and a reader who looks only at the 3D view
+              still learns those colours came from a model.
+
+              It is absent when the channel is not bound to the rank, and that
+              matters just as much: a standing disclaimer over a picture of
+              `chain` would be this desk calling the file's own labels a
+              recommendation.
+            */
+            rankBound
+              ? `THE COLOURS IN THIS PICTURE ARE ${HOTSPOT_TAG.toUpperCase()}: the colour channel is bound to ${HOTSPOT_RANK_COLUMN}, the column stage 5 landed — a model was shown the facts stages 1 to 4 established and asked which residues it would call hot spots, and every rank cites the ids its reason rests on. ${count(boundAbsent)} of the residues drawn here carry NO rank at all and are painted in the absence colour: the model did not name them, which is not a low rank and not a last place`
+              : null,
             'click a residue to select it: one commit, on the log, with its cause — and the scatter and the sheet answer',
+            // AND EVERY RESIDUE IS STILL CLICKABLE, said out loud precisely
+            // where a reader might expect the opposite: marking six of them is
+            // not narrowing the gesture to six (`./workbench/README.md`).
+            rankBound ? 'every residue in this picture is still clickable, ranked or not — a reader inspecting one the model did NOT pick is doing what this desk is for' : null,
           ]
             .filter((s): s is string => s !== null)
             .join(' · ')}{' '}

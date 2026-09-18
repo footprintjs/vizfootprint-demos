@@ -83,8 +83,12 @@ describe('the workbench folder holds the layers it says it holds', () => {
     // ruling — *no paragraphs below the stepper* — left it with nothing to
     // draw, and its every field moved to the thing it was about
     // (`panel.ts` · the file header has the field-by-field map).
-    expect(components.sort()).toEqual(['ChartCard.tsx', 'Chrome.tsx', 'Search.tsx', 'Stepper.tsx']);
-    expect(logic.sort()).toEqual(['bands.ts', 'charts.ts', 'panel.ts', 'results.ts', 'steps.ts']);
+    // `BootReport.tsx` + `boot.ts` are the boot's own pair, added when the page
+    // started reporting what it is doing while it does it: the component draws
+    // four marks over plain data and the fold turns the boot's reports into
+    // them. They are a pair for the same reason `Stepper.tsx`/`steps.ts` are.
+    expect(components.sort()).toEqual(['BootReport.tsx', 'ChartCard.tsx', 'Chrome.tsx', 'Search.tsx', 'Stepper.tsx']);
+    expect(logic.sort()).toEqual(['bands.ts', 'boot.ts', 'charts.ts', 'panel.ts', 'results.ts', 'steps.ts']);
     expect(modules.filter(isTheme)).toEqual(['tokens.ts']);
   });
 });

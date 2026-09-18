@@ -65,14 +65,29 @@ export interface ResidueAddress {
 }
 
 /**
- * What a residue's colour MEANS. Four words, and the picture is painted in
+ * What a residue's colour MEANS. Five words, and the picture is painted in
  * exactly these — so a legend can be built from the same constant the paint is
  * (see {@link PAINT_COLOR}).
+ *
+ * `absent` IS THE ONE THIS RENDERER DID NOT HAVE, and the gap was a real
+ * defect rather than a missing nicety: a `kept` residue takes its hue from the
+ * value of the column the `color` channel is bound to, and the fold read that
+ * value as `String(row[field])` — so a row with NO value in that column landed
+ * in a bucket named `"undefined"`, with a palette hue of its own, beside the
+ * real values and indistinguishable from one.
+ *
+ * It never showed, because every column bound here until now was the file's own
+ * (`chain`, `resname`) and every residue has one. Stage 5's rank is the first
+ * bound column with an ABSENCE in it, and the absence is most of the column:
+ * on the committed entry 179 of 185 residues carry no rank, because the act
+ * writes the rank ABSENT — never 0, never last — for every residue the model
+ * did not name (`src/prot/hotspots.ts` · `hotspotsAnalysis`). Painting those
+ * from the palette would have been the picture inventing a rank for them.
  */
-export type PaintWord = 'lit' | 'dropped' | 'no-angle' | 'kept';
+export type PaintWord = 'lit' | 'dropped' | 'no-angle' | 'absent' | 'kept';
 
-/** The four words, in the order a reader meets them in the legend. */
-export const PAINT_WORDS: readonly PaintWord[] = ['lit', 'kept', 'dropped', 'no-angle'];
+/** The five words, in the order a reader meets them in the legend. */
+export const PAINT_WORDS: readonly PaintWord[] = ['lit', 'kept', 'absent', 'dropped', 'no-angle'];
 
 /**
  * One instruction: paint these residues this colour, because of this word.
@@ -142,6 +157,19 @@ export const PAINT_COLOR: Readonly<Record<PaintWord, number>> = {
   // the file gives this residue no backbone angle. NOT the colour of zero —
   // zero degrees is a real conformation and this is the absence of one.
   'no-angle': 0xa83a3a,
+  /*
+    NO VALUE IN THE BOUND COLUMN — and the hue is chosen for what it must not
+    read as.
+
+    Every hue in {@link VALUE_PALETTE} is saturated, so an unsaturated slate is
+    visibly NOT one of the values: a reader scanning the legend sees a colour
+    that is not a member of the series. And it is deliberately not the palette's
+    last hue, not a darker or lighter shade of one, and not on any ramp through
+    them — a rank of 6 followed by a seventh colour would read as *ranked
+    seventh*, which is the exact lie this bucket exists to prevent. Absence is
+    not the end of an order; it is not in the order at all.
+  */
+  absent: 0x8b93a1,
 };
 
 /**
@@ -162,6 +190,10 @@ export const VALUE_PALETTE: readonly number[] = [
 export const PAINT_MEANING: Readonly<Record<PaintWord, string>> = {
   lit: 'selected here or by another view',
   kept: 'in view, coloured by the bound column',
+  // THE WORD IS `absent`, and it is the word on purpose: not zero, not a last
+  // place, not "other". The column the colour is bound to has no value for
+  // these residues, and that is the whole of what the picture is saying.
+  absent: 'absent in the bound column — no value there, which is not a zero and not a last place',
   dropped: 'dropped by another view’s selection',
   'no-angle': 'no backbone angle in the file — the absence, not a value',
 };
@@ -251,8 +283,16 @@ function fieldsOf(options: StructureFields): Required<StructureFields> {
  *                   residue outside the brush must read as outside the brush,
  *                   whatever else is true of it.
  *   3. `no-angle` — the file gives no phi or no psi. An absence, painted as
- *                   one; never the colour a zero would get.
- *   4. `kept`     — in view, nothing said. THESE are coloured by the column
+ *                   one; never the colour a zero would get. It stays AHEAD of
+ *                   `absent` because it is a fact about whether this residue
+ *                   has a conformation at all, true before any channel was
+ *                   bound to anything — and it is the one absence the captions
+ *                   have counted since the first frame.
+ *   4. `absent`   — in view, and the column the colour is BOUND to has no
+ *                   value for it. Its own bucket and its own word, so a
+ *                   reader is never shown an absence wearing one of the
+ *                   series' hues (see {@link PaintWord}).
+ *   5. `kept`     — in view, nothing said. THESE are coloured by the column
  *                   the `color` channel is bound to, read through the library's
  *                   own `boundField` off `state.encodings` — so re-encoding the
  *                   view in the desk's picker repaints the molecule, exactly as
@@ -280,7 +320,7 @@ export function paintOf(state: RenderState, options: StructureFields = {}): read
   for (const row of state.rows) {
     const address = addressOf(row, fields);
     if (address === null) continue; // a row with no addressable residue is not a mark this viewer can paint
-    const word = wordFor(row, fields, own?.predicate, keep);
+    const word = wordFor(row, fields, own?.predicate, keep, colorField);
     if (word !== 'kept') {
       byWord.get(word)!.push(address);
       continue;
@@ -294,10 +334,13 @@ export function paintOf(state: RenderState, options: StructureFields = {}): read
 }
 
 /** One row's word, under the precedence {@link paintOf} documents. */
-function wordFor(row: RenderRow, fields: Required<StructureFields>, isOwn: ((row: RenderRow) => boolean) | undefined, keep: (row: RenderRow) => boolean): PaintWord {
+function wordFor(row: RenderRow, fields: Required<StructureFields>, isOwn: ((row: RenderRow) => boolean) | undefined, keep: (row: RenderRow) => boolean, colorField: string): PaintWord {
   if (isOwn !== undefined && isOwn(row)) return 'lit';
   if (!keep(row)) return 'dropped';
   if (fields.absentWhenNull.some((field) => row[field] === null || row[field] === undefined)) return 'no-angle';
+  // AND THE ABSENCE IN THE BOUND COLUMN — asked of the column the `color`
+  // channel really carries, so it follows a rebind instead of naming one
+  if (row[colorField] === null || row[colorField] === undefined) return 'absent';
   return 'kept';
 }
 

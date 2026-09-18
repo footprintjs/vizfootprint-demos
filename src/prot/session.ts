@@ -84,7 +84,7 @@ import type { InteractionSession } from 'vizfootprint/agent';
 import { buildDashboardAsync } from 'vizfootprint/def';
 import type { Dashboard } from 'vizfootprint/def';
 import type { Row } from 'vizfootprint/data';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, PROT_VIEWS, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
 import { CONSERVATION_COLUMN, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from './analyses.js';
 import type { ConservationEvidence } from './conservationEvidence.js';
 import { landAct, runProtStages, type ActOutcome, type ProtRun, type ProtRunWatch } from './orchestrator.js';
@@ -350,6 +350,35 @@ export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence
 }
 
 /**
+ * SOMEBODY WATCHING THE WHOLE BOOT, and not only its acts.
+ *
+ * `ProtRunWatch` offers the acts as they come back, which is three of the boot's
+ * steps out of five. The other two are the ones a reader waits longest for and
+ * hears nothing about: the DASHBOARD BUILD (the def through the firewall, which
+ * throws on a lie) and the THREE PROBE GESTURES this surface makes on purpose
+ * (`probeTheUnlandedColumns`). Both are states of the boot, so both are offered
+ * — and every field on them is a COUNT the builder already holds, never a
+ * payload and never a row.
+ *
+ * It EXTENDS `ProtRunWatch` rather than replacing it, so every existing caller
+ * is a `ProtBootWatch` already and a host that passes none gets exactly today's
+ * boot.
+ */
+export interface ProtBootWatch extends ProtRunWatch {
+  /** The def went through the firewall and a session exists: how many views it declares, how many acts, how many rows. */
+  onBuilt?(built: { readonly views: number; readonly acts: number; readonly rows: number }): void;
+  /**
+   * The gestures at the charts whose columns no act has landed were made: how
+   * many were asked and how many the library refused.
+   *
+   * A gesture ACCEPTED here is a fault rather than a success
+   * ({@link protSurfaceProblems} says why), so the two numbers are reported
+   * apart instead of as one "done".
+   */
+  onProbed?(probed: { readonly asked: number; readonly refused: number }): void;
+}
+
+/**
  * The same surface through the async builder — the one with a refresh door and
  * a data journal, which is what the page opens, AND the one that runs the two
  * stages: the contacts and the surface are on the log before the first paint,
@@ -360,9 +389,14 @@ export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence
  * stages) and the sentences from step two are kept, because a visitor arrives
  * at the end of it.
  */
-export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtRunWatch, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): Promise<ProtSurface> {
+export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtBootWatch, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): Promise<ProtSurface> {
   const unrun = await openProtSurfaceUnrun(artifact, evidence, hotspots);
+  // THE BUILD, REPORTED — counted off the def the builder was handed rather than
+  // off anything this function believes about it
+  watch?.onBuilt?.({ views: PROT_VIEWS.length, acts: Object.keys(unrun.dashboard.def.analyses ?? {}).length, rows: unrun.tables.residues.length });
   const refusals = await probeTheUnlandedColumns(unrun.session);
+  const asked = Object.keys(refusals);
+  watch?.onProbed?.({ asked: asked.length, refused: asked.filter((viewId) => refusals[viewId] !== null).length });
   // `watch` is the SCREEN's copy of the acts, act by act, and it changes nothing
   // about the run (`./orchestrator.ts` · ProtRunWatch): a host that passes none
   // gets exactly today's boot.

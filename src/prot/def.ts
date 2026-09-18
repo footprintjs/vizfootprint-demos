@@ -75,6 +75,12 @@ import type { ActorMeta } from 'vizfootprint/selection';
 import type { ProtTables, ResidueRow } from './etl.js';
 import { ACT_KEY_COLUMN, ACT_TABLE, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PAIRS_ACT, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, protAnalyses } from './analyses.js';
 import type { ConservationEvidence } from './conservationEvidence.js';
+// STAGE 5's column NAME, from the module that owns it — this file declares what
+// the column IS on a chart and never a second spelling of what it is called.
+// The dependency runs one way only (`./hotspots.ts` has never heard of this
+// file), which is why it is an import and not the second constant the act's own
+// name needs.
+import { HOTSPOT_RANK_COLUMN } from './hotspots.js';
 
 // ── the views, named once ────────────────────────────────────────────────────
 
@@ -299,13 +305,32 @@ export function protCaption(tables: ProtTables): string {
  * packet — a `null` measure carries no vocabulary, so nothing on the wire says
  * WHY it is null, and every consumer that wants the reason re-derives it from
  * "first or last residue of its chain".
+ *
+ * ── AND ONE COLUMN DECLARED THAT NO ROW HERE CARRIES ────────────────────────
+ * `hotspot_rank` is declared when — and only when — stage 5's act is
+ * ({@link RANK_DECLARED}, gated on the same slot as the act). Every other
+ * act-landed column on this table is left to the engine's own reading, and
+ * that reading is right for all of them: a distance, a score and an area are
+ * magnitudes, and `scaleOfType('number')` says `continuous`, which is true.
+ *
+ * A RANK IS NOT A MAGNITUDE, and the declaration is what says so — the
+ * `resnum` argument one line further down, for the same reason: rank 6 is not
+ * six times rank 1, it is a PLACE. Measured, because the cost of leaving it
+ * undeclared is a refusal a reader meets rather than a paragraph: the
+ * structure view's colour channel takes a column with distinct values
+ * ({@link STRUCTURE_COLOR_RULE}), the engine read the landed column as
+ * `number/continuous`, and the desk's own rebind was refused by name —
+ * *hotspot_rank is not one*. So the one honest route to painting the picks
+ * into the molecule is a DECLARATION of what the column is, never a widened
+ * house rule.
  */
-function protSources(residues: readonly ResidueRow[]): Record<string, DataSourceDef> {
+function protSources(residues: readonly ResidueRow[], rank: boolean): Record<string, DataSourceDef> {
   return {
     [RESIDUES_TABLE]: {
       source: { format: 'rows', via: 'inline', at: residues },
       key: RESIDUE_KEY,
       columns: {
+        ...(rank ? RANK_DECLARED : {}),
         // the MINTED key: chain and residue number, joined by one character this
         // repository spells in exactly one place (`./etl.ts` · residueKey)
         residue_key: { role: 'identifier', label: 'residue — the chain and the number the file gives it, as "<chain>:<resnum>"' },
@@ -330,6 +355,33 @@ function protSources(residues: readonly ResidueRow[]): Record<string, DataSource
     },
   };
 }
+
+/**
+ * WHAT STAGE 5'S RANK IS, declared — one entry, and the only act-landed column
+ * this table declares anything about.
+ *
+ * It is here rather than in `./hotspots.ts` because a DECLARATION about a
+ * table's column belongs to the table's declaration, and because a module that
+ * can only sometimes be performed may not be the one the def's data section
+ * depends on. `./hotspots.ts` owns the column's NAME and the act that writes
+ * it; this owns what it is on a chart.
+ *
+ * The label says the absence out loud, because the absence is the column's
+ * hard half: 179 of the committed entry's 185 residues carry no rank, and the
+ * act writes `null` for every one of them rather than a zero or a last place
+ * (`./hotspots.ts` · `hotspotsAnalysis`).
+ */
+const RANK_DECLARED = {
+  [HOTSPOT_RANK_COLUMN]: {
+    role: 'dimension' as const,
+    // a number, and deliberately NOT a measure — the `resnum` argument, one
+    // ranking along: rank 6 is not six times rank 1, and averaging places
+    // means nothing. `scale: 'discrete'` is what makes it a bucket, which is
+    // also what lets the 3D view's colour channel take it.
+    scale: 'discrete' as const,
+    label: 'the place a model gave this residue among the hot spots it ranked — a recommendation, not a measurement, and ABSENT for every residue it did not name',
+  },
+} as const;
 
 // ── the encoding surfaces ────────────────────────────────────────────────────
 
@@ -755,7 +807,11 @@ export function protGrains(): readonly { readonly viewId: string; readonly keys:
 export function protDef(tables: ProtTables, structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null): DashboardDef {
   return {
     meta: { title: 'A protein complex — vizfootprint on one PDB entry' },
-    data: protSources(tables.residues),
+    // THE RANK IS DECLARED EXACTLY WHERE ITS ACT IS — one condition, and the
+    // published def is byte-identical to what it was before this packet: a
+    // build that cannot ask a model declares no column for the answer it
+    // cannot have (`./plan.ts` · step 5).
+    data: protSources(tables.residues, hotspots !== null),
     actors: {
       [STRUCTURE_VIEW]: STRUCTURE,
       [RAMA_VIEW]: RAMA,

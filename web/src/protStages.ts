@@ -65,6 +65,70 @@ import type { ActOutcome, ProtRun } from '../../src/prot/orchestrator.js';
  */
 export type StageState = 'not-run' | 'running' | 'landed' | 'refused' | 'unavailable' | 'blocked';
 
+/**
+ * A PLAN-ONLY STEP THIS HOST IS NOT BLOCKED ON, and what it is doing right now
+ * — the fix for the sharpest thing on the served page's boot screen.
+ *
+ * ── THE BUG, in the author's own screenshot ────────────────────────────────
+ * During boot, the served page's stepper marked stage 5 **NOT ON THIS BUILD**
+ * — on the build that was about to run it. The mark was right about the
+ * PUBLISHED build and false about the one drawing it, and it only learned the
+ * truth when the ask came back: until then `outcomes` held nothing for a
+ * plan-only step, so the fold fell through to {@link planOnly} and printed the
+ * plan's blocker.
+ *
+ * What was missing is a statement only the HOST can make. The served page knows
+ * from its first paint that it is not the build the plan's blocker is about —
+ * it asked the door before it opened the entry, and it holds a slot for the act
+ * (`web/src/protServed.tsx` · `boot`). So it says so, per step, with what that
+ * step is doing:
+ *
+ *   `not-run`   declared, and nothing has been asked yet. The stepper's own
+ *               word for PENDING, and a different fact from `blocked`.
+ *   `running`   the ask is in flight.
+ *
+ * An outcome still WINS over both, exactly as it wins over the blocked card:
+ * once the run has said what it did, what the host expected is no longer the
+ * interesting fact. And a host that says nothing gets today's screen, byte for
+ * byte — which is what the PUBLISHED desk does, and what
+ * `tests/prot-stepper.test.tsx` pins.
+ */
+export type AwaitedSteps = Readonly<Record<string, 'not-run' | 'running'>>;
+
+/**
+ * WHAT THE HOST KNOWS ABOUT ITS OWN RUN, and the second field is the ONE
+ * SPINNER.
+ *
+ * ── WHY `live` EXISTS, and it is a defect it closes ────────────────────────
+ * `running` used to be derived here as *the first declared stage that has not
+ * finished, while the run is in flight* — which is right the moment the
+ * orchestrator starts and WRONG for everything before it. On the served page's
+ * boot screen that meant the SECOND stage's mark spun from the first paint,
+ * through six http reads, an ETL and a dashboard build, while its stage had
+ * dispatched nothing at all.
+ *
+ * That is precisely the lie this desk's blocked mark exists to prevent — *a
+ * circle that spins forever is a promise; a circle that says why it cannot fill
+ * is a fact* — one state along: a spinner on a step nothing is doing.
+ *
+ * So the HOST says which step is live, because the host is the only thing that
+ * knows: it is reading the files, it is building the dashboard, it is asking
+ * the model (`web/src/workbench/boot.ts` · `bootNow` is the one owner of that
+ * answer, and the centred line under the stepper is its other half). Given a
+ * `live`, exactly that step runs and no other; absent, the old derivation
+ * stands and the desk is byte-identical.
+ */
+export interface HostSteps {
+  /** Plan-only steps this host is not blocked on, and what each is doing — see {@link AwaitedSteps}. */
+  readonly awaiting?: AwaitedSteps;
+  /**
+   * THE ONE STEP WHOSE MARK SPINS, as the host names it. `null` means nothing
+   * is running; ABSENT means the host is not saying, and the fold derives it as
+   * it always did.
+   */
+  readonly live?: string | null;
+}
+
 /** One numbered circle on the stepper, with everything the screen draws from it. */
 export interface StepperStage {
   /** Its place in the PLAN, from 1 — the number in the circle (`src/prot/plan.ts` · `PROT_PLAN`). */
@@ -134,8 +198,11 @@ function landedSubtitle(acts: readonly ActOutcome[], materialized: readonly stri
  * state) and `outcomes` is what has come back by then — the same two arguments
  * the trace panel took, for the same reason: a reader watches the run fill.
  */
-export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | null): readonly StepperStage[] {
+export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | null, host: HostSteps = {}): readonly StepperStage[] {
   const inFlight = run === null;
+  const awaiting = host.awaiting ?? {};
+  /** The host's own answer to *which step is running*, when it gave one — see {@link HostSteps.live}. */
+  const said = host.live;
   /** The first declared stage that has not finished is the one in flight — and only while the run is. */
   let runningFound = false;
   /**
@@ -154,7 +221,14 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
     const materialized = acts.flatMap((a) => a.materialized);
     const landedCommits = acts.flatMap((a) => (a.commit === null ? [] : [a.commit]));
     const complete = acts.length === declared.acts.length;
-    const running = inFlight && !complete && !runningFound;
+    /*
+      THE HOST'S WORD WINS. Where it named a live step, exactly that step runs
+      and every other unfinished one is simply not run — which is what stops a
+      mark spinning over a stage that has dispatched nothing
+      ({@link HostSteps.live}). Where it said nothing, this is the derivation
+      the desk has always used.
+    */
+    const running = said === undefined ? inFlight && !complete && !runningFound : said === declared.stage && !complete;
     if (running) runningFound = true;
     const state: StageState = refusals.length > 0 ? 'refused' : complete ? 'landed' : running ? 'running' : acts.length === 0 ? 'not-run' : 'landed';
     const subtitle =
@@ -243,11 +317,25 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
     const refusals = acts.flatMap((a) => (a.refusal === null ? [] : [a.refusal]));
     const materialized = acts.flatMap((a) => a.materialized);
     const landedCommits = acts.flatMap((a) => (a.commit === null ? [] : [a.commit]));
+    /*
+      THE LATEST ATTEMPT DECIDES THE MARK, and every earlier one is still on the
+      act rows — which is what a RETRY needs.
+
+      A reader can ask stage 5 again (`web/src/protServed.tsx` ·
+      `onRetryHotspots`), and each ask lands its own act: the refusal stays on
+      the ledger and is never overwritten. So a stage whose first ask was
+      refused and whose second answered is LANDED — that is what happened — and
+      `detail` still carries every refusal sentence, verbatim, so nothing is
+      hidden by the mark moving on. With one act this is byte-identical to the
+      reading it replaced.
+    */
+    const last = acts[acts.length - 1];
+    const refusedNow = last !== undefined && last.refusal !== null;
     return {
       stage: step.stage,
       label: step.question ?? step.name,
-      state: refusals.length > 0 ? 'refused' : 'landed',
-      subtitle: refusals.length > 0 ? `${plural(refusals.length, 'act', 'acts')} of this step ${refusals.length === 1 ? 'was' : 'were'} refused` : landedSubtitle(acts, materialized),
+      state: refusedNow ? 'refused' : 'landed',
+      subtitle: refusedNow ? `${plural(refusals.length, 'act', 'acts')} of this step ${refusals.length === 1 ? 'was' : 'were'} refused` : landedSubtitle(acts, materialized),
       // THE REFUSAL SENTENCES, VERBATIM, and NOT the plan's own reason: the
       // plan says this build cannot perform the step, and on a build that just
       // did, printing that paragraph would be the screen contradicting the log
@@ -258,6 +346,32 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
       materialized,
     };
   };
+  /**
+   * A STEP THE PLAN DECLARES, THE DEF DOES NOT, AND THIS HOST IS ABOUT TO
+   * PERFORM — the boot state of stage 5 on a build with a process behind it.
+   *
+   * It is the PENDING arm, and the whole of why it exists is that *a step that
+   * has not happened yet must not read as a step that failed* — nor as one the
+   * build cannot do. The two states it can be in are the stepper's own words
+   * for pending and in-flight ({@link AwaitedSteps}), the tag is therefore the
+   * state's (which is `null` for both) rather than the plan's blocker, and the
+   * DETAIL is the plan's own reason DELIBERATELY OMITTED: that paragraph is
+   * about a static page, and quoting it here is the mistake this arm fixes.
+   */
+  const awaited = (step: PlanStep, state: 'not-run' | 'running'): Omit<StepperStage, 'number' | 'name' | 'blockedBy' | 'landsAtRoot'> => ({
+    stage: step.stage,
+    label: step.question ?? step.name,
+    state,
+    subtitle:
+      state === 'running'
+        ? 'asking now — nothing has landed yet, and no part of an answer is shown until the whole of it is frozen'
+        : 'declared, and nothing has been asked yet on this session — it has landed nothing, so there is nothing here to go back to',
+    detail: null,
+    acts: [],
+    declared: 0,
+    commit: null,
+    materialized: [],
+  });
   /**
    * AND THE LAYOUT: the plan's order, the plan's numbers, the plan's short
    * names.
@@ -270,18 +384,30 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
   return PROT_PLAN.map((step): StepperStage => {
     /** What this run says it did for a step the def declares nothing for — empty for every other step. */
     const performedActs = folded.has(step.stage) ? [] : outcomes.filter((o) => o.stage === step.stage);
+    /** What the HOST says about a plan-only step it is not blocked on — see {@link AwaitedSteps}. An outcome wins over it. */
+    /**
+     * What the HOST says about a plan-only step it is not blocked on — and the
+     * host's `live` wins over its own `awaiting`, because a step it named as
+     * running is running whatever it said a moment ago.
+     */
+    const pending = folded.has(step.stage) || performedActs.length > 0 ? undefined : said === step.stage ? 'running' : awaiting[step.stage];
     return {
-      ...(folded.get(step.stage) ?? (performedActs.length > 0 ? performed(step, performedActs) : planOnly(step))),
+      ...(folded.get(step.stage) ?? (performedActs.length > 0 ? performed(step, performedActs) : pending !== undefined ? awaited(step, pending) : planOnly(step))),
       number: step.step,
       name: step.name,
       // A STEP SOMETHING PERFORMED IS NOT BLOCKED, whatever the plan says about
       // the build that publishes it: the blocker is the PUBLISHED build's and
       // the outcome is THIS run's, and a mark that said both would be the
       // stepper holding two ideas of the same fact.
-      blockedBy: performedActs.length > 0 ? null : step.blockedBy,
+      //
+      // NOR IS A STEP THIS HOST IS WAITING ON. That mark used to carry the
+      // published build's blocker for the whole of a served boot, on the very
+      // build that was about to perform the step — the same two ideas of one
+      // fact, one moment earlier.
+      blockedBy: performedActs.length > 0 || pending !== undefined ? null : step.blockedBy,
       // the step the def dispatches nothing for and nothing is blocking: the
       // parse, whose answer is true before the record starts
-      landsAtRoot: !folded.has(step.stage) && performedActs.length === 0 && step.blockedBy === null,
+      landsAtRoot: !folded.has(step.stage) && performedActs.length === 0 && pending === undefined && step.blockedBy === null,
     };
   });
 }

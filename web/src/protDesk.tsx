@@ -70,12 +70,16 @@ import {
 import type { EntryCredit, ProtCounts } from '../../src/prot/etl.js';
 import type { ActOutcome, ProtRun } from '../../src/prot/orchestrator.js';
 import { STRUCTURE_VIEW } from '../../src/prot/def.js';
+// STAGE 5's COLUMN — the composition asks what the 3D view's colour channel is
+// bound to, and the one module that owns the name answers.
+import { HOTSPOT_RANK_COLUMN } from '../../src/prot/hotspots.js';
 import { AXIS_ROOM, useProtCells, type ProtCell, type ProtDeskData } from './protCells.js';
 import { useProtProjection } from './protProjection.js';
 import { ActRow, RunNarrative, narrativeTitle } from './protTrace.js';
-import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from './protStages.js';
+import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type HostSteps, type StepperStage } from './protStages.js';
 import { Count, Disclosure, RecordDrawer, RegionDivider, WorkbenchHeader, type DividerAction } from './workbench/Chrome.js';
 import { BlockedGroup, ChartCard, ChartTile, Recommendation, ViewerBox } from './workbench/ChartCard.js';
+import { BootLog, type BootStepView } from './workbench/BootReport.js';
 import { StageStepper } from './workbench/Stepper.js';
 import { methodLine } from './workbench/bands.js';
 import {
@@ -109,7 +113,7 @@ import {
   type RegionSplit,
   type SplitStop,
 } from './workbench/charts.js';
-import { focusVsCursor, railCards, rankingVsCursor, stageWords, type BlockedCard, type HotspotCardInput } from './workbench/panel.js';
+import { emptyFocusSaid, focusVsCursor, paintLabelOf, railCards, rankingVsCursor, retryLabelOf, stageWords, type BlockedCard, type HotspotCardInput } from './workbench/panel.js';
 import { STEPPER_LABEL, actsLabelOf, stepViews } from './workbench/steps.js';
 import { useWorkbenchInk } from './workbench/tokens.js';
 
@@ -193,7 +197,43 @@ export interface ProtDeskProps {
    * and the control is then absent too rather than dead.
    */
   onSelectPicks?(residues: readonly string[]): void;
+  /**
+   * BIND THE 3D VIEW'S COLOUR CHANNEL TO THE COLUMN THE RANKING LANDED — and
+   * unbind it again. Absent where a page wires none, and the control is then
+   * absent too rather than dead.
+   *
+   * It belongs to the PAGE for the same reason `onSelectPicks` does: a rebind
+   * is a dispatch through the session view, and the data layer is the only code
+   * that touches one (`./README.md`, layer 4). This composition derives WHICH
+   * WAY the control goes from the record — the encoding fold at the cursor —
+   * and never from which button was last pressed.
+   */
+  onPaintByRank?(bound: boolean): void;
+  /**
+   * THE BOOT'S OWN ACCOUNT, for the record drawer — every step with its counts
+   * and its refusals (`workbench/boot.ts` · `bootSteps`).
+   *
+   * Empty on every build that does not report a boot, and the drawer's section
+   * is then absent rather than empty.
+   */
+  readonly boot?: readonly BootStepView[];
+  /**
+   * ASK THE MODEL AGAIN — on the LIVE session, keeping the earlier refusal on
+   * the record.
+   *
+   * Offered by this composition only where the stage's own KIND says a re-ask
+   * could honestly answer differently (`src/prot/hotspots.ts` · `RETRYABLE`,
+   * folded onto `RecommendationView.retryable`), so the control is ABSENT
+   * rather than present-and-dead. `asking` is the ask already in flight: the
+   * button is not pressable a second time mid-ask.
+   */
+  onRetryHotspots?(): void;
+  /** `true` while a retry is in flight — the card's fourth state, and a control that is not pressable again. */
+  readonly asking?: boolean;
 }
+
+/** What the boot's own account is called in the record drawer — the detail the centred line cannot carry. */
+const BOOT_TITLE = 'How this desk came to hold what it holds — every step of the boot, with its own counts and every sentence it was refused with';
 
 /** What the fold holding the dashboard's own words is called. */
 const ABOUT_TITLE = 'About this dashboard and this desk — the definition’s own summary at this cursor, and the claim this desk makes about itself';
@@ -328,10 +368,25 @@ export function StageDetail({ stage, run, onSeek, say }: { readonly stage: Stepp
  * belongs to the session view, and there is no session view until the last act
  * has landed. This is the composition for the page's `reading` phase — one
  * stage in flight, drawn with the design's only moving mark.
+ *
+ * `host` IS WHAT FIXED THE TWO SHARPEST BUGS ON THIS SCREEN, and both were the
+ * stepper claiming something about a step nothing was doing
+ * (`../protStages.ts` · `AwaitedSteps` and `HostSteps.live` carry the whole
+ * account):
+ *
+ *   `awaiting`  stage 5's mark was the PUBLISHED build's *not on this build*
+ *               for the whole of a boot, on the build that was about to run
+ *               it. A host that holds a slot says so, and the mark is PENDING.
+ *   `live`      the SECOND stage's mark spun from the first paint, through six
+ *               http reads and a dashboard build, while its stage had
+ *               dispatched nothing. The host names the step that is really
+ *               running, and only that one spins.
+ *
+ * A host that passes nothing gets exactly the screen that shipped.
  */
-export function RunStepper({ outcomes }: { readonly outcomes: readonly ActOutcome[] }): JSX.Element {
+export function RunStepper({ outcomes, host }: { readonly outcomes: readonly ActOutcome[]; readonly host?: HostSteps }): JSX.Element {
   const [said, setSaid] = useState<string | null>(null);
-  const stages = stepperStages(outcomes, null);
+  const stages = stepperStages(outcomes, null, host);
   const steps = stepViews(stages, null, false);
   return <StageStepper steps={steps} label={STEPPER_LABEL} refusedSeek={said} onSeek={() => setSaid('nothing here is a control yet — the cursor arrives with the desk')} />;
 }
@@ -367,7 +422,7 @@ function rememberedSplit(): RegionSplit {
 }
 
 /** The whole workbench. See the file header for the four layers and what this file is allowed to do. */
-export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, record, onSearchAgain, hotspots = null, onSelectPicks }: ProtDeskProps): JSX.Element {
+export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, record, onSearchAgain, hotspots = null, onSelectPicks, onPaintByRank, boot = [], onRetryHotspots, asking = false }: ProtDeskProps): JSX.Element {
   // ── LAYER 4: the data ─────────────────────────────────────────────────────
   const state = useSessionView(view);
   const sheetPort = useMemo(() => sessionSheetData(session, { table }), [session, table]);
@@ -381,6 +436,18 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
   // their own `colorOf`, never through a selector into their SVG).
   const cells = useProtCells(desk, data, ink);
   const [said, setSaid] = useState<string | null>(null);
+  /**
+   * IS THE 3D VIEW'S COLOUR CARRYING THE MODEL'S RANK RIGHT NOW, and how many
+   * residues does that column say nothing about — the two facts stage 5's
+   * second control is named from.
+   *
+   * Both are READ OFF THE RECORD: the binding from the encoding fold at the
+   * cursor (`desk.bound`, the same reader every cell uses) and the absence from
+   * the rows the pictures are drawn from. Neither is a boolean this component
+   * keeps, which is what makes the label right after a reload or a seek.
+   */
+  const rankBound = desk.bound(STRUCTURE_VIEW, 'color', 'chain') === HOTSPOT_RANK_COLUMN;
+  const rankAbsent = useMemo(() => data.residues.filter((row) => row[HOTSPOT_RANK_COLUMN] === null || row[HOTSPOT_RANK_COLUMN] === undefined).length, [data.residues]);
 
   /*
     ── THE READER MOVES THE BOUNDARY, and the state is a LAYOUT PREFERENCE ───
@@ -658,7 +725,36 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
     // promotion the reader made earlier is dropped here rather than surviving a
     // press that was about a different stage.
     setPromoted(null);
-    void seek(stage.commit).then(setSaid, (e: unknown) => setSaid(`that seek threw: ${e instanceof Error ? e.message : String(e)}`));
+    /**
+     * AND WHERE A LANDED STAGE OWNS NO PICTURE, THE PRESS SAYS SO — measured,
+     * on this very desk, and it was a press that changed nothing and said
+     * nothing.
+     *
+     * `chartsOfStage` is an INTERSECTION of what a stage's acts landed with
+     * what each view binds, and it has no fallback by design: *the layout
+     * follows it, so moving the stepper moves the big card and no card is
+     * hard-coded as the big one*. When a stage lands columns no chart is drawn
+     * from, that intersection is empty — which is a true answer and was a
+     * SILENT one. The author found it at stage 5 before its rank was bound to
+     * anything: *clicking on the cursor stage nothing happens.*
+     *
+     * The fix is not a fallback view — promoting an arbitrary card because the
+     * honest answer is *none* would be the layout guessing, which is the exact
+     * thing that intersection exists to prevent. The fix is to SAY IT, in the
+     * slot this stepper already has for a press that answers something
+     * (`workbench/Stepper.tsx` · `refusedSeek`), and to name the real reason:
+     * which columns the stage landed, and that no picture here reads them.
+     *
+     * It stays DISTINCT from a press on a stage that landed no commit at all:
+     * that one moves the focus and not the cursor, and is handled above. This
+     * one moved the cursor and could not move the focus. Two different facts,
+     * two different answers.
+     */
+    const owns = chartsOfStage(stage, desk.shown, actColumns);
+    void seek(stage.commit).then(
+      (refused) => setSaid(refused ?? emptyFocusSaid(stage, owns)),
+      (e: unknown) => setSaid(`that seek threw: ${e instanceof Error ? e.message : String(e)}`),
+    );
   };
   // THE BAR AND `aria-current` MARK THE FOCUSED STAGE, never the cursor's — see
   // {@link focusedStage}. The cursor keeps its own voice in the chrome's commit
@@ -872,6 +968,33 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
                   // answer, which are the ones the act landed
                   label: `select these ${String(b.recommendation.rows.length)} residues across the desk`,
                   onPress: () => onSelectPicks(b.recommendation === undefined ? [] : b.recommendation.rows.map((row) => row.residue)),
+                },
+              })}
+          {...(onRetryHotspots === undefined || !b.recommendation.retryable
+            ? {}
+            : {
+                retry: {
+                  // THE KIND DECIDES, IN LAYER 3 — this composition asks
+                  // `retryable` and never works out its own eligibility
+                  label: retryLabelOf(asking),
+                  busy: asking,
+                  onPress: onRetryHotspots,
+                },
+              })}
+          {...(onPaintByRank === undefined || b.recommendation.rows.length === 0
+            ? {}
+            : {
+                paint: {
+                  /*
+                    WHICH WAY THE CONTROL GOES IS READ OFF THE RECORD — the
+                    encoding fold at the cursor (`desk.bound`), never a flag
+                    this component keeps. So the label is right after a reload,
+                    after a seek behind the rebind's own commit, and after a
+                    rebind made from anywhere else; a remembered boolean would
+                    be a second idea of a fact the log already holds.
+                  */
+                  label: paintLabelOf(rankBound, b.recommendation.rows.length, rankAbsent),
+                  onPress: () => onPaintByRank(rankBound),
                 },
               })}
         />
@@ -1156,6 +1279,28 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
               <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>this desk</span> {claim}
             </p>
           </Disclosure>
+          {/*
+            THE BOOT'S OWN ACCOUNT — where the boot report's DETAIL went when the
+            list stopped being the status display.
+
+            The author's ruling put one centred line under the stepper and took
+            the eight-row list off the boot screen; this is the other half of
+            that sentence, and it is the half that keeps it honest. *335,217
+            bytes read, no total — the content-length is the size of what came
+            over the wire and these are the decoded bytes* is provenance, and
+            the gzip trap in it cost a packet to learn; *3 gestures, 3 refused
+            by the library* is how this desk knows its own pipeline claim is
+            true. Detail belongs in the record, and **"we simplified the screen"
+            is how honesty gets quietly dropped.**
+
+            Absent where a host reports no boot — which is every build but the
+            served one (`web/src/protServed.tsx`).
+          */}
+          {boot.length === 0 ? null : (
+            <Disclosure shape="card" label={BOOT_TITLE} title={<>{BOOT_TITLE} <Count>{boot.length.toLocaleString('en-US')}</Count></>}>
+              <BootLog steps={boot} label={BOOT_TITLE} />
+            </Disclosure>
+          )}
           <Disclosure shape="card" label={NOT_HERE_TITLE} title={NOT_HERE_TITLE}>
             <NotHere />
           </Disclosure>

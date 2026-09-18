@@ -43,21 +43,32 @@ const SHELL: React.CSSProperties = { font: '14px/1.55 system-ui, -apple-system, 
 const CARD: React.CSSProperties = { maxWidth: '46rem', background: '#fff', border: '1px solid #dfe4ea', borderRadius: 10, padding: '1.5rem 1.75rem' };
 
 /**
- * While the tables are on the wire. It names the megabytes, because a page that
- * looks stuck is worse than a page that says it is fetching 8 MB.
+ * WHAT THIS PARAGRAPH SAYS, AND WHY A PAGE MAY REPLACE IT.
  *
- * `extra` is for a boot that has something to SHOW while it waits. The protein
- * desk's does: its two stages dispatch three acts before the first paint, and
- * the trace panel is handed each one as it lands
- * (`src/prot/orchestrator.ts` · `ProtRunWatch`) so a reader watches the run
- * fill rather than watching a sentence about it.
+ * It is the honest sentence for a desk whose boot is one fetch and one ETL, and
+ * it is what three of the four demos have. The author asked the obvious
+ * question of the FOURTH one — *"why is this not live status support instead of
+ * this static text?"* — while watching a boot that really performs six http
+ * reads, an ETL, a dashboard build, three probe gestures, four stages and a
+ * model call, and reported none of them.
+ *
+ * So `instead` REPLACES the paragraph for a page that can report its own boot
+ * (`web/src/protServed.tsx` hands it `workbench/BootReport.tsx`), and a page
+ * that passes nothing renders byte for byte what it rendered before this prop
+ * existed. `extra` is unchanged and is for a boot with something to SHOW beside
+ * the words — the protein desk's stepper, filling as each act lands
+ * (`src/prot/orchestrator.ts` · `ProtRunWatch`).
+ *
+ * It is a replacement rather than an addition on purpose: a page that reported
+ * each read as it happened AND kept a paragraph saying *the page is fetching
+ * the committed files* would be saying one thing twice, once vaguely.
  */
-export function Reading({ what, extra }: { readonly what: string; readonly extra?: ReactNode }): JSX.Element {
+export function Reading({ what, extra, instead }: { readonly what: string; readonly extra?: ReactNode; readonly instead?: ReactNode }): JSX.Element {
   return (
     <div style={SHELL}>
       <div style={CARD}>
         <h1 style={{ margin: '0 0 .5rem', fontSize: '1.05rem' }}>Reading {what}</h1>
-        <p style={{ margin: 0, color: '#5a6572' }}>The page is fetching the committed files over http and running the same ETL the server runs. Nothing is cached yet, so the first load carries the whole snapshot.</p>
+        {instead ?? <p style={{ margin: 0, color: '#5a6572' }}>The page is fetching the committed files over http and running the same ETL the server runs. Nothing is cached yet, so the first load carries the whole snapshot.</p>}
         {extra}
       </div>
     </div>
