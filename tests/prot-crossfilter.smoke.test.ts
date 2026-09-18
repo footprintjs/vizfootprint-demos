@@ -47,7 +47,7 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { buildSiteIfMissing, startProtSite, type SiteHandle } from './protSiteServer.js';
 import { EXAMPLE_ENTRY } from '../src/prot/archive.js';
-import { INTERFACE_VIEW, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 
 const CHROME = process.env['VZF_CHROME'];
 
@@ -58,6 +58,34 @@ const marks = (page: Page): Promise<Readonly<Record<string, number>>> =>
       [...document.querySelectorAll('[data-chart]')].map((el) => [el.getAttribute('data-chart') ?? '?', el.querySelectorAll('circle.vzf-line-dot, circle.vzf-dot, rect.vzf-barrect').length]),
     ),
   );
+
+/**
+ * WHAT EACH PANE SAYS about the selection it did not make — the narrowing
+ * sentence, read off the page by the one attribute the two slots that can hold
+ * it share (`web/src/workbench/ChartCard.tsx`: the card's footer and a tile's
+ * figure line). `null` for a pane that says nothing.
+ */
+const sentences = (page: Page): Promise<Readonly<Record<string, string | null>>> =>
+  page.evaluate(() =>
+    Object.fromEntries(
+      [...document.querySelectorAll('[data-chart]')].map((el) => [el.getAttribute('data-chart') ?? '?', el.querySelector('[data-narrowed="true"]')?.textContent ?? null]),
+    ),
+  );
+
+/** How many marks a pane draws BRIGHT — the scatter keeps its dots and dims the ones a clause drops, so its in-force count is the un-dimmed one. */
+const bright = (page: Page, address: string): Promise<number> =>
+  page.evaluate((id) => {
+    const pane = document.querySelector(`[data-chart="${id}"]`);
+    if (pane === null) return -1;
+    const all = pane.querySelectorAll('circle.vzf-line-dot, circle.vzf-dot, rect.vzf-barrect');
+    return [...all].filter((el) => !el.classList.contains('vzf-dim') && el.closest('.vzf-dim') === null).length;
+  }, address);
+
+/** The first number in a sentence — what the page CLAIMS is in force, as a number a test can compare with the marks. */
+const claimed = (said: string | null): number | null => {
+  const found = /^([\d,]+) of ([\d,]+)/.exec(said ?? '');
+  return found === null ? null : Number((found[1] ?? '').replace(/,/g, ''));
+};
 
 describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane narrows the others, and it is on screen while it happens (real headless Chromium)', () => {
   let site: SiteHandle;
@@ -97,18 +125,45 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800);
   });
 
+  it('SAYS NOTHING AT REST — the resting page carries no narrowing line at all', async () => {
+    const said = await sentences(page);
+    say(`at rest: ${Object.entries(said).map(([id, line]) => `${id} ${line === null ? '(silent)' : `"${line}"`}`).join(' · ')}`);
+    expect(Object.values(said).filter((line) => line !== null)).toEqual([]);
+  });
+
   it('NARROWS EVERY OTHER PANE on a pick made in a TILE — and times the round trip', async () => {
     const before = await marks(page);
     const bars = page.locator(`[data-chart="${INTERFACE_VIEW}"] rect.vzf-barrect`);
     expect(await bars.count()).toBeGreaterThan(100);
     /*
+      ── WHAT THE POINTER PRESSES, and why it is no longer the drawn bar ──────
+      The library grew a POINTER TARGET per bar — one transparent full-height
+      rect over the mark's own slot column (`vizfootprint-ui` · `VizBar`, the
+      WCAG 2.2 AA floor of 24px or the slot when the slot is narrower) — which
+      is exactly the affordance the last packet reported as missing. So the
+      gesture a reader's pointer really lands on is that target, and this is
+      what the test drives. The bar underneath still carries the same two
+      handlers and the same accessible name; the press is one gesture either
+      way.
+
+      AND PRESSING THE DRAWN BAR NOW LANDS NOTHING, measured here and reported
+      as a FINDING rather than worked around silently: the same library packet
+      draws its *marks are closer together than a pointer can separate* note as
+      an SVG `<text>` inside the plot, and that text is painted OVER the marks
+      with no `pointer-events: none` — so `document.elementFromPoint` at a
+      bar's own centre answers `text.vzf-crowded-note`, the press is swallowed,
+      and nothing is selected. A note about a pointer problem that blocks the
+      pointer is the sharpest possible version of the bug it describes.
+
       THE ROUND TRIP, MEASURED — the author asked for the number rather than a
       hunch: eight live panes all repaint on every pick, and if that is slow
       enough to feel broken the payoff is damaged even though it is correct.
       From the click to the focused pane settling at its new mark count.
     */
+    const targets = page.locator(`[data-chart="${INTERFACE_VIEW}"] rect.vzf-mark-hit`);
+    expect(await targets.count()).toBe(await bars.count());
     const started = Date.now();
-    await bars.nth(40).click({ force: true });
+    await targets.nth(40).click({ force: true });
     await page.waitForFunction((selector) => document.querySelectorAll(selector).length < 100, `[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 15_000 });
     const roundTrip = Date.now() - started;
     const after = await marks(page);
@@ -143,6 +198,38 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     expect(roundTrip).toBeLessThan(2_000);
   });
 
+  /*
+    ── THE ASSERTION THIS PACKET IS BOUGHT FOR ────────────────────────────────
+    The author's complaint was not that the crossfilter is broken — it works,
+    and the test above measures it. It is that **nothing on the page SAYS so**,
+    and a connection nobody can see is the same as no connection.
+
+    So: with the clause from the pick above still in force, every pane but the
+    one it came from must now carry a sentence, and THE NUMBER IN IT MUST MATCH
+    THE MARKS THE PICTURE ACTUALLY DRAWS — bright ones where the chart dims
+    (the scatter), drawn ones where it drops them (the line). That is the half a
+    unit test cannot buy: it is what stops the page claiming a narrowing its
+    picture does not show.
+  */
+  it('SAYS SO, IN EVERY OTHER PANE — and the number in each sentence is the marks that pane really drew', async () => {
+    const said = await sentences(page);
+    say(`with the clause in force:${Object.entries(said).map(([id, line]) => `\n    ${id}: ${line === null ? '(silent — it is the source)' : `"${line}"`}`).join('')}`);
+    // the pane the clause came FROM is the only silent one; it already shows its own selection
+    expect(said[INTERFACE_VIEW]).toBe(null);
+    for (const address of [RAMA_VIEW, SURFACE_VIEW, STRUCTURE_VIEW]) expect(said[address], address).not.toBe(null);
+
+    // …and the words agree with the pictures, pane by pane, in the way each chart shows a clause
+    const drawn = await marks(page);
+    const brightDots = await bright(page, RAMA_VIEW);
+    say(`  the scatter draws ${String(drawn[RAMA_VIEW] ?? 0)} dots of which ${String(brightDots)} are bright; the run draws ${String(drawn[SURFACE_VIEW] ?? 0)} marks`);
+    expect(claimed(said[RAMA_VIEW] ?? null)).toBe(brightDots);
+    expect(claimed(said[SURFACE_VIEW] ?? null)).toBe(drawn[SURFACE_VIEW]);
+    // the receipt is the one pane no clause can be judged on, and it says that rather than nothing
+    expect(said[PAIRS_VIEW] ?? '').toContain('cannot be judged here');
+    // nothing scrolled to say any of it
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800);
+  });
+
   it('says which pane holds the clause, and offers the one control that clears it', async () => {
     // the selection row appears only when there IS a selection — an empty strip
     // is an instruction, not a fact — and the library's own chips are what it
@@ -164,6 +251,15 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     expect(back[SURFACE_VIEW]!).toBeGreaterThan(narrowed[SURFACE_VIEW]!);
     expect(back[INTERFACE_VIEW]!).toBeGreaterThan(100);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800);
+    /*
+      AND THE SENTENCES GO WITH THE CLAUSE. An absence is absent: a line that
+      outlived the selection it was about would be the same lie as a count that
+      outlived its picture, and it is the half that would rot silently — every
+      pane is back to saying nothing.
+    */
+    const said = await sentences(page);
+    say(`  after the clear:${Object.entries(said).map(([id, line]) => ` ${id} ${line === null ? '(silent)' : `"${line}"`}`).join(' ·')}`);
+    expect(Object.values(said).filter((line) => line !== null)).toEqual([]);
   });
 
   it('threw nothing while doing it', () => {

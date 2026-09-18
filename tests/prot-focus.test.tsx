@@ -29,7 +29,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ReactElement } from 'react';
 import { framePad } from 'vizfootprint-ui';
-import { RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { PROT_ENCODINGS, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { PROT_PLAN } from '../src/prot/plan.js';
 import { CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
@@ -268,23 +268,36 @@ describe('whether a mark can be pressed by hand — the fold behind defect 2', (
 });
 
 describe('the Ramachandran’s crosshair is DECLARED, and the declaration is what the picture answers to', () => {
-  it('reads both axes off the def’s own frame — never a prop typed at a call site', () => {
-    expect(zeroGuideOf(RAMA_VIEW)).toEqual({ x: true, y: true });
+  /*
+    THE FOLD IS THE INPUT NOW, and that is the whole change here: this page used
+    to read the declaration from the def it shares with the session, because the
+    reader-side mapper dropped a layerless view's frame. The library has fixed
+    the mapper, the tripwire left for that day fired, and `zeroGuideOf` takes
+    the RECORD's own frame. So what is asserted here is the SHAPE fold — one
+    boolean per axis, out of whatever the record carries — and the assertions
+    are fed the def's own declared frames, which `tests/prot-def.test.ts` pins
+    byte for byte against what the session serves and what the reader receives.
+  */
+  const frameOf = (viewId: string): Readonly<Record<string, { readonly zeroGuide?: boolean }>> | undefined =>
+    PROT_ENCODINGS.find((encoding) => encoding.viewId === viewId)?.frame;
+
+  it('turns both declared axes into the prop the chart takes — never a prop typed at a call site', () => {
+    expect(frameOf(RAMA_VIEW)).toEqual({ x: { zeroGuide: true }, y: { zeroGuide: true } });
+    expect(zeroGuideOf(frameOf(RAMA_VIEW))).toEqual({ x: true, y: true });
   });
 
   it('asks it of no other view, so every other picture is byte-identical to before the key existed', () => {
-    expect(zeroGuideOf(SURFACE_VIEW)).toBeUndefined();
-    expect(zeroGuideOf('interface')).toBeUndefined();
-    expect(zeroGuideOf('pairs')).toBeUndefined();
+    for (const viewId of [SURFACE_VIEW, 'interface', 'pairs']) {
+      expect(frameOf(viewId), viewId).toBeUndefined();
+      expect(zeroGuideOf(frameOf(viewId)), viewId).toBeUndefined();
+    }
   });
 
-  /*
-    THE FINDING — that the DECLARATION is on the wire and the reader's own
-    mapper drops it, which is why this page reads the def rather than the fold
-    — is pinned where the def's other wire assertions are:
-    `tests/prot-def.test.ts` · *the crosshair this view declares reaches the
-    wire, and the reader's own mapper drops it*. It lives there because it
-    needs a real session and no DOM, and because a change in what the WIRE
-    serves belongs beside every other thing this def asks of the door.
-  */
+  it('draws no line at all where the record says nothing — an absent declaration is never a guessed one', () => {
+    expect(zeroGuideOf(undefined)).toBeUndefined();
+    expect(zeroGuideOf({})).toBeUndefined();
+    expect(zeroGuideOf({ x: {} })).toBeUndefined();
+    // one axis asked and one not: only the one that asked gets a line
+    expect(zeroGuideOf({ x: { zeroGuide: true } })).toEqual({ x: true });
+  });
 });

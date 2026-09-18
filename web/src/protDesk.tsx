@@ -90,6 +90,7 @@ import {
   columnTracks,
   dividerFloors,
   dividerValues,
+  narrowingSaid,
   parseSplit,
   promoteCardLabel,
   promoteChartLabel,
@@ -685,6 +686,23 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         cursorElsewhere={focused ? elsewhere : null}
         footLeft={c.foot}
         /*
+          AND ON THE RIGHT OF THAT SAME LINE: WHAT A SELECTION MADE SOMEWHERE
+          ELSE DID TO THIS PICTURE.
+
+          The author's most-repeated complaint about this desk was that the
+          charts do not look connected — and they were right about what they
+          saw while the crossfilter underneath was working: no pane ever SAID it
+          had been narrowed by a gesture made in another pane. A connection
+          nobody can see is the same as no connection.
+
+          So the pane says it, in the register the footer already uses: a count,
+          on the line of counts, with the source named by its DECLARED name
+          because the focus slot can afford it. The facts are the cell's
+          (`./protCells.tsx` · `narrowingOf`, counted with the library's own
+          predicates off the rows the picture drew); the words are the rules
+          layer's (`./workbench/charts.ts` · `narrowingSaid`). `null` when
+          nothing is selected elsewhere, and then the footer is what it was.
+
           NO STAGE ATTRIBUTION IN A FOOTER ANY MORE — ONE OWNER PER QUESTION.
           The question is *which stage produced the picture I am looking at*,
           and the stepper answers it now that the bar and `aria-current` follow
@@ -700,7 +718,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
           about a tile whose stage is not the focused one — named in
           {@link NotHere}.
         */
-        footRight={null}
+        footRight={narrowingSaid(c.narrowing, 'focus')}
         // THE LONG NOTE, BEHIND THE DISCLOSURE AND NEVER DELETED: this is the
         // caption the desk always had, with every silence it counts — and, on
         // the focused card, the stage's own sentences in front of it.
@@ -826,6 +844,15 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         id={c.id}
         label={desk.label(c.id)}
         said={`${c.foot ?? ''} — the 3D viewer draws in the focus, where a camera can be fitted to the molecule. Press to bring it here.`}
+        /*
+          AND IT IS HONEST ABOUT THE CROSSFILTER HERE TOO, which matters most at
+          exactly this size: promoted, the molecule RECOLOURS under a clause from
+          elsewhere, and in a 282×73 rail pane that recolouring would be
+          invisible even if the canvas were drawn. In the rail this pane is words
+          already, so the words carry the narrowing sentence — the same fold,
+          the same counts, read where the picture cannot show them.
+        */
+        narrowed={narrowingSaid(c.narrowing, 'tile')}
         promote={{ label: promoteChartLabel(desk.label(c.id)), onPress: () => setPromoted({ stage: here?.stage ?? null, id: c.id }) }}
       />
     ) : (
@@ -844,6 +871,15 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         the marks enough — the clause is derived and corrects itself.
       */
       reach={c.marks === undefined ? null : reachClause(laid.w, c.marks, chartPad)}
+      /*
+        AND WHAT A SELECTION MADE IN ANOTHER PANE DID TO THIS ONE — the short
+        form, because a tile's figure line cannot hold the source's declared
+        name as well as its counts (`./workbench/charts.ts` · `narrowingSaid`,
+        room `'tile'`; the focus slot says the long one). A tile that stayed
+        silent while another pane narrowed it is the whole of the author's
+        complaint, and it is silent now only when nothing is selected.
+      */
+      narrowed={narrowingSaid(c.narrowing, 'tile')}
       wide={wide}
       promote={{ label: promoteChartLabel(desk.label(c.id)), onPress: () => setPromoted({ stage: here?.stage ?? null, id: c.id }) }}
     >

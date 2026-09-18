@@ -183,33 +183,45 @@ export function shapeOfView(viewId: string): TileShape {
 }
 
 /**
- * WHICH AXES OF A VIEW ASKED FOR A LINE THROUGH ZERO — the declaration, read
- * from the one place that owns it, in the shape `vizfootprint-ui` ·
- * `ChartDomain.zeroGuide` takes.
- *
- * ── WHY IT IS READ OFF THE DEF AND NOT OFF THE FOLD, which was the intent ──
- * The ask is declared once (`src/prot/def.ts` · `PROT_ENCODINGS`, the rama
- * entry's `frame`), and the SESSION does serve it — measured, on its own
- * `overview()`: `{"x":{"zeroGuide":true},"y":{"zeroGuide":true}}`. What loses it
- * is the reader-side mapper: `vizfootprint-ui` · `sessionView.ts` · `mapFrame`
- * keeps a channel only when it carries `mode: 'shared' | 'independent'` and
- * drops every other one — and a LAYERLESS view may not carry `mode` at all,
- * because the def door refuses it there by name (`vizfootprint/def` ·
- * `AXIS_SHAPE`). So `SessionViewState.views[].frame` arrives as `{}` for this
- * view and a declaration that IS on the wire cannot reach the picture.
- *
- * **Reported as a FINDING; the mapper is the library's to fix.** Meanwhile this
- * page does what it already does for the declared `chartKind` the wire serves
- * only for a layer ({@link shapeOfView}, and this file's header says so): it
- * reads the DECLARATION from the def it owns. One owner either way, and no prop
- * typed at a call site — the day `mapFrame` keeps an axis entry, this function
- * is the one place that changes.
- *
- * `undefined` when no channel asked, which is byte-identical to the picture
- * before the key existed.
+ * ONE CHANNEL OF A FRAME, as much of it as this page reads — the shape the
+ * session's own fold serves per channel (`SessionViewState.views[].frame`,
+ * whose entries are the library's `ChannelResolution`). Spelled structurally
+ * rather than imported, because the rules layer may not reach the library
+ * (`tests/prot-layers.test.ts`, rule 2) — and structurally is enough: what this
+ * fold needs is one boolean per axis.
  */
-export function zeroGuideOf(viewId: string): { readonly x?: boolean; readonly y?: boolean } | undefined {
-  const frame = PROT_ENCODINGS.find((encoding) => encoding.viewId === viewId)?.frame;
+export interface FrameAxis {
+  readonly zeroGuide?: boolean;
+}
+
+/**
+ * WHICH AXES OF A VIEW ASKED FOR A LINE THROUGH ZERO — read OFF THE FOLD, in
+ * the shape `vizfootprint-ui` · `ChartDomain.zeroGuide` takes.
+ *
+ * ── THE FOLD IS BACK ON THE FOLD, and that is the whole history of this ────
+ * The ask is declared once (`src/prot/def.ts` · `PROT_ENCODINGS`, the rama
+ * entry's `frame`) and the SESSION always served it — measured, on its own
+ * `overview()`: `{"x":{"zeroGuide":true},"y":{"zeroGuide":true}}`. What used to
+ * lose it was the reader-side mapper: `vizfootprint-ui` · `sessionView.ts` ·
+ * `mapFrame` kept a channel only when it carried `mode: 'shared' |
+ * 'independent'`, and a LAYERLESS view may not carry `mode` at all because the
+ * def door refuses it there by name. So the frame arrived `{}` and this page
+ * read the declaration from the def it owns — a workaround, with a test pinned
+ * on it as a TRIPWIRE: *the day the library fixes the mapper, that test fails
+ * and this comes back onto the fold.*
+ *
+ * **The library has fixed it** (the mapper now keeps a mode-less entry that
+ * carries an axis key of its own), the tripwire fired, and this is the fold
+ * again: the page reads the declaration from the RECORD, not from a file it
+ * happens to share with the session. `tests/prot-def.test.ts` pins the whole
+ * path — the def declares it, the session serves those bytes, the reader's fold
+ * carries them, and this function turns them into the prop the chart takes.
+ *
+ * `undefined` when no channel asked (and for a server or a stub whose fold
+ * carries no frame at all), which is byte-identical to the picture before the
+ * key existed — an absent declaration draws no line rather than a guessed one.
+ */
+export function zeroGuideOf(frame: Readonly<Record<string, FrameAxis>> | undefined): { readonly x?: boolean; readonly y?: boolean } | undefined {
   const asked = (channel: 'x' | 'y'): boolean => frame?.[channel]?.zeroGuide === true;
   if (!asked('x') && !asked('y')) return undefined;
   return { ...(asked('x') ? { x: true } : {}), ...(asked('y') ? { y: true } : {}) };
@@ -454,6 +466,119 @@ export function reachClause(regionWidth: number, marks: number, pad: PaneMargin)
     reasons are in the picture's own note, whole.
   */
   return `${marks.toLocaleString('en-US')} marks in this width — too thin to press; Tab picks one`;
+}
+
+// ── and WHAT A CLAUSE FROM ELSEWHERE DID TO THIS PICTURE ────────────────────
+
+/**
+ * THE FOUR STATES A PICTURE CAN BE IN under a selection somebody made in
+ * another pane — and the reason there are four rather than two.
+ *
+ * The author's most-repeated complaint about this desk is *I don't see the
+ * connection*, and they were right about what they SAW while the machinery was
+ * right underneath: measured, a pick on one bar takes the focused chart from
+ * 185 marks to 1 in 22 ms and dims 180 of 181 in the backbone-angle pane. What
+ * no pane ever did was SAY that it had been narrowed by something the reader
+ * did somewhere else — and a connection nobody can see is the same as no
+ * connection.
+ *
+ *   `narrowed`     the clause reached this picture and cut it. The survivors,
+ *                  the total, and the view it came from by its DECLARED name.
+ *   `nothing-cut`  the clause reached this picture and cut NOTHING — every mark
+ *                  matched. It says so in the library's own words (*filtered
+ *                  nothing here*), because SILENCE HERE IS THE BUG: a pane that
+ *                  says nothing reads as a pane that is not connected, which is
+ *                  the whole complaint.
+ *   `unreachable`  the clause cannot be judged on this picture at all — its
+ *                  rows do not carry the column the clause names, or no link
+ *                  carries it here. The count is unchanged and the sentence
+ *                  says why, quoting the library where the library has a
+ *                  sentence of its own.
+ *   (no state)     nothing is selected anywhere else. `null`, and no line at
+ *                  all — the resting page stays clean.
+ */
+export type NarrowedKind = 'narrowed' | 'nothing-cut' | 'unreachable';
+
+/**
+ * WHAT A SELECTION MADE ELSEWHERE DID TO ONE PICTURE, as plain data.
+ *
+ * Folded by the cells, which are the only code that can fold it honestly:
+ * `../protCells.tsx` · `narrowingOf` counts the marks with the LIBRARY'S OWN
+ * predicates on the very rows it hands the chart, so a number here cannot
+ * claim a narrowing the picture does not draw.
+ */
+export interface Narrowing {
+  readonly kind: NarrowedKind;
+  /** How many of this picture's marks are IN FORCE — drawn, bright, or painted as kept. */
+  readonly inForce: number;
+  /** How many it has at rest, with nothing selected anywhere. */
+  readonly total: number;
+  /** What this picture's marks ARE, in its own word: `dots`, `bars`, `residues`, `points`, `rows`. */
+  readonly unit: string;
+  /** The views the clauses came from, by their DECLARED names — never an address, never invented. */
+  readonly from: readonly string[];
+  /**
+   * WHY a clause could not be judged here — the LIBRARY's own sentence where it
+   * has one (a declined default edge's `reason`, or a clause's `narrowed.reason`
+   * off the session's `narrowedFor`), else the page's own honest clause naming
+   * the column these rows do not carry. Absent when nothing said, and then the
+   * sentence stops at the fact.
+   */
+  readonly reason?: string;
+}
+
+/**
+ * WHICH SLOT IS READING IT. The focus card's footer can afford the source's
+ * declared name; a tile's figure line is about nine characters of Mono wide
+ * once its counts have had theirs, so it says the short form.
+ */
+export type NarrowingRoom = 'focus' | 'tile';
+
+/** The views a clause came from, as a reader would say them. */
+function namesOf(from: readonly string[]): string {
+  if (from.length <= 1) return from[0] ?? 'another pane';
+  return `${from.slice(0, -1).join(', ')} and ${from[from.length - 1] ?? ''}`;
+}
+
+const figure = (n: number): string => n.toLocaleString('en-US');
+
+/**
+ * THE SENTENCE A PICTURE SAYS ABOUT THE SELECTION IT DID NOT MAKE — one line,
+ * in the register the footers already use, readable without a gesture.
+ *
+ * ── WHY THE NUMBERS COME FIRST ─────────────────────────────────────────────
+ * It rides the Mono line of FIGURES (the card's footer, a tile's count line)
+ * and it IS a count, so it is spelled as one: the survivors out of the total
+ * before any words about where the clause came from. The clause is what clips
+ * when the line runs out of room — the same law the footer already keeps, and
+ * the reason the source's name is the part a tile drops.
+ *
+ * ── AND WHY `nothing-cut` IS NOT SILENCE ───────────────────────────────────
+ * The library's own law (a clause that filtered nothing says so where it was
+ * sent) is quoted rather than re-worded: *filtered nothing here* is the
+ * Sheet's sentence (`vizfootprint-ui` · `narrowedSaid`), and one fact reads
+ * one way wherever it is read.
+ *
+ * `null` for a picture nothing reached — an absence is absent.
+ */
+export function narrowingSaid(narrowing: Narrowing | null, room: NarrowingRoom): string | null {
+  if (narrowing === null) return null;
+  const { kind, inForce, total, unit } = narrowing;
+  const source = namesOf(narrowing.from);
+  const because = narrowing.reason === undefined ? '' : `: ${narrowing.reason}`;
+  if (kind === 'narrowed') {
+    return room === 'focus'
+      ? `${figure(inForce)} of ${figure(total)} ${unit} in force — narrowed by ${source}`
+      : `${figure(inForce)} of ${figure(total)} ${unit} in force — narrowed from another pane`;
+  }
+  if (kind === 'nothing-cut') {
+    return room === 'focus'
+      ? `${figure(total)} of ${figure(total)} ${unit} in force — the selection in ${source} filtered nothing here`
+      : `${figure(total)} of ${figure(total)} ${unit} in force — filtered nothing here`;
+  }
+  return room === 'focus'
+    ? `${figure(total)} of ${figure(total)} ${unit} still drawn — the selection in ${source} cannot be judged here${because}`
+    : `${figure(total)} of ${figure(total)} ${unit} still drawn — the selection elsewhere cannot be judged here`;
 }
 
 /** What the floors are folded OUT of — every one of them a number the library or this page already carries. */

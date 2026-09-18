@@ -29,6 +29,7 @@ import type { DashboardDef } from 'vizfootprint/agent';
 import { INTERFACE_VIEW, PAIRS_VIEW, PROT_VIEWS, PROT_WORDS, RAMA_VIEW, RESIDUES_TABLE, RESIDUE_KEY, SHEET_VIEW, STRUCTURE_VIEW, SURFACE_VIEW, protCaption, protDef, protGrains } from '../src/prot/def.js';
 import { ACT_KEY_COLUMN, ACT_TABLE, INTERACTION_COLUMNS, INTERACTION_SCHEMA, INTERACTIONS_TABLE, INTERFACE_CONTACTS_COLUMN, PROT_ACT_ORDER, PROT_STAGES, SASA_COLUMN } from '../src/prot/analyses.js';
 import { protTables } from '../src/prot/etl.js';
+import { zeroGuideOf } from '../web/src/workbench/charts.js';
 import { loadStructureText } from '../src/prot/snapshot.js';
 
 const TEXT = loadStructureText();
@@ -289,8 +290,8 @@ describe('(b−) the same declaration with no per-kind requirement, and (a) no d
 });
 
 /**
- * THE CROSSHAIR THIS DEF DECLARES, AND HOW FAR IT GETS — law 12, and the
- * finding this page owes the library.
+ * THE CROSSHAIR THIS DEF DECLARES, AND IT NOW REACHES THE PICTURE OFF THE
+ * RECORD — law 12, and the tripwire that fired.
  *
  * `PROT_ENCODINGS`' rama entry declares `frame: { x: { zeroGuide: true },
  * y: { zeroGuide: true } }`: a backbone φ against ψ is the figure the library
@@ -299,32 +300,56 @@ describe('(b−) the same declaration with no per-kind requirement, and (a) no d
  * session serves a view's frame, and a host hands it over as
  * `ChartDomain.zeroGuide`.
  *
- * It cannot, and both halves are measured below. The SESSION serves it. The
- * reader-side mapper then drops it: `vizfootprint-ui` · `sessionView.ts` ·
- * `mapFrame` keeps a channel only when it carries
- * `mode: 'shared' | 'independent'`, and a LAYERLESS view may not carry `mode`
- * at all — the def door refuses it there by name (`AXIS_SHAPE`). So
- * `SessionViewState.views[].frame` arrives EMPTY and a declaration that is on
- * the wire cannot reach the drawing.
+ * ── THE WHOLE PATH, AND THE HISTORY OF ONE ASSERTION ───────────────────────
+ * For three releases it could NOT reach the drawing, and both halves were
+ * measured here: the SESSION served the declaration and the reader-side mapper
+ * then dropped it — `vizfootprint-ui` · `sessionView.ts` · `mapFrame` kept a
+ * channel only when it carried `mode: 'shared' | 'independent'`, and a
+ * LAYERLESS view may not carry `mode` at all, because the def door refuses it
+ * there by name (`AXIS_SHAPE`). So `SessionViewState.views[].frame` arrived
+ * EMPTY, the page read the declaration from the def it owns, and the second
+ * assertion below was pinned ON THAT EMPTINESS as a **TRIPWIRE**: the day the
+ * library fixed the mapper it would fail, and the failure would be the reminder
+ * to put the fold back on the fold.
  *
- * Meanwhile the page reads the declaration from the def it owns
- * (`web/src/workbench/charts.ts` · `zeroGuideOf`), exactly as it already does
- * for the declared `chartKind` the wire serves only for a layer.
- * **WHEN THE LIBRARY FIXES THE MAPPER, THE SECOND ASSERTION HERE FAILS** — and
- * that is why it is written: it is the reminder to put the fold back on the
- * fold.
+ * **IT FIRED, AND THIS IS THE FOLD BACK ON THE FOLD.** The mapper now keeps a
+ * mode-less entry that carries an axis key of its own, so the assertion pins
+ * what the reader really receives — and `web/src/protCells.tsx` reads the
+ * crosshair from THAT rather than from the def: `./workbench/charts.ts` ·
+ * `zeroGuideOf` takes the fold's own frame now and looks nothing up. The path
+ * is pinned in three steps in the order a fact travels: the def declares it,
+ * the session serves those bytes, the reader's fold carries the same bytes, and
+ * the page's fold turns them into the prop the chart takes.
  */
-describe('the crosshair this view declares reaches the wire, and the reader’s own mapper drops it', () => {
+describe('the crosshair this view declares reaches the wire, and the reader’s fold now carries it', () => {
   it('is served by the session, verbatim, as the words the def wrote', async () => {
     const { overview } = await overviewOf(DEF);
     const rama = (overview.views as readonly { viewId: string; frame?: unknown }[]).find((v) => v.viewId === RAMA_VIEW);
     expect(rama?.frame).toEqual({ x: { zeroGuide: true }, y: { zeroGuide: true } });
   });
 
-  it('and arrives EMPTY on the reader’s side, because a layerless axis entry carries no `mode` for the mapper to keep', async () => {
+  it('ARRIVES WHOLE on the reader’s side now that the mapper keeps a mode-less axis entry — the tripwire this assertion was', async () => {
+    const { overview, session } = await overviewOf(DEF);
+    const view = createSessionView(sessionSource(session), { as: 'user' });
+    await view.refresh();
+    const served = (overview.views as readonly { viewId: string; frame?: unknown }[]).find((v) => v.viewId === RAMA_VIEW)?.frame;
+    const folded = view.getState().views.find((v) => v.viewId === RAMA_VIEW)?.frame;
+    // byte for byte what the session served: nothing dropped, nothing invented
+    expect(folded).toEqual(served);
+    // and no OTHER view of this def declares a frame, so none of them gains one
+    for (const viewId of [STRUCTURE_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW]) {
+      expect(view.getState().views.find((v) => v.viewId === viewId)?.frame ?? {}, viewId).toEqual({});
+    }
+  });
+
+  it('and THAT is what the picture is drawn from — the page’s fold reads the record, not the def beside it', async () => {
     const { session } = await overviewOf(DEF);
     const view = createSessionView(sessionSource(session), { as: 'user' });
     await view.refresh();
-    expect(view.getState().views.find((v) => v.viewId === RAMA_VIEW)?.frame).toEqual({});
+    const frame = view.getState().views.find((v) => v.viewId === RAMA_VIEW)?.frame;
+    expect(zeroGuideOf(frame)).toEqual({ x: true, y: true });
+    // a fold that carries no frame draws no line rather than a guessed one
+    expect(zeroGuideOf(view.getState().views.find((v) => v.viewId === SURFACE_VIEW)?.frame)).toBeUndefined();
+    expect(zeroGuideOf(undefined)).toBeUndefined();
   });
 });

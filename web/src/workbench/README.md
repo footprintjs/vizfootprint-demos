@@ -195,6 +195,61 @@ What stays below the picture is the RECORD, and it stays: the stage's own number
 
 **The dependency is the whole risk and the order was not optional:** defect 1 first, verified in a browser for all six kinds, and only then the attribution off. Until the bar followed the focus the footer was the ONLY place a reader learned which stage a picture came from, and cutting it first would have put the fact nowhere — the same failure as two cuts each justified by the other place. Before cutting it, every fact in it was traced: the stage is on the stepper and at the lead of the card's note, and step 1's `no act, no commit` is in that note's account, in its quiet line and in the accessible name of its own stepper control (`steps.ts` · `focusLabelOf`). What a reader loses AT A GLANCE — a small pane labelling its own stage while another stage is focused — is named in `protDesk.tsx` · `NotHere`.
 
+### …and that right-hand slot now carries the thing the whole desk is for
+
+The footer's right half was empty from the moment the attribution left it, and it is where **what another pane's selection did to this picture** is read. It is a count, it is the same Mono register, and it costs a layout with no spare vertical space nothing at all. Which half clips has not changed and is still the law: the LEFT half never shortens, because the counts are the only surviving copy of themselves; the right one ellipsizes, and what it loses that way is the source's declared name, which is a press away in the note.
+
+## A PICTURE NARROWED BY A CLAUSE FROM ELSEWHERE SAYS SO — NAMES WHERE IT CAME FROM, AND COUNTS WHAT IT LOST
+
+> *"All the charts have to be connected — that's very critical. Still now I don't see [the] connection."*
+
+The author's most-repeated complaint of the project, said four times — and they were right about what they SAW while the machinery underneath was working the whole time. Measured: a pick on one bar takes the focused chart from **185 marks to 1 in 22 ms** and dims **180 of 181** in the backbone-angle pane, with nothing scrolled. The crossfilter works. What no pane ever did was **say that it had been narrowed by something the reader did somewhere else** — and **a connection nobody can see is the same as no connection.** Invisible is indistinguishable from absent.
+
+So every picture on this desk now says it, in one line, in the register the footers already use, readable with no gesture. **Four states, and the second one is the load-bearing one:**
+
+| state | the sentence in the focus slot | in a tile |
+|---|---|---|
+| **narrowed** — the clause reached it and cut it | `1 of 181 dots in force — narrowed by Backbone angles, residue by residue` | `1 of 181 dots in force — narrowed from another pane` |
+| **nothing-cut** — it reached it and cut NOTHING | `181 of 181 dots in force — the selection in How much of each residue the solvent can reach filtered nothing here` | `181 of 181 dots in force — filtered nothing here` |
+| **cannot be judged here** — the clause cannot be judged on these rows at all | `3 of 3 rows still drawn — the selection in Contacts across the interface, residue by residue cannot be judged here: these rows carry no "residue_key"` | `3 of 3 rows still drawn — the selection elsewhere cannot be judged here` |
+| **nothing selected** | no line at all | no line at all |
+
+**State 2 is the one that was silent, and silence there is the bug.** A pane that says nothing while a clause is in force reads as a pane that is not connected — which is the complaint, exactly. So a clause that filtered nothing says so, in the library's own words (`vizfootprint-ui` · `narrowedSaid`: *filtered nothing here*), quoted rather than re-worded, so one fact reads one way wherever it is read.
+
+**The pane the clause came FROM stays silent**, and that is not an omission: it is the source, it already shows its own selection, and the library's fold already addresses it (`RenderSelection.selfClauseId`). The source is the ONE pane with no line while a clause is live, and the browser test asserts exactly that.
+
+### Every part of every sentence is read off a field — and the counts are the marks the picture really drew
+
+| the part | where it is read |
+|---|---|
+| the marks in force | counted by the CELL, with the library's own predicate, off the very rows it handed its chart (`protCells.tsx` · the `structureInForce` / `dotsInForce` block) |
+| which predicate | whichever one that chart folds by: `keepPredicate` for the 3D paint and the run, `brightPredicate` for the scatter (it dims rather than drops), and for the bars the rows they are summed from |
+| the total at rest | the same fold with nothing applied (`barsAtRest`, `runAtRest`) |
+| the source's name | `SessionViewState.views[].label` through `DeskProjection.label` — the DECLARED name, never an address and never invented |
+| whether it could be judged here | the library's law, asked the library's way: does any row this pane holds CARRY the clause's column (`selection.ts` · `judgeable`) — and the SESSION's own word wins where it has one (`SelectionClauseView.narrowed`, off the overview's `narrowedFor`) |
+| why it could not | the session's `narrowed.reason`, else a DECLINED default edge's own sentence (`links.declined`, the map's `unreachableWords`), else the column the clause names |
+| whether anything is selected at all | `SessionViewState.selections` — the desk-wide fact, because a pane's own fold cannot tell *nothing is selected* from *a clause could not reach here*, and those are two different sentences |
+
+The fold is `protCells.tsx` · `narrowingOf` (the facts) and `charts.ts` · `narrowingSaid` (the words), and the split is the folder's own rule: **the cell is what knows how many marks it drew**, the rules layer says it in the page's voice. `tests/prot-connection.test.tsx` asserts all four states over a REAL session with every number folded from the committed entry's own rows, and `tests/prot-crossfilter.smoke.test.ts` does the half that matters most — in a real browser at 1280×800, it picks a bar and asserts **the number in each pane's sentence equals the marks that pane actually drew** (bright dots in the scatter, drawn marks in the run), then clears and asserts every line goes. That is what stops the page claiming a narrowing its picture does not show.
+
+### The cross-chain bars now narrow, and that is a library finding as much as a fix
+
+`VizBar` takes a `selection` and uses it for ONE thing: outlining the category its OWN clause picked. **It has no dim arm** — unlike `VizScatter`, which dims under everyone's brush but its own. So this pane sat unmoved through every pick in the desk's life, while the def declared the views crossfiltered and the page said so in a caption. The library's own law says whose job that is — the HOST owns all aggregation (a renderer declaring a transform is refused at bind) — so the host sums the rows in force, with `keepPredicate`, self clause excluded (`protCells.tsx` · `barRows`). A press on a bar still never collapses its own chart.
+
+**The finding:** a categorical chart with no selection-driven dim leaves a host two choices — re-aggregate, or show nothing — and *nothing* is what a library that offers no dim arm gets from a host that has not thought about it. It also makes an existing claim in this folder true rather than aspirational: `reachClause`'s note says *a crossfilter that cuts 185 marks to 12 makes the pitch 71px and the clause returns null*, which could not happen while the bars never narrowed.
+
+### And the 3D view is honest about it too — which is where the second finding is
+
+It is the one pane whose content is a canvas: it **recolours** under a clause (`molstarRenderer.ts` · `paintOf` paints `dropped` by `keepPredicate`) rather than dimming or dropping marks, and at rail size a recolour is invisible — part of why the connection could not be seen at all. In the rail this pane is words already, so **the words carry the same narrowing sentence**; promoted, it recolours as before and its footer carries the long form.
+
+**The finding, and this is its second consumer: a picture cannot be asked what it drew.** `BoundRenderer.update` answers `{ ok: true }` (or a typed gap) and nothing else, so a host cannot ask how many residues were repainted — the renderer writes a count into its own `role="status"` line and the host cannot read it back. The fold here is honest because it is the same predicate on the same rows, not because the renderer confirmed anything. A `RenderReport` on the way back out — marks drawn, marks dimmed, rows the renderer could not place — is the shape that would close it, and it would serve every host that wants to say what a third-party picture did.
+
+### Where the line does NOT go
+
+Not above the picture, not in a band, not in a panel, and not as a tooltip or a badge. The face law stands: **a title, a picture, one line of figures**, and the narrowing sentence is part of that one line — the footer's right half on a card, the figures' own line on a tile, after the counts. The instrument fits the window exactly and everything between the stepper and the charts is deliberately empty; a fifth band would have cost the pictures the height this packet is trying to make legible.
+
+**One thing it deliberately does not do: announce itself.** The sentence is plain text in a line a reader is already reading, not a live region — eight panes all announcing at once on every pick would be a storm, and the library's own `SelectionChips` row already says what is selected where. Named here rather than left to be discovered.
+
 ## A MARK A READER IS MEANT TO PRESS NEEDS A POINTER-SIZED TARGET
 
 The interaction grammar was declared, tested and unreachable. Measured: the cross-chain bar tile draws **185 bars**, the strip gives them a **922px** pane, `framePad` takes 70 of it, so a band is **4.6px** and a bar is **3.5px** — and `locator.click()` refused, reporting the target as not stable. Worse, and the sharper half: **167 of those 185 residues touch no other chain**, so their count is a real ZERO, and an SVG rect of zero height has no area to press at all.
@@ -221,14 +276,24 @@ The interaction grammar was declared, tested and unreachable. Measured: the cros
 
 `tests/prot-focus.smoke.test.ts` presses a bar **with a real pointer at the mark's own coordinates** and asserts the selection landed and the residue is named — the assertion the suite could not make — and prints the measurement the clause is folded from while it does it.
 
-## A DECLARATION THE RECORD CARRIES, AND A PROP IT DOES NOT
+## A DECLARATION THE RECORD CARRIES — AND THE ONE PROP STILL BESIDE IT
 
 The backbone-angle plot got the two things that make it a Ramachandran plot rather than a cloud of dots in a box, and **they are not the same kind of thing**, which is the point worth keeping:
 
-* **the crosshair is DECLARED.** `src/prot/def.ts` · `PROT_ENCODINGS` gives the rama entry `frame: { x: { zeroGuide: true }, y: { zeroGuide: true } }` — the axis arm of the shape, so no `mode` (the def door refuses it by name on a layerless view). `charts.ts` · `zeroGuideOf` reads that declaration and hands it over as `ChartDomain.zeroGuide`; the record carries the ask.
-* **the box is a PROP.** `protCells.tsx` · `TORSION_RANGE` is `[-180, 180]`, because φ and ψ span that BY DEFINITION and a residue at 107° drawn hard against the right edge reads as the edge of torsion space. The library's frame vocabulary is words (`domain: 'union'`, folded from the rows), so there is no way to declare a numeric domain — and **a prop is on no commit**. The shortfall is announced in `protDesk.tsx` · `NotHere` the way the structure file's missing version is, and the declaration replaces the prop the day the library can take one.
+* **the crosshair is DECLARED, and now READ OFF THE FOLD.** `src/prot/def.ts` · `PROT_ENCODINGS` gives the rama entry `frame: { x: { zeroGuide: true }, y: { zeroGuide: true } }` — the axis arm of the shape, so no `mode` (the def door refuses it by name on a layerless view). `charts.ts` · `zeroGuideOf` takes **the reader's own frame** (`SessionViewState.views[].frame`) and hands it over as `ChartDomain.zeroGuide`. The record carries the ask and the record is what the picture answers to.
+* **the box is still a PROP.** `protCells.tsx` · `TORSION_RANGE` is `[-180, 180]`, because φ and ψ span that BY DEFINITION and a residue at 107° drawn hard against the right edge reads as the edge of torsion space. **A prop is on no commit**, and the shortfall is announced in `protDesk.tsx` · `NotHere` the way the structure file's missing version is.
 
-**It was meant to be read off the FOLD and it cannot be**, which is this section's finding: the session serves the declaration verbatim (measured, on its own `overview()`), and the reader-side mapper drops it — `vizfootprint-ui` · `sessionView.ts` · `mapFrame` keeps a channel only when it carries `mode: 'shared' | 'independent'`, and a layerless axis entry may not carry `mode` at all. So `SessionViewState.views[].frame` arrives `{}` and this page reads the def it owns, exactly as `shapeOfView` already does for the declared `chartKind` the wire serves only for a layer. `tests/prot-def.test.ts` pins both halves — **and fails the day the mapper is fixed**, which is the reminder to put the fold back on the fold.
+### The tripwire fired, and this is what it was for
+
+For three releases the crosshair **could not** be read off the fold: the session served the declaration verbatim (measured, on its own `overview()`) and the reader-side mapper dropped it — `vizfootprint-ui` · `sessionView.ts` · `mapFrame` kept a channel only when it carried `mode: 'shared' | 'independent'`, and a layerless axis entry may not carry `mode` at all. So the frame arrived `{}`, this page read the def it owns, and `tests/prot-def.test.ts` pinned an assertion **on that emptiness** with a note saying it would fail the day the mapper was fixed.
+
+**It failed, exactly as written, and the fix is the fold.** The mapper now keeps a mode-less entry that carries an axis key of its own; the assertion pins what the reader really receives, byte for byte against what the session served; `zeroGuideOf` takes a frame instead of a view id and looks nothing up; and the page reads the declaration from the RECORD rather than from a file it happens to share with the session. **A tripwire is worth more than a comment** — this is the whole argument for writing one: the workaround came out on the day it became a workaround, and nobody had to remember.
+
+### And the numeric range can be declared now — deliberately NOT taken in this packet
+
+The library has grown `ChannelResolution.bounds?: [number, number]` (law 14) on the shared and layerless arms, *"a fact about the quantity, not about the rows"*, with the Ramachandran named as the figure that asked for it. That is exactly `TORSION_RANGE`'s shortfall and it should replace the prop — `bounds: [-180, 180]` beside each `zeroGuide`, the `domain` read off the fold, the caption's *there is still no way to declare it* sentence rewritten, and the omission dropped from `NotHere`.
+
+**It is not taken here, for one measured reason:** that key lives in the library's UNCOMMITTED working tree while a packet is still gating it, and **a def key the door does not know is refused at build** — declaring it against work that has not landed risks a page that does not render at all, on a desk somebody is watching. It is one packet, it touches five files and four suites, and it wants the library's commit first.
 
 ## NO PROSE UNDER A DRAWING, in any card, focused or tiled
 

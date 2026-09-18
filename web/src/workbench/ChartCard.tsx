@@ -110,12 +110,18 @@ export interface ChartCardProps {
    * The footer, in Mono: one line of figures, and a second clause at the right
    * edge for a host that has one.
    *
-   * THIS DESK PASSES `footRight: null` EVERYWHERE. It used to carry the owning
-   * stage, and that came off when the stepper's bar began following the focus —
-   * one owner per question (`./charts.ts`, the note where `ownerLine` was). The
-   * slot stays because this component is written to move into
-   * `vizfootprint-ui` and serve every desk, not because this page wants it
-   * back: a card's footer here is its counts and nothing else.
+   * THE RIGHT SLOT NOW CARRIES WHAT ANOTHER PANE'S SELECTION DID TO THIS
+   * PICTURE (`./charts.ts` · `narrowingSaid`, room `'focus'`) — a count, in the
+   * same register, on the line the counts already spend, and `null` when
+   * nothing is selected anywhere else. It used to carry the owning stage, and
+   * that came off when the stepper's bar began following the focus — one owner
+   * per question (`./charts.ts`, the note where `ownerLine` was).
+   *
+   * WHICH HALF CLIPS IS THE LAW, and it has not changed: the counts are the
+   * only surviving copy of themselves on this desk, so the LEFT half never
+   * shortens and the right one ellipsizes. What a narrowing clause loses that
+   * way is the source's declared name, whose long form is a press away in the
+   * card's own note.
    */
   readonly footLeft: string | null;
   readonly footRight: string | null;
@@ -275,8 +281,8 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
       )}
 
       {/*
-        THE FOOTER: COUNTS ON THE LEFT, THE OWNING STAGE ON THE RIGHT, both
-        Mono, ONE LINE, never wrapping.
+        THE FOOTER: COUNTS ON THE LEFT, WHAT ANOTHER PANE'S SELECTION DID TO
+        THIS PICTURE ON THE RIGHT, both Mono, ONE LINE, never wrapping.
         The counts are load-bearing and are the ONLY surviving copy of
         themselves: the counted-facts band was deleted on the grounds that each
         card carries its own, so a card that dropped them would lose them off
@@ -302,8 +308,12 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
             minWidth: 0,
           }}
         >
-          {footLeft === null ? null : <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{footLeft}</span>}
-          {footRight === null ? null : <span style={{ marginLeft: 'auto', flex: '0 0 auto' }}>{footRight}</span>}
+          {footLeft === null ? null : <span style={{ minWidth: 0, flex: '0 0 auto' }}>{footLeft}</span>}
+          {footRight === null ? null : (
+            <span data-narrowed="true" style={{ marginLeft: 'auto', minWidth: 0, flex: '0 1 auto', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {footRight}
+            </span>
+          )}
         </div>
       )}
 
@@ -365,6 +375,21 @@ export interface ChartTileProps {
    * the long form is in the card's own note where every long note here lives.
    */
   readonly reach?: string | null;
+  /**
+   * WHAT A SELECTION MADE IN ANOTHER PANE DID TO THIS ONE — the short form,
+   * folded by the business layer (`./charts.ts` · `narrowingSaid`, room
+   * `'tile'`), `null` when nothing is selected anywhere else.
+   *
+   * It rides the FIGURES' OWN LINE, right after the counts, because it IS a
+   * count and because this tile ships about two pixels above the floor at which
+   * its marks stop being a band — a line of its own would take the picture
+   * under it. The counts keep the space they need; this clause and the reach
+   * clause are what clip.
+   *
+   * A connection a reader cannot see is the same as no connection, which is why
+   * a clause that cut NOTHING says so here rather than staying silent.
+   */
+  readonly narrowed?: string | null;
   /** `true` lays the tile out for the bottom strip; a block for the right column otherwise. */
   readonly wide?: boolean;
   /** The picture. `null` for a step that has none — the three that will not run here — and then {@link ChartTileProps.said} is the whole body. */
@@ -401,7 +426,7 @@ export interface ChartTileProps {
  * worth drawing. The header row is the promote control, with the accessible
  * name; the picture below it belongs to the reader.
  */
-export function ChartTile({ id, label, said, promote, reach = null, wide = false, children }: ChartTileProps): JSX.Element {
+export function ChartTile({ id, label, said, promote, reach = null, narrowed = null, wide = false, children }: ChartTileProps): JSX.Element {
   return (
     <article
       data-chart={id}
@@ -450,9 +475,19 @@ export function ChartTile({ id, label, said, promote, reach = null, wide = false
       </button>
       {/* THE COUNT, in Mono — the only surviving copy of these numbers now that
           the counted-facts band is gone, and never a sentence. */}
-      {said === null && reach === null ? null : (
+      {said === null && reach === null && narrowed === null ? null : (
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontFamily: children === undefined ? 'var(--pw-font-sans)' : 'var(--pw-font-mono)', fontSize: children === undefined ? 10.5 : 9.5, lineHeight: 1.35, color: 'var(--pw-mid-2)', flex: '0 0 auto', minWidth: 0 }}>
           {said === null ? null : <span style={children === undefined ? { minWidth: 0 } : { minWidth: 0, flex: '0 0 auto', whiteSpace: 'nowrap' }}>{said}</span>}
+          {/*
+            WHAT ANOTHER PANE'S SELECTION DID TO THIS ONE — first of the two
+            clauses, and the one that keeps its room longest: it is the fact the
+            whole crossfilter is FOR, and the reach clause below it is about a
+            gesture rather than about the data. Same register as the counts it
+            follows, one line, never wrapping.
+          */}
+          {narrowed === null ? null : (
+            <span data-narrowed="true" style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9, color: 'var(--pw-mid-2)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{narrowed}</span>
+          )}
           {/*
             THE GESTURE FACT, ON THE FIGURES' OWN LINE so the picture keeps
             every pixel it has — this tile ships about two pixels above the

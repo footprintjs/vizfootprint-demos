@@ -77,7 +77,7 @@
  * byte-identical to before the parameter existed.
  */
 import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { VizBar, VizLine, VizScatter, VizTable, bindRenderer, keepPredicate, type BarDatum, type BoundRenderer, type ChartEmission, type ContractGap, type LinePoint, type RenderRow, type RenderSelection, type ScatterDatum } from 'vizfootprint-ui';
+import { VizBar, VizLine, VizScatter, VizTable, bindRenderer, brightPredicate, keepPredicate, type BarDatum, type BoundRenderer, type ChartEmission, type ContractGap, type DeclinedEdgeView, type LinePoint, type RenderRow, type RenderSelection, type ScatterDatum, type SelectionClauseView } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection } from 'vizfootprint-studio/desk';
 import { PAINT_COLOR, PAINT_MEANING, PAINT_WORDS, VALUE_PALETTE, molstarRenderer, type PaintWord } from './molstarRenderer.js';
 import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
@@ -87,7 +87,7 @@ import type { EntryNote } from '../../src/prot/entryNotes.js';
 import type { ProtRun } from '../../src/prot/orchestrator.js';
 import type { StructureArtifact, UnlandedRefusals } from '../../src/prot/session.js';
 import { emitIntent, type Row } from './derive.js';
-import { chainColorOf, zeroGuideOf } from './workbench/charts.js';
+import { chainColorOf, zeroGuideOf, type Narrowing } from './workbench/charts.js';
 import type { WorkbenchInk } from './workbench/tokens.js';
 
 export { STRUCTURE_VIEW, RAMA_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW };
@@ -354,6 +354,133 @@ export function surfaceRun(residues: readonly Row[], xField: string, yField: str
   return (numeric ? [...points].sort((a, b) => Number(a.x) - Number(b.x)) : points).map((p) => p.point);
 }
 
+// ── what a clause from ELSEWHERE did to a picture ───────────────────────────
+
+/**
+ * CAN THIS CLAUSE BE JUDGED ON THESE ROWS AT ALL? — asked the library's own
+ * way, and never re-worded into a rule of this page's.
+ *
+ * `vizfootprint-ui` · `selection.ts` · `judgeable` is the law: *a row that does
+ * not CARRY the clause's column is never dropped by it — a sentence about a
+ * column these rows do not have is not a claim about these rows.* So the
+ * question here is exactly the question the predicate beside it already
+ * answers: does any row this pane holds carry the column the clause names.
+ *
+ * The SESSION's own word wins where it has one (`SelectionClauseView.narrowed`,
+ * filled from the overview's `narrowedFor`): it holds the whole table's columns
+ * at the cursor, while a render tier holds a window of them.
+ */
+function judgeableHere(clause: SelectionClauseView, rows: readonly RenderRow[]): boolean {
+  if (clause.narrowed !== undefined) return false;
+  const columns = clause.fields ?? [clause.field];
+  return columns.every((column) => rows.some((row) => column in row));
+}
+
+/**
+ * The clauses that REACH this pane from somewhere else — the same set the
+ * charts fold by (`brightPredicate`: filter or highlight, never this view's
+ * own), so a sentence cannot count a clause the picture does not.
+ *
+ * NAMED, NOT FIXED, and out of contract today: an edge whose response is
+ * `mirror` or `navigate` outlines a value or moves a viewport rather than
+ * narrowing anything, and it is left out here — so a pane reached ONLY by one
+ * reports the `unreachable` state, whose sentence says *cannot be judged here*
+ * when the honest words would be *reached this picture and does not filter it*.
+ * This def declares no such edge (`src/prot/def.ts` · `protLinks` is empty and
+ * the crossfilter default mints `filter` everywhere), and the day one is
+ * declared or a reader edits an edge's response, the fold owes that case a
+ * verdict of its own rather than a fourth reading of this one.
+ */
+function reachingClauses(selection: RenderSelection): readonly (readonly [string, SelectionClauseView])[] {
+  return [...selection.clauses].filter(([viewId, clause]) => viewId !== selection.selfClauseId && (clause.response === undefined || clause.response === 'filter' || clause.response === 'highlight'));
+}
+
+/**
+ * WHY A CLAUSE COULD NOT BE JUDGED HERE — the LIBRARY's sentence wherever the
+ * library has one, and this page's own only where it has none.
+ *
+ *   1. the clause's own `narrowed.reason` — the session's `narrowedFor`, the
+ *      sentence the Sheet, the chip and `why()` all quote (`unjudgeableWords`);
+ *   2. a DECLINED default edge into this address — the map's own
+ *      `unreachableWords`, recorded rather than silent
+ *      (`SessionViewState.links.declined`), which is how a pane learns that a
+ *      clause never even set out for it;
+ *   3. failing both, the column: the clause names one, these rows do not carry
+ *      it, and that is the whole fact.
+ */
+function reasonOf(reaching: readonly (readonly [string, SelectionClauseView])[], sources: readonly string[], here: string | null, declined: readonly DeclinedEdgeView[]): string | null {
+  const said = reaching.find(([, clause]) => clause.narrowed !== undefined)?.[1].narrowed?.reason;
+  if (said !== undefined) return said;
+  const edge = here === null ? undefined : declined.find((d) => d.target === here && sources.includes(d.source));
+  if (edge !== undefined) return edge.reason;
+  const named = reaching[0]?.[1];
+  return named === undefined ? null : `these rows carry no "${named.field}"`;
+}
+
+/**
+ * Everything the fold below is asked with — each field either the session's own
+ * answer or a count off the rows this pane hands its chart.
+ *
+ * EXPORTED for the same reason {@link ramaDots} and {@link interfaceBars} are:
+ * the fold is the interesting half and a test asks it directly, with clauses
+ * this desk's own def cannot produce (a session that says `narrowedFor`, a
+ * declined edge, a `highlight` response). What the cells do with it is asserted
+ * over the real session beside those.
+ */
+export interface NarrowingBasis {
+  /** This pane's own fold at its own address, as the library made it — so the self clause is already addressable. */
+  readonly selection: RenderSelection;
+  /** Every view holding a live clause right now, this one included: what tells *nothing is selected* from *it could not reach here*. */
+  readonly live: readonly string[];
+  /** The rows this pane's marks stand on — the very rows it handed its chart. */
+  readonly rows: readonly RenderRow[];
+  /** The marks at rest, and the marks in force: counted by the cell, with the library's predicates, off those same rows. */
+  readonly total: number;
+  readonly inForce: number;
+  /** What this picture's marks are, in its own word. */
+  readonly unit: string;
+  /** An address's DECLARED name (`DeskProjection.label`). */
+  readonly label: (viewId: string) => string;
+  /** The default edges the reach law declined, each with the map's own reason. */
+  readonly declined: readonly DeclinedEdgeView[];
+}
+
+/**
+ * WHICH OF THE FOUR STATES THIS PICTURE IS IN — the fold, and it lives here
+ * rather than in the rules layer for the reason every count in this file does:
+ * **the cell is what knows how many marks it drew.** The rules layer turns the
+ * facts into the sentence (`./workbench/charts.ts` · `narrowingSaid`); nothing
+ * here writes a word of it.
+ *
+ * `null` for the pane the clause came FROM — it is the source, it already shows
+ * its own selection, and a source telling itself it was narrowed would be the
+ * one sentence on this desk that is about nothing. `null` again when nothing is
+ * selected anywhere: the resting page stays clean.
+ */
+export function narrowingOf(basis: NarrowingBasis): Narrowing | null {
+  const { selection, live, rows, total, inForce, unit, label, declined } = basis;
+  const self = selection.selfClauseId;
+  const elsewhere = live.filter((viewId) => viewId !== self);
+  if (elsewhere.length === 0) return null;
+  const reaching = reachingClauses(selection);
+  const judged = reaching.filter(([, clause]) => judgeableHere(clause, rows));
+  /*
+    NOTHING JUDGEABLE REACHED IT — and the two ways that happens are one state
+    to a reader, because the consequence is the same: this picture is unchanged
+    and it is NOT because the reader's clause kept everything. A clause arrived
+    and its column is not on these rows; or no clause arrived at all while one
+    is live elsewhere. Silence in either case is the failure this whole packet
+    is about, so both say so, with whatever reason the record carries.
+  */
+  if (judged.length === 0) {
+    const sources = reaching.length > 0 ? reaching.map(([viewId]) => viewId) : elsewhere;
+    const reason = reasonOf(reaching, sources, self, declined);
+    return { kind: 'unreachable', inForce: total, total, unit, from: sources.map(label), ...(reason === null ? {} : { reason }) };
+  }
+  const from = judged.map(([viewId]) => label(viewId));
+  return inForce >= total ? { kind: 'nothing-cut', inForce: total, total, unit, from } : { kind: 'narrowed', inForce, total, unit, from };
+}
+
 /**
  * ONE CELL, PLUS THE LINE IN THE CORNER OF ITS CARD.
  *
@@ -377,6 +504,16 @@ export interface ProtCell extends DeskChart {
    * chart, never a count the page takes again.
    */
   readonly marks?: number;
+  /**
+   * WHAT A SELECTION MADE IN ANOTHER PANE DID TO THIS PICTURE — the facts, for
+   * the rules layer to say in words (`./workbench/charts.ts` · `narrowingSaid`).
+   *
+   * `null` when nothing is selected anywhere else, when this pane is the source
+   * of the only clause, and for a picture with nothing drawn to narrow — the
+   * same law {@link ProtCell.foot} keeps, because a claim about marks that are
+   * not there is not a fact about anything.
+   */
+  readonly narrowing: Narrowing | null;
 }
 
 /**
@@ -476,12 +613,15 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
 
   const sel = [state.selections, state.links, state.cleared] as const;
 
-  /** THE CROSSHAIR THIS VIEW DECLARES — `./workbench/charts.ts` · `zeroGuideOf` carries why it is read off the def and not off the fold. */
-  const ramaZeroGuide = useMemo(() => zeroGuideOf(RAMA_VIEW), []);
+  /**
+   * THE CROSSHAIR THIS VIEW DECLARES — read off the FOLD, which is where it
+   * belonged all along (`./workbench/charts.ts` · `zeroGuideOf` carries the
+   * history: the reader-side mapper used to drop a layerless view's frame, the
+   * page read its own def meanwhile, and a test was left as the tripwire that
+   * fired the day the library fixed it).
+   */
+  const ramaZeroGuide = useMemo(() => zeroGuideOf(state.views.find((v) => v.viewId === RAMA_VIEW)?.frame), [state.views]);
   const dots = useMemo(() => ramaDots(residues, phiField, psiField), [residues, phiField, psiField]);
-  const bars = useMemo(() => interfaceBars(residues, barCategory, barValue), [residues, barCategory, barValue]);
-  /** How many residues touch ANOTHER chain at all — counted from the bars on screen, so the caption cannot outrun the picture. */
-  const interfaceTouching = useMemo(() => bars.filter((b) => b.count > 0).length, [bars]);
   /**
    * HAS THE STAGE LANDED? — asked of the WHOLE table, once per act-fed chart,
    * and asked separately from "are there marks to draw".
@@ -530,6 +670,17 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
     [...sel],
   );
+  /**
+   * THE FOLD AT THE RECEIPT'S ADDRESS — asked even though no clause can narrow
+   * these rows, and asked for exactly that reason: what reaches this address is
+   * how the pane learns it cannot be judged here, which is a sentence it owes a
+   * reader rather than a silence (`narrowingOf`, the `unreachable` state).
+   */
+  const pairsSelection = useMemo(
+    () => selFor(PAIRS_VIEW),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+    [...sel],
+  );
 
   /**
    * The run's points, NARROWED BY EVERY OTHER VIEW'S CLAUSE — the one cell on
@@ -546,8 +697,85 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
     [residues, runX, runY, runSeries, surfaceSelection],
   );
 
+  /**
+   * THE BARS, OVER THE ROWS IN FORCE — the same treatment the run above gets,
+   * and for a sharper version of the same reason.
+   *
+   * `VizBar` takes a `selection` and uses it for ONE thing: outlining the
+   * category its OWN clause picked (`vizfootprint-ui` · `VizBar`, `selectedSet`).
+   * It has no dim arm — unlike `VizScatter`, which dims under everyone's brush
+   * but its own. So a bar chart whose host hands it the whole table is a bar
+   * chart that CANNOT show a clause from anywhere else, and this pane sat there
+   * unmoved through every pick while the desk claimed the views were
+   * crossfiltered. The library's own law says whose job that is: the HOST owns
+   * all aggregation (`RendererHello.transforms` must be empty), so the host is
+   * what must sum the rows in force. It does now, with `keepPredicate` — the
+   * library's own fold, self clause excluded, so a press on a bar never
+   * collapses its own chart.
+   *
+   * (A FINDING, reported: a bar chart with no selection-driven dim leaves a
+   * host two choices, re-aggregate or show nothing, and nothing is what a
+   * library that offers no dim arm gets by default.)
+   */
+  const barRows = useMemo(
+    () => residues.filter(keepPredicate(interfaceSelection) as (row: Row) => boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- interfaceSelection is memoised on the same slices
+    [residues, interfaceSelection],
+  );
+  const bars = useMemo(() => interfaceBars(barRows, barCategory, barValue), [barRows, barCategory, barValue]);
+  /** How many bars this picture has AT REST — the total the narrowing sentence counts out of, folded off the same rows by the same function. */
+  const barsAtRest = useMemo(() => interfaceBars(residues, barCategory, barValue).length, [residues, barCategory, barValue]);
+  /** How many residues touch ANOTHER chain at all — counted from the bars on screen, so the caption cannot outrun the picture. */
+  const interfaceTouching = useMemo(() => bars.filter((b) => b.count > 0).length, [bars]);
+
   /** How many residues the file gives no angle for: the absence, counted from the rows the desk holds. */
   const noAngle = useMemo(() => residues.filter((r) => !placed(r[phiField]) || !placed(r[psiField])).length, [residues, phiField, psiField]);
+
+  /*
+    ── HOW MANY MARKS EACH PICTURE HAS IN FORCE ─────────────────────────────
+    Counted here, with the LIBRARY'S OWN predicate, off the very rows each
+    picture is handed — so the sentence a pane says cannot claim a narrowing
+    the picture does not draw. Which predicate is not a choice either: it is
+    whichever one the chart itself folds by.
+
+      the 3D view   `keepPredicate` — what `./molstarRenderer.ts` · `paintOf`
+                    paints `dropped` by, one residue at a time.
+      the scatter   `brightPredicate` — `VizScatter` dims under everyone's
+                    brush but its own, and a datum with no row is never dimmed
+                    (*no evidence, no dimming*), so the count follows that too.
+      the bars      already narrowed above, so the marks ARE the marks in force.
+      the run       already narrowed, so the total is the one thing left to
+                    fold: the same function over the rows with nothing applied.
+
+    And the 3D view is the one pane whose count cannot be READ BACK from what
+    it drew — `BoundRenderer.update` answers `{ ok: true }` and nothing else, so
+    a host cannot ask a picture what it painted (a FINDING, and this is its
+    second consumer: the first was the status line the renderer writes for
+    itself). The fold is honest because it is the same predicate on the same
+    rows, not because the renderer confirmed it.
+  */
+  const structureInForce = useMemo(() => {
+    const keep = keepPredicate(structureSelection);
+    return structureRows.filter((row) => keep(row)).length;
+  }, [structureRows, structureSelection]);
+  const dotsInForce = useMemo(() => {
+    const bright = brightPredicate(ramaSelection);
+    return dots.filter((d) => (d.row === undefined ? true : bright(d.row))).length;
+  }, [dots, ramaSelection]);
+  const runAtRest = useMemo(() => surfaceRun(residues, runX, runY, runSeries).length, [residues, runX, runY, runSeries]);
+
+  /**
+   * WHICH VIEWS HOLD A LIVE CLAUSE RIGHT NOW — the desk-wide fact, and the one
+   * thing a pane's own fold cannot tell it: a pane no clause reached sees an
+   * empty map whether nothing is selected or a clause could not get there, and
+   * those are two different sentences (`narrowingOf`).
+   */
+  const live = useMemo(() => state.selections.filter((s) => s.value !== null).map((s) => s.viewId), [state.selections]);
+  /** The default edges the reach law DECLINED, with the map's own reason — absent on a graph that declined none. */
+  const declined = state.links?.declined ?? [];
+  /** One pane's narrowing, asked the same way for all five — the cell hands its own counts and its own word for a mark. */
+  const narrowingAt = (selection: RenderSelection, rows: readonly RenderRow[], total: number, inForce: number, unit: string): Narrowing | null =>
+    narrowingOf({ selection, live, rows, total, inForce, unit, label: desk.label, declined });
 
   const emit = (viewId: string, verb: string) => (e: ChartEmission) => void view.emit(viewId, e, emitIntent(verb, e));
   const reencode = (v: string, c: string, f: string): void => void view.reencode(v, c, f);
@@ -580,6 +808,14 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
       weight: 5,
       // the file's whole picture, counted — the parse's own numbers
       foot: `${count(counts.residues)} residues · ${count(counts.chains.length)} ${counts.chains.length === 1 ? 'chain' : 'chains'} drawn`,
+      /*
+        AND WHAT ANOTHER PANE'S SELECTION DID TO IT. This pane RECOLOURS under a
+        clause rather than dropping or dimming marks, which at rail size is
+        invisible — part of why the connection could not be seen at all. The
+        count is the residues the paint keeps, folded by the predicate the paint
+        itself uses.
+      */
+      narrowing: narrowingAt(structureSelection, structureRows, structureRows.length, structureInForce, 'residues'),
       caption: (
         <>
           {[
@@ -620,6 +856,9 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
       id: RAMA_VIEW,
       weight: 4,
       foot: `${count(dots.length)} of ${count(counts.residues)} residues plotted${noAngle === 0 ? '' : ` · ${count(noAngle)} with no angle`}`,
+      // the DIMMED half, counted: this chart keeps every dot and dims the ones
+      // a clause from elsewhere drops, so its in-force count is the bright one
+      narrowing: dots.length === 0 ? null : narrowingAt(ramaSelection, structureRows, dots.length, dotsInForce, 'dots'),
       caption: (
         <>
           {[
@@ -655,9 +894,9 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
             THE REAL SQUARE, AND THE DECLARED CROSSHAIR — the two halves of what
             makes this a Ramachandran plot rather than a cloud of dots in a box.
             The extent is a fact about the measurement ({@link TORSION_RANGE},
-            which carries why it is a prop); the guide is read back off the
-            session's own copy of the declaration (`./workbench/charts.ts` ·
-            `zeroGuideOf`), never typed here.
+            which carries why it is STILL a prop); the guide comes off the
+            RECORD — the reader's own fold of the declaration, through
+            `./workbench/charts.ts` · `zeroGuideOf` — and is never typed here.
           */
           domain={{ x: TORSION_RANGE, y: TORSION_RANGE, ...(ramaZeroGuide === undefined ? {} : { zeroGuide: ramaZeroGuide }) }}
           // THE HONESTY FLOOR: marks at every size, chrome only where it fits
@@ -673,6 +912,9 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
       id: INTERFACE_VIEW,
       weight: 4,
       foot: noInterface !== null || !interfaceLanded ? null : `${count(bars.length)} bars · ${count(interfaceTouching)} touch another chain`,
+      // the bars ARE the rows in force (see `barRows`), so this pane's sentence
+      // counts the marks it drew against the marks it has at rest
+      narrowing: noInterface !== null || !interfaceLanded ? null : narrowingAt(interfaceSelection, structureRows, barsAtRest, bars.length, 'bars'),
       // HOW MANY MARKS STAND IN THE BAND — what the page folds the reach of a
       // press from ({@link ProtCell.marks}). It is this cell's own count of
       // what it handed `VizBar`, so a crossfilter that narrows the rows narrows
@@ -765,6 +1007,9 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
       id: SURFACE_VIEW,
       weight: 4,
       foot: !surfaceLanded ? null : `${count(runPoints.length)} residues plotted${run?.surface?.counts === undefined ? '' : ` · ${count(run.surface.counts.buried)} at exactly 0 Å²`}`,
+      // this pane DROPS the marks a clause excludes (the line takes no
+      // selection), so the points drawn are the points in force
+      narrowing: !surfaceLanded ? null : narrowingAt(surfaceSelection, structureRows, runAtRest, runPoints.length, 'residues'),
       caption: (
         <>
           {[
@@ -825,6 +1070,14 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
       id: PAIRS_VIEW,
       weight: 3,
       foot: pairRows.length === 0 ? null : `${count(pairRows.length)} rows${run?.pairs?.counts === undefined ? '' : ` · ${count(run.pairs.counts.crossing)} cross-chain`}`,
+      /*
+        THE ONE PANE NO CLAUSE CAN NARROW, SAYING SO. These rows are not in the
+        data space at all (the note below says why), so a clause that arrives
+        here names a column they do not carry — and a pane that stayed silent
+        about that would look unaffected, which is indistinguishable from
+        looking unconnected. The state and its reason are folded, never typed.
+      */
+      narrowing: pairRows.length === 0 ? null : narrowingAt(pairsSelection, pairRows as readonly RenderRow[], pairRows.length, pairRows.length, 'rows'),
       caption: (
         <>
           {[

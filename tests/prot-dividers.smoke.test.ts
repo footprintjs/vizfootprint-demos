@@ -313,8 +313,25 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
     const before = await measure(page);
     const bars = page.locator(`[data-chart="${INTERFACE_VIEW}"] rect.vzf-barrect`);
     expect(await bars.count()).toBeGreaterThan(100);
+    /*
+      THE PRESS IS ON THE LIBRARY'S OWN POINTER TARGET — one transparent
+      full-height rect per bar over its slot column (`vizfootprint-ui` ·
+      `VizBar`, the WCAG 2.2 AA floor or the slot when the slot is narrower),
+      which is the affordance this desk reported as missing and the thing a
+      reader's pointer really lands on. Same handlers, same clause, same
+      accessible name on the bar underneath.
+
+      Pressing the DRAWN bar lands nothing any more, and the reason is a
+      FINDING rather than a workaround: the same library packet draws its
+      crowded-marks note as an SVG `<text>` over the plot with no
+      `pointer-events: none`, so `elementFromPoint` at a bar's own centre
+      answers `text.vzf-crowded-note` and the press is swallowed
+      (`tests/prot-crossfilter.smoke.test.ts` carries the measurement).
+    */
+    const targets = page.locator(`[data-chart="${INTERFACE_VIEW}"] rect.vzf-mark-hit`);
+    expect(await targets.count()).toBe(await bars.count());
     const started = Date.now();
-    await bars.nth(40).click({ force: true });
+    await targets.nth(40).click({ force: true });
     await page.waitForFunction((selector) => document.querySelectorAll(selector).length < 100, `[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 15_000 });
     const narrowed = await measure(page);
     const dimmed = await page.evaluate((id) => document.querySelectorAll(`[data-chart="${id}"] .vzf-dim`).length, RAMA_VIEW);

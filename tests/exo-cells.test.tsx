@@ -367,12 +367,24 @@ describe('the three cells over the committed slice', () => {
     const deskWith = (s: SelectionView): DeskProjection => ({ ...QUIET, state: { ...QUIET.state, selections: [s] }, selFor: (self: string | null) => selectionForView([s], self, 'intersect', pointInto(self ?? ''), []) }) as unknown as DeskProjection;
     const barsOf = (desk: DeskProjection): readonly { readonly category: string; readonly count: number }[] =>
       (cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 }) as React.ReactElement<{ readonly data: readonly { readonly category: string; readonly count: number }[] }>).props.data;
-    const rectsOf = (desk: DeskProjection): number => count(renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 })}</>), 'rect');
+    /*
+      THE MARK RECTS, BY THEIR OWN CLASS — and not every `<rect>` in the
+      picture, which is what this counted until the library gave each pressable
+      bar a TRANSPARENT POINTER TARGET of its own (`vizfootprint-ui` · `VizBar`:
+      one full-height rect per bar over its slot column, the WCAG 2.2 AA floor
+      or the slot when the slot is narrower). So a bar is now TWO rects — the
+      mark and its target — and *every bar is one rect* stopped being true.
+      Counting `vzf-barrect` counts the MARKS, which is what the arithmetic
+      below is about, and it stays true whichever affordances the library adds
+      around them.
+    */
+    const rectsOf = (desk: DeskProjection): number =>
+      (renderToStaticMarkup(<>{cellsOf(data, desk).find((c) => c.id === BY_YEAR_VIEW)!.render({ width: 800, height: 400 })}</>).match(/vzf-barrect/g) ?? []).length;
 
     // WITH the key: ONE bar, the one reference's year, one reference tall — hand-counted above and derived here
     expect(barsOf(deskWith(TRAVELLED))).toEqual([{ category: '2021', count: 1 }]);
     expect(barsOf(deskWith(TRAVELLED))).toEqual(cited.map((r) => ({ category: String(r['pub_year']), count: 1 })));
-    // …and the picture agrees: every bar is one `rect`, so the rects drop by (all the years − 1)
+    // …and the picture agrees: every bar is one MARK rect, so the marks drop by (all the years − 1)
     const quiet = barsOf(QUIET);
     expect(quiet.length).toBeGreaterThan(1);
     expect(rectsOf(deskWith(TRAVELLED))).toBe(rectsOf(QUIET) - (quiet.length - 1));
