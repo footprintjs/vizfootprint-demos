@@ -91,6 +91,102 @@ export interface LegendChip {
   readonly color: string;
 }
 
+/**
+ * THE HANDLE THAT MOVES A PANE — one prop bundle, shared by the focus card and
+ * every rail tile so the gesture cannot be wired two ways.
+ *
+ * ── WHAT REACHES THE RECORD AND WHAT DOES NOT ──────────────────────────────
+ * A SWAP is an act: a reader who rearranged their desk would expect to find it
+ * again tomorrow, and it lands one commit that travels with the cursor. What is
+ * MID-GESTURE — which pane is picked up, what the pointer is over — is a
+ * REPORT: it is transient, it reaches no commit and nothing computes from it,
+ * so it rides `held` / `target` as plain props and dies with the gesture.
+ *
+ * ── AND IT IS REACHABLE WITHOUT A POINTER ──────────────────────────────────
+ * The handle is a BUTTON, so `Tab` reaches it and `Enter` or `Space` presses
+ * it: press once to pick a pane up, press another pane's handle to swap the
+ * two, press the held one again (or `Escape`) to put it back. This desk has
+ * already shipped a drag handle that was ten pixels by zero while its keyboard
+ * path worked perfectly (`./Chrome.tsx` · `RegionDivider`), and a
+ * pointer-only arrangement is an arrangement some readers cannot make.
+ * `onGrab` is the POINTER half laid over the same act — the composition
+ * watches the pointer and lands exactly the same swap on release.
+ */
+export interface ArrangeHandle {
+  /** What the handle is called RIGHT NOW: pick this pane up, put it back, or the swap pressing it would land. */
+  readonly label: string;
+  /** `true` while THIS pane is the one picked up — a report, never a commit. */
+  readonly held: boolean;
+  /** `true` while ANOTHER pane is held, so pressing here lands the swap. */
+  readonly target: boolean;
+  /** Pick up, drop, or put back — whichever this handle means right now. The one door the keyboard and the mouse share. */
+  onPress(): void;
+  /** A pointer went down on the handle: the composition takes the drag from here and lands the same act on release. */
+  onGrab(at: { readonly x: number; readonly y: number }): void;
+}
+
+/**
+ * ONE PANE'S HANDLE, drawn — the ⠿ a reader takes hold of.
+ *
+ * `prefers-reduced-motion` is honoured by having nothing to honour: the handle
+ * lights, it never slides, and the panes themselves are swapped by the grid in
+ * one paint rather than animated between slots. A movement a reader did not ask
+ * for is the one thing an instrument cannot afford, and the cheapest way to
+ * respect the setting is to draw no motion in the first place.
+ */
+export function ArrangeGrip({ arrange }: { readonly arrange: ArrangeHandle }): JSX.Element {
+  return (
+    <button
+      type="button"
+      data-arrange={arrange.held ? 'held' : arrange.target ? 'target' : 'idle'}
+      aria-label={arrange.label}
+      aria-pressed={arrange.held}
+      onPointerDown={(e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        arrange.onGrab({ x: e.clientX, y: e.clientY });
+      }}
+      onClick={arrange.onPress}
+      style={{
+        font: 'inherit',
+        fontFamily: 'var(--pw-font-mono)',
+        fontSize: 11,
+        lineHeight: 1,
+        cursor: 'grab',
+        touchAction: 'none',
+        flex: '0 0 auto',
+        /*
+          A POINTER-SIZED TARGET THAT COSTS THE PICTURE NOTHING — and both
+          halves of that were measured.
+
+          24px is WCAG 2.2's pointer target, and this desk has already been
+          caught shipping a drag handle that was ten pixels by zero. But a
+          24px box in a tile's 13px header row grew the tile's own chrome by a
+          pixel, and the strip's floor is folded from that chrome: at the
+          divider's stop the picture came back 101px against a 102px mark
+          floor, which is the honesty floor broken by a control. So the box is
+          full size and the ROW is told to ignore its height — the overflow
+          rides the tile's own padding, which is exactly the space a handle
+          beside a heading should use.
+        */
+        width: 24,
+        height: 24,
+        margin: '-6px 0',
+        alignSelf: 'center',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+        borderRadius: 4,
+        border: `1px solid ${arrange.held || arrange.target ? 'var(--pw-accent-open-edge)' : 'transparent'}`,
+        background: arrange.held || arrange.target ? 'var(--pw-accent-open-bg)' : 'none',
+        color: arrange.held || arrange.target ? 'var(--pw-accent)' : 'var(--pw-soft-2)',
+      }}
+    >
+      <span aria-hidden>⠿</span>
+    </button>
+  );
+}
+
 export interface ChartCardProps {
   /** The cell's address — stamped as `data-chart`, exactly as the packaged cockpit's own cell does. */
   readonly id: string;
@@ -158,11 +254,17 @@ export interface ChartCardProps {
    * has to get right (`web/src/protDesk.tsx` · the zone-1 grid).
    */
   readonly height: number | 'fill';
+  /**
+   * THE HANDLE THAT MOVES THIS PANE ({@link ArrangeHandle}) — absent on a card
+   * a host wires no arrangement for, and then no handle is drawn rather than a
+   * dead one.
+   */
+  readonly arrange?: ArrangeHandle | null;
   readonly children: ReactNode;
 }
 
 /** The card. See the file header for the one visible line and the law about the note. */
-export function ChartCard({ id, label, focused, howToRead, legend, footLeft, footRight, note, noteLabel, noteAria, clear, stage = null, cursorElsewhere = null, height, children }: ChartCardProps): JSX.Element {
+export function ChartCard({ id, label, focused, howToRead, legend, footLeft, footRight, note, noteLabel, noteAria, clear, stage = null, cursorElsewhere = null, height, arrange = null, children }: ChartCardProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const fills = height === 'fill';
   /*
@@ -208,7 +310,27 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
             *a scientist reading a Ramachandran plot does not care about stage 1
             or commits.* Neither is deleted; the note below renders both.
           */}
-          <h2 style={{ margin: 0, fontSize: focused ? 16 : 13.5, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--pw-ink)' }}>{label}</h2>
+          {/*
+            AND WHEN IT IS THE FOCUSED ONE, IT SAYS SO — the author's first
+            request, and the desk derived the fact and drew nothing about it.
+
+            The paint alone did not carry it: heavier glass and a deeper shadow
+            are the difference between a hero and a tile at a GLANCE, and a
+            reader who has just pressed a stepper column is asking *which pane
+            answered*. So the word rides beside the name, in the mono register
+            this desk keeps for a fact about a pane, in the accent the stepper's
+            own current-step bar uses — one vocabulary for *you are here*.
+            It is PROPS-ONLY, like everything else in this file, so it can move
+            into the library's own cockpit the day that cockpit wants it.
+          */}
+          <h2 style={{ margin: 0, fontSize: focused ? 16 : 13.5, fontWeight: 600, letterSpacing: '-0.005em', color: 'var(--pw-ink)', display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+            {!focused ? null : (
+              <span data-focus-mark="true" style={{ flex: '0 0 auto', fontFamily: 'var(--pw-font-mono)', fontSize: 9.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--pw-accent)' }}>
+                in focus
+              </span>
+            )}
+          </h2>
         </div>
         <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           {legend.map((chip) => (
@@ -217,6 +339,7 @@ export function ChartCard({ id, label, focused, howToRead, legend, footLeft, foo
               {chip.name}
             </span>
           ))}
+          {arrange === null ? null : <ArrangeGrip arrange={arrange} />}
           {clear === null ? null : (
             <GlassButton small label={clear.label} onPress={clear.onPress}>
               ✕ clear
@@ -392,6 +515,18 @@ export interface ChartTileProps {
   readonly narrowed?: string | null;
   /** `true` lays the tile out for the bottom strip; a block for the right column otherwise. */
   readonly wide?: boolean;
+  /**
+   * THE HANDLE THAT MOVES THIS PANE ({@link ArrangeHandle}) — absent on a tile
+   * a host wires no arrangement for, and then no handle is drawn rather than a
+   * dead one.
+   *
+   * It sits at the END of the header row, after the promote control, because
+   * the two are different verbs about the same pane: `⤢` brings it INTO the
+   * focus (which the cursor owns) and `⠿` exchanges it with another pane
+   * (which the reader owns and the record keeps). Two controls, two owners, and
+   * the accessible names say which is which.
+   */
+  readonly arrange?: ArrangeHandle | null;
   /** The picture. `null` for a step that has none — the three that will not run here — and then {@link ChartTileProps.said} is the whole body. */
   readonly children?: ReactNode;
 }
@@ -426,11 +561,12 @@ export interface ChartTileProps {
  * worth drawing. The header row is the promote control, with the accessible
  * name; the picture below it belongs to the reader.
  */
-export function ChartTile({ id, label, said, promote, reach = null, narrowed = null, wide = false, children }: ChartTileProps): JSX.Element {
+export function ChartTile({ id, label, said, promote, reach = null, narrowed = null, wide = false, arrange = null, children }: ChartTileProps): JSX.Element {
   return (
     <article
       data-chart={id}
       data-tile="true"
+      data-arrange-target={arrange !== null && arrange.target ? 'true' : undefined}
       aria-label={label}
       style={{
         border: '1px solid var(--pw-edge-card)',
@@ -448,6 +584,7 @@ export function ChartTile({ id, label, said, promote, reach = null, narrowed = n
         minWidth: 0,
       }}
     >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, width: '100%', minWidth: 0, flex: '0 0 auto' }}>
       <button
         type="button"
         onClick={promote.onPress}
@@ -463,9 +600,17 @@ export function ChartTile({ id, label, said, promote, reach = null, narrowed = n
           display: 'flex',
           alignItems: 'baseline',
           gap: 6,
-          width: '100%',
+          // `flex: 1 1 0` RATHER THAN `width: 100%`, and the difference was a
+          // real defect: the header is a flex ROW now (the promote control and
+          // the arrangement handle are two different verbs and a button may not
+          // contain a button), so a child asking for the full width pushed the
+          // handle past the tile — and the column, which is `overflow: hidden`
+          // and therefore still scrollable, scrolled 12px to reveal the handle
+          // the moment a reader focused it. Every pane in that column then read
+          // 12px to the left of where it had been, which is the swap law broken
+          // by a scroll nobody asked for.
+          flex: '1 1 0',
           minWidth: 0,
-          flex: '0 0 auto',
         }}
       >
         <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pw-ink)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
@@ -473,6 +618,12 @@ export function ChartTile({ id, label, said, promote, reach = null, narrowed = n
           ⤢
         </span>
       </button>
+      {/* THE SECOND VERB: not *bring this here* but *exchange this with that*.
+          It is outside the promote button because a button may not contain a
+          button, and because the two acts have different owners — see
+          {@link ChartTileProps.arrange}. */}
+      {arrange === null ? null : <ArrangeGrip arrange={arrange} />}
+      </div>
       {/* THE COUNT, in Mono — the only surviving copy of these numbers now that
           the counted-facts band is gone, and never a sentence. */}
       {said === null && reach === null && narrowed === null ? null : (
@@ -506,6 +657,66 @@ export function ChartTile({ id, label, said, promote, reach = null, narrowed = n
         </span>
       )}
       {children === undefined ? null : <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 0', minHeight: 0, minWidth: 0, marginTop: 3 }}>{children}</div>}
+    </article>
+  );
+}
+
+export interface PaneHomeProps {
+  /** The pane whose home this is — stamped as `data-home`, never `data-chart`: the picture itself is drawn in the focus and a test must find exactly one of it. */
+  readonly id: string;
+  readonly label: string;
+  /** What the marker says — `arrangement.ts` · `homeSaid`, so the words have one owner. */
+  readonly said: string;
+  /** The handle, so a reader can arrange where this pane will SETTLE while it is still lifted. */
+  readonly arrange?: ArrangeHandle | null;
+}
+
+/**
+ * A PANE'S HOME WHILE THE PANE IS LIFTED INTO THE FOCUS.
+ *
+ * ── WHY THE BOX IS HELD OPEN AT ALL ────────────────────────────────────────
+ * This is the whole price of *a focus change swaps, it does not reflow*. Every
+ * pane on this desk has one home and never leaves it, so the desk needs one box
+ * more than it has pictures — and the box belonging to whatever is currently
+ * focused has no picture to draw. Collapsing it would put every pane after it
+ * back on the move, which is the defect this arrangement exists to remove.
+ *
+ * So it says what it is, in the register the 3D viewer's own rail tile already
+ * speaks (*the 3D viewer draws in the focus…*), and it stays a DROP TARGET:
+ * arranging where a pane will settle is exactly as much an act while it is
+ * lifted as while it is not.
+ *
+ * No motion of any kind is drawn here, which is how `prefers-reduced-motion` is
+ * honoured — there is nothing to reduce. A pane that slid between slots would
+ * be movement a reader did not ask for, on an instrument that has to stay still.
+ */
+export function PaneHome({ id, label, said, arrange = null }: PaneHomeProps): JSX.Element {
+  return (
+    <article
+      data-home={id}
+      data-arrange-target={arrange !== null && arrange.target ? 'true' : undefined}
+      aria-label={said}
+      style={{
+        border: '1px dashed var(--pw-rule-divider)',
+        borderRadius: 'var(--pw-r-card)',
+        background: 'none',
+        padding: '5px 8px 7px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        minHeight: 0,
+        minWidth: 0,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--pw-soft)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span aria-hidden style={{ marginLeft: 'auto', fontFamily: 'var(--pw-font-mono)', fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--pw-accent)', flex: '0 0 auto' }}>
+          in focus
+        </span>
+        {arrange === null ? null : <ArrangeGrip arrange={arrange} />}
+      </div>
+      <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9.5, lineHeight: 1.35, color: 'var(--pw-soft-2)', minWidth: 0 }}>{said}</span>
     </article>
   );
 }

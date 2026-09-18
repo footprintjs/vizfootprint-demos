@@ -88,7 +88,13 @@ describe('the workbench folder holds the layers it says it holds', () => {
     // four marks over plain data and the fold turns the boot's reports into
     // them. They are a pair for the same reason `Stepper.tsx`/`steps.ts` are.
     expect(components.sort()).toEqual(['BootReport.tsx', 'ChartCard.tsx', 'Chrome.tsx', 'Search.tsx', 'Stepper.tsx']);
-    expect(logic.sort()).toEqual(['bands.ts', 'boot.ts', 'charts.ts', 'panel.ts', 'results.ts', 'steps.ts']);
+    // `arrangement.ts` is the reader's OWN arrangement of the desk — which pane
+    // sits in which slot, as a permutation over a fixed slot list, with the
+    // codec and the words for the one act that lands it. It is business logic
+    // for the reason every fold here is: it is a pure function from the record
+    // to the props, and the composition is the only file that knows a session
+    // exists.
+    expect(logic.sort()).toEqual(['arrangement.ts', 'bands.ts', 'boot.ts', 'charts.ts', 'panel.ts', 'results.ts', 'steps.ts']);
     expect(modules.filter(isTheme)).toEqual(['tokens.ts']);
   });
 });

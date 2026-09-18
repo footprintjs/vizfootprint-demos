@@ -85,6 +85,58 @@ The cost, named: a tile's axis labels are also the encoding pickers, so re-encod
 
 **A tile's header is the control, not the whole tile.** The picture inside is live: a button may not contain the library's own axis controls, and a press anywhere would swallow the gesture that makes the tile worth drawing.
 
+## AND THE READER ARRANGES THE PANES — an ACT, on the road the library already has
+
+The author asked whether layout should be a first-class interaction and then ruled: **build it on this desk first, on the road that already exists — then lift it.** So nothing here declares a new library law. What follows is the shape that came out, which is the thing worth lifting.
+
+### THE LAW: a visible act either reaches the record, or claims nothing
+
+A reader who **swaps two panes** has made a decision, and *would expect to find it that way tomorrow* — which is the line this desk uses to decide what an act is. So it lands. What is **mid-gesture** — which pane is picked up, what the pointer is over — is a **report**: transient, reaching no commit, nothing computing from it.
+
+| | reaches the record | why |
+|---|---|---|
+| a reader swapped two panes | **yes — an act** | a decision, and it persists |
+| which pane is picked up · what the pointer is over | **never** | a report: it dies with the gesture |
+| where the two dividers sit | never a commit; `localStorage` | a preference, and the section below argues it |
+
+The library has already caught the other shape once — a sheet holding its own sort in component state — removed it and wrote the argument down (`vizfootprint · ui/src/sheet/arrangement.ts`). Re-introducing it on the one desk built to find such things would be the worst possible place for it.
+
+### The road, and nothing new on it
+
+One `navigate` on the library's own `layout:dashboard` identity, prop `order`, through **`SessionView.setLayout({ order })`** — the cockpit's own *cell order*, which is exactly what a pane arrangement is. Read back off **`SessionViewState.layout.order`** and nowhere else, so a seek restores it and a reload does too. The commit is **inert by construction at the session tier** (`src/branches/fold.ts · LAYOUT_VIEW_PREFIX`: a layout note never enters `activeFilters` and never reaches `foldDiff`), it branches at the cursor like any act, and `rebuildFold` restores it per path. **No verb was added and no door was asked for.**
+
+The codec is the cockpit's too — `order.join(',')` out, `parseLayout` split-and-trim back — so this desk does **not** put a second grammar over the same prop. The one thing that grammar cannot carry is a pane name holding a comma, and that is **refused at the door with the reason** (`arrangement.ts · paneNameRefusal`) rather than repaired: repairing it would forge the record of an act.
+
+### A LAYOUT ACT IS INERT, and it is asserted rather than promised
+
+It may never change which rows are in force. `tests/prot-arrangement.smoke.test.ts` reads **every pane's own line of figures** before and after a swap and asserts they are identical. If rearranging panes could move a number, that is catastrophic, so it is a test and not a sentence.
+
+### A FOCUS CHANGE SWAPS; IT DOES NOT REFLOW — and the model had to change for it to be true
+
+*"When focus shifts to a second widget, can we rotate that with the other one in the wide slot instead of randomly changing place, this way the other widgets won't jump."*
+
+Measured first, on the live page at 1280×800: promoting the backbone-angle scatter **moved five of the eight panes**. The cause was that the rail was split by each pane's own SHAPE on every render, so focusing a square picture pulled a wide one out of the strip and pushed a square one into the column, and both regions changed length.
+
+The obvious fix is a **transposition**: put the focused pane in slot 0 by swapping it with whatever is there. It is pure, it is the plain reading of the ruling, and **it is wrong** — `tests/prot-arrangement.test.ts` caught it before a browser did. From a recorded order `[P0, P1, P2]`, focusing `P1` draws `[P1, P0, P2]` and focusing `P2` draws `[P2, P1, P0]`: going from one to the other is a **three-cycle**, and `P0` moves too. The reason is structural — *the pane that was in the focus* is **history**, and a pure function of (recorded order, focused pane) cannot know it. The only ways out are to remember it (component state: the exact defect being refused) or to land a commit on every stepper press (which makes the focus an act and gives one question two owners).
+
+So the **model** changed instead:
+
+> **Every pane has a HOME SLOT and never leaves it. The focus is a LIFT, not a reshuffle.**
+
+The focused pane is *also* drawn large in the focus slot, and its home stays where it is and says so (`ChartCard.tsx · PaneHome`). Changing the focus therefore moves exactly two things: the one that lifts and the one that settles back into the home it never gave up. Nothing else can move, because nothing else's home changed — and the home order is the only thing on the record.
+
+**The price, stated:** the desk needs one box more than it has pictures, so one home always shows a marker rather than a picture and the panes beside it are a little smaller than they were. The author decided that trade in advance: *this way the other widgets won't jump.*
+
+**The one place it bends** is the column's row tracks. A pane that DRAWS wants `minmax(0, 1fr)` and the desk's one pane of WORDS (the 3D viewer's rail tile) wants `auto` — content height and no more, which is the same argument the blocked cards' rows won. That is the one thing a slot cannot decide for its occupant, so a swap that moves the word pane also changes one track. It is named in the composition beside `columnTrack`, and the browser test asserts the drawing-to-drawing case to the pixel.
+
+### What a reader does, with either hand
+
+Every home carries a `⠿` handle beside its `⤢`, and the two are **different verbs with different owners**: `⤢` brings a pane INTO the focus (the cursor's slot) and `⠿` exchanges two homes (the reader's arrangement, kept by the record). A **pointer** drag from a handle onto any pane's box lands the swap on RELEASE and nothing before it; the composition watches the window rather than the handle, because the gesture ends wherever the reader lets go. The **keyboard** path is the same act through the same function: `Tab` to a handle, `Enter` to pick a pane up, `Enter` on another handle to swap the two, `Escape` to put it back. This desk has already shipped a drag handle that was ten pixels by zero while its keyboard path worked perfectly, so **the browser test drives both**, with a real pointer at real coordinates. No motion is declared on any pane — the grid lays them out in one paint — so `prefers-reduced-motion` has nothing to turn off, which the test also asserts by reading `transitionDuration` and `animationName` off every pane.
+
+### The focused pane says it is the focused one
+
+The paint alone did not carry it: heavier glass and a deeper shadow read as *hero vs tile* at a glance, and a reader who has just pressed a stepper column is asking *which pane answered*. So the word rides beside the card's name, in the mono register this desk keeps for a fact about a pane and in the accent the stepper's own current-step bar uses — **one vocabulary for *you are here***. Props-only, like everything else in the components layer, so it can move into the library's own cockpit the day that cockpit wants it.
+
 ## AND THE READER MOVES THE BOUNDARY — two dividers, with floors derived from the honesty floor above
 
 The author asked for a **corner resize on the focus widget, aspect-ratio locked**. Two things about that were changed on the way in, and the reasons are here rather than in a commit message because the choice has to stay legible.

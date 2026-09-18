@@ -78,7 +78,21 @@ import { useProtProjection } from './protProjection.js';
 import { ActRow, RunNarrative, narrativeTitle } from './protTrace.js';
 import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type HostSteps, type StepperStage } from './protStages.js';
 import { Count, Disclosure, RecordDrawer, RegionDivider, WorkbenchHeader, type DividerAction } from './workbench/Chrome.js';
-import { BlockedGroup, ChartCard, ChartTile, Recommendation, ViewerBox } from './workbench/ChartCard.js';
+import { BlockedGroup, ChartCard, ChartTile, PaneHome, Recommendation, ViewerBox, type ArrangeHandle } from './workbench/ChartCard.js';
+import {
+  arrangePanes,
+  arrangementSaid,
+  defaultPaneOrder,
+  dropLabel,
+  heldLabel,
+  heldSaid,
+  homeSaid,
+  paneNameRefusal,
+  pickUpLabel,
+  slotsOf,
+  stripSlots,
+  swapPanes,
+} from './workbench/arrangement.js';
 import { BootLog, type BootStepView } from './workbench/BootReport.js';
 import { StageStepper } from './workbench/Stepper.js';
 import { methodLine } from './workbench/bands.js';
@@ -230,6 +244,24 @@ export interface ProtDeskProps {
   onRetryHotspots?(): void;
   /** `true` while a retry is in flight — the card's fourth state, and a control that is not pressable again. */
   readonly asking?: boolean;
+  /**
+   * LAND THE READER'S ARRANGEMENT OF THE DESK — one act, one commit, and it
+   * belongs to the PAGE for the reason every other act here does: a `navigate`
+   * is a dispatch through the session view, and the data layer is the only code
+   * that touches one (`./workbench/README.md`, layer 4).
+   *
+   * The order is a permutation of this desk's pane ids
+   * (`./workbench/arrangement.ts` · `swapPanes`), and the page hands it to the
+   * library's own cockpit door: `view.setLayout({ order })`, which lands ONE
+   * inert commit on `layout:dashboard` that folds, branches per cursor and
+   * replays. **Nothing is read back through this prop** — the arrangement at
+   * the cursor comes off the record (`state.layout.order`), so a seek restores
+   * it and a reload does too.
+   *
+   * Absent where a page wires none, and the handles are then absent rather than
+   * dead.
+   */
+  onArrange?(order: readonly string[]): void;
 }
 
 /** What the boot's own account is called in the record drawer — the detail the centred line cannot carry. */
@@ -240,7 +272,7 @@ const ABOUT_TITLE = 'About this dashboard and this desk — the definition’s o
 
 /** What that fold is called — the one place the count of omissions is spelled. */
 const NOT_HERE_TITLE =
-  'What the other three desks show and this page does not — seven things it does without, each one named rather than quietly missing, one affordance it no longer announces, one attribution its pictures no longer each carry, one thing it adds, one thing it remembers that is not on the record, one number it draws that is on no commit, and one request it makes';
+  'What the other three desks show and this page does not — seven things it does without, each one named rather than quietly missing, one affordance it no longer announces, one attribution its pictures no longer each carry, one thing it adds, one thing it now puts ON the record, one thing it remembers that is not on the record, one number it draws that is on no commit, and one request it makes';
 
 /**
  * WHAT THE OTHER THREE DESKS SHOW AND THIS PAGE DOES NOT — named, because an
@@ -276,7 +308,7 @@ function NotHere(): JSX.Element {
         </li>
         <li>
           <b>The Data tab&rsquo;s acts.</b> The sheet below is READ-ONLY here: no add-a-column, no cut-an-aggregate, no export, and no arrangement acts (sort, hide, reorder, freeze) — which on the packaged desk are real
-          commits that travel with the cursor. The Sources tab and its refresh are missing too, as they are on every static build: these bytes are what the repository committed.
+          commits that travel with the cursor. That is about the SHEET&rsquo;s own columns and not about the panes: the reader&rsquo;s arrangement of the panes IS an act here, and the item below says so. The Sources tab and its refresh are missing too, as they are on every static build: these bytes are what the repository committed.
         </li>
         <li>
           <b>And one thing this page shows that the packaged desk does not:</b> the GAPS panel — every request the session refused, typed and in its own words, including the two gestures this desk makes at its own unlanded charts before the stages run.
@@ -286,6 +318,12 @@ function NotHere(): JSX.Element {
         bars for a run</i> before anybody has clicked anything. That is an instruction rather than a fact, and this desk&rsquo;s instrument has no room between the stepper and the charts for either — so the strip appears only once
         there IS a selection, in the library&rsquo;s own words. <b>The consequence, said plainly:</b> a reader arriving here is not told that clicking a mark selects a residue, dragging an axis keeps a range, and shift-clicking adds to
         what is already kept. Every one of those still works, and every one of them lands a real commit on the record below.
+      </li>
+      <li>
+        <b>And one thing this page now puts ON the record:</b> which pane sits in which slot. Take hold of a pane&rsquo;s <code>⠿</code> handle &mdash; with the pointer, or with <code>Tab</code> and <code>Enter</code> &mdash; drop it on another
+        pane, and the two swap. That is an ACT: it lands one commit on the log below, it travels with the cursor (seek behind it and the desk comes back to how it was), and it survives a reload, because a reader who rearranged their desk would
+        expect to find it that way tomorrow. It is also INERT &mdash; it can never change which rows are in force, and no pane&rsquo;s counts move when you move a pane. The pane in the FOCUS has no handle: that slot is put there by the cursor,
+        and the way to move a picture into it is to press it. <b>The consequence, said plainly:</b> the divider positions below are a preference and this is not, and the two are kept in different places for that reason alone.
       </li>
       <li>
         <b>And one thing this page remembers that is not on the record:</b> where you put the two dividers between the focus and its satellite panes. That is a LAYOUT PREFERENCE and not an analytical act — it lands no commit, appears
@@ -422,7 +460,7 @@ function rememberedSplit(): RegionSplit {
 }
 
 /** The whole workbench. See the file header for the four layers and what this file is allowed to do. */
-export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, record, onSearchAgain, hotspots = null, onSelectPicks, onPaintByRank, boot = [], onRetryHotspots, asking = false }: ProtDeskProps): JSX.Element {
+export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, record, onSearchAgain, hotspots = null, onSelectPicks, onPaintByRank, boot = [], onRetryHotspots, asking = false, onArrange }: ProtDeskProps): JSX.Element {
   // ── LAYER 4: the data ─────────────────────────────────────────────────────
   const state = useSessionView(view);
   const sheetPort = useMemo(() => sessionSheetData(session, { table }), [session, table]);
@@ -647,14 +685,69 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
   const promotedCell = pictures.find((c) => c.id === promotedId) ?? null;
   /** The pictures THIS STAGE produced, in rail order. */
   const produced = splitByFocus(pictures, focus).hero;
+
+  /*
+    ── THE DESK AS SLOTS, AND THE READER'S PERMUTATION OVER THEM ─────────────
+
+    THE LAW: *a visible act either reaches the record, or claims nothing.* A
+    reader who swaps two panes has made a decision that persists, so it lands —
+    one inert `navigate` on the library's own `layout:dashboard` identity, which
+    folds, branches per cursor and replays. What is mid-gesture ({@link held})
+    is a REPORT and reaches nothing. The whole argument, the codec and the words
+    are in `./workbench/arrangement.ts`.
+
+    AND THE SHAPE THAT MAKES *A FOCUS CHANGE SWAPS, IT DOES NOT REFLOW* TRUE:
+    EVERY PANE HAS A HOME SLOT AND NEVER LEAVES IT. The desk used to split its
+    rail by each pane's own shape on every render, so focusing a square picture
+    pulled a wide one out of the strip and pushed a square one into the column —
+    measured at 1280×800: promoting the backbone-angle scatter moved FIVE of the
+    eight panes. Now the focus is a LIFT: the focused pane is also drawn large in
+    the focus slot and its home says so, so changing the focus moves exactly two
+    things — the one that lifts and the one that settles back. The transposition
+    that was tried first, and the reason a pure function cannot make it true, are
+    argued above `stripSlots` in that file.
+  */
+  /** Every pane of this desk, in the desk's OWN order — the arrangement nobody has recorded. */
+  const defaults = useMemo(() => defaultPaneOrder(pictures.map((c) => c.id), (id) => shapeOfView(id) === 'wide', (id) => id === STRUCTURE_VIEW), [pictures]);
   /**
-   * THE FOCUS SLOT HOLDS ONE PICTURE — the reader's promotion, else the first
-   * the standing stage produced, else the first picture on the desk so the slot
-   * is never empty. A stage's other pictures wait in the rail, a press away,
-   * and the arrangement clause says so.
+   * THE ARRANGEMENT AT THIS CURSOR — read off the RECORD and never off a
+   * boolean this component keeps, exactly as the paint control's direction is.
+   *
+   * `state.layout.order` is the library's own cockpit cell order, folded from
+   * the `layout:dashboard` commits on the active path up to the cursor
+   * (`vizfootprint-ui` · `parseLayout`). So a seek behind a swap shows the
+   * earlier arrangement, a seek forward shows the later one, and a reload shows
+   * whatever the record says — with no help from this file.
    */
-  const hero: ProtCell | null = promotedCard !== null ? null : (promotedCell ?? produced[0] ?? pictures[0] ?? null);
-  const rail = pictures.filter((c) => c !== hero);
+  const arranged = useMemo(() => arrangePanes(defaults, state.layout.order), [defaults, state.layout.order]);
+  /** How many HOMES the bottom strip has — a constant of the geometry, folded once over every pane (`arrangement.ts` · `stripSlots`). */
+  const stripCount = useMemo(() => stripSlots(arranged.panes, (id) => shapeOfView(id) === 'wide'), [arranged.panes]);
+  /**
+   * WHICH PANE THE CURSOR PUTS IN THE FOCUS — the reader's promotion, else the
+   * first the standing stage produced, else the first picture on the desk so
+   * the slot is never empty.
+   *
+   * It is folded EVEN WHEN a blocked step's card has the focus, because the
+   * pane it displaces has to be placed somewhere and the answer must not depend
+   * on which control was pressed.
+   */
+  const focusPaneId: string | null = promotedCell?.id ?? produced[0]?.id ?? pictures[0]?.id ?? null;
+  /*
+    A BLOCKED STEP'S CARD IS NOT A PANE AND HAS NO HOME. When one takes the
+    focus, NOTHING is lifted — every pane is drawn in its own home and no home
+    shows a marker. That is one pane settling back and nothing else moving,
+    which is the same law as every other focus change.
+  */
+  const slots = useMemo(
+    () => slotsOf(arranged.panes, stripCount, promotedCard === null ? focusPaneId : null),
+    [arranged.panes, stripCount, promotedCard, focusPaneId],
+  );
+  const paneAt = useMemo(() => new Map(pictures.map((c) => [c.id, c])), [pictures]);
+  const paneOf = (id: string): readonly ProtCell[] => {
+    const cell = paneAt.get(id);
+    return cell === undefined ? [] : [cell];
+  };
+  const hero: ProtCell | null = slots.focus === null ? null : (paneAt.get(slots.focus) ?? null);
   /**
    * WHICH STAGE OWNS THE PICTURE IN THE FOCUS — asked of the picture and not of
    * the cursor, because the card is the picture's: a stage's line on a chart
@@ -682,6 +775,144 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
   /** Which views hold a LIVE clause — what the ✕ on a card is about. `cleared` is `null`, whatever the kind. */
   const liveViews = useMemo(() => new Set(state.selections.filter((s) => s.value !== null).map((s) => s.viewId)), [state.selections]);
   const summary = state.dashboard?.prose.find((p) => p.slot === 'caption');
+
+  /*
+    ── THE ARRANGEMENT ACT, AND THE REPORT THAT IS NOT ONE ───────────────────
+
+    `held` is which pane a reader has picked up. It is a REPORT: transient,
+    reaching no commit, and nothing on this desk computes from it — the table
+    the packet was written against puts *what is mid-drag* on the same line as
+    *where a scrollbar sits*. The SWAP is the act, and it lands exactly once, on
+    release or on the second press, through the page's own door.
+  */
+  const [held, setHeld] = useState<string | null>(null);
+  /** The pointer gesture in flight — a ref, not state: nothing renders from it, and a re-render per pointermove would be a paint per pixel. */
+  const dragging = useRef<{ readonly id: string; readonly x: number; readonly y: number; moved: boolean } | null>(null);
+  /** A drag that LANDED also fires the handle's click; this is how the click is told not to pick the pane straight back up. */
+  const droppedJust = useRef(false);
+  /**
+   * ONE SWAP, LANDED — the only place an arrangement is written, and the only
+   * place a pane name is judged.
+   *
+   * The value is a permutation of the ids this desk holds; the cockpit's own
+   * codec joins it with a comma, so a name carrying one is REFUSED here with
+   * the reason rather than written down as two names
+   * (`./workbench/arrangement.ts` · `paneNameRefusal`). An act that would change
+   * nothing lands nothing.
+   */
+  const landSwap = (a: string, b: string): void => {
+    setHeld(null);
+    if (onArrange === undefined) return;
+    const next = swapPanes(arranged.panes, a, b);
+    if (next === null) return;
+    const refused = next.map(paneNameRefusal).find((reason) => reason !== null);
+    if (refused !== undefined && refused !== null) {
+      setSaid(refused);
+      return;
+    }
+    setSaid(null);
+    onArrange(next);
+  };
+  /**
+   * THE KEYBOARD PATH, AND IT IS THE SAME ACT — press to pick up, press another
+   * handle to swap, press the held one again to put it back.
+   *
+   * This desk has already shipped a drag handle that was ten pixels by zero
+   * while its keyboard path worked perfectly (`./workbench/Chrome.tsx` ·
+   * `RegionDivider`), so the two doors are the same door here: a pointer drag
+   * ends by calling exactly this.
+   */
+  const pressHandle = (id: string): void => {
+    if (droppedJust.current) {
+      droppedJust.current = false;
+      return;
+    }
+    if (held === null) {
+      setHeld(id);
+      setSaid(heldSaid(desk.label(id)));
+      return;
+    }
+    if (held === id) {
+      setHeld(null);
+      setSaid(null);
+      return;
+    }
+    landSwap(held, id);
+  };
+  /**
+   * THE POINTER HALF — the composition watches the WINDOW, because the gesture
+   * ends wherever the reader lets go and not on the handle.
+   *
+   * IT DOES NOT PICK THE PANE UP ON `pointerdown`, and that was a defect a
+   * browser found: a plain press fires `pointerdown` and then `click`, so
+   * setting `held` here made the click — which is the keyboard path's own
+   * pick-up — read it as *the held pane pressed again* and put it straight
+   * back. The pane is picked up only once the pointer has actually MOVED, which
+   * is also the moment there is a drag to show.
+   */
+  const grabHandle = (id: string, at: { readonly x: number; readonly y: number }): void => {
+    dragging.current = { id, x: at.x, y: at.y, moved: false };
+    const move = (e: PointerEvent): void => {
+      const now = dragging.current;
+      if (now === null || now.moved) return;
+      if (Math.abs(e.clientX - now.x) <= 4 && Math.abs(e.clientY - now.y) <= 4) return;
+      now.moved = true;
+      setHeld(id);
+    };
+    const up = (e: PointerEvent): void => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      const now = dragging.current;
+      dragging.current = null;
+      // NOT A DRAG: the press stands, and the click that follows is the
+      // keyboard path's own pick-up. A reader who taps the handle has picked
+      // the pane up, which is exactly what the label said would happen.
+      if (now === null || !now.moved) return;
+      droppedJust.current = true;
+      // A HOME IS A DROP TARGET TOO — `data-home` is the box a lifted pane
+      // belongs to, and arranging where it will settle is as much an act while
+      // it is lifted as while it is not.
+      const box = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-chart],[data-home]') ?? null;
+      const onto = box === null ? null : (box.getAttribute('data-home') ?? box.getAttribute('data-chart'));
+      // a blocked step's card, the chrome, anywhere that is not a pane's box:
+      // the pane is put back and nothing is claimed
+      if (onto === null || onto === now.id || !arranged.panes.includes(onto)) {
+        setHeld(null);
+        return;
+      }
+      landSwap(now.id, onto);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  // ESCAPE PUTS IT BACK, from anywhere — a reader who has picked a pane up and
+  // changed their mind must not have to find the handle again.
+  useEffect(() => {
+    if (held === null) return undefined;
+    const key = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      setHeld(null);
+      setSaid(null);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [held]);
+  /**
+   * ONE PANE'S HANDLE — on every pane, its HOME included, because a home is a
+   * real slot and a lifted pane still has one. `null` on a build that wires no
+   * arrangement door, so the control is absent rather than dead.
+   */
+  const handleOf = (id: string): ArrangeHandle | null => {
+    if (onArrange === undefined) return null;
+    const label = desk.label(id);
+    return {
+      label: held === null ? pickUpLabel(label) : held === id ? heldLabel(label) : dropLabel(desk.label(held), label),
+      held: held === id,
+      target: held !== null && held !== id,
+      onPress: () => pressHandle(id),
+      onGrab: (at) => grabHandle(id, at),
+    };
+  };
 
   /**
    * THE SEEK, and its answer handed straight back for the stepper to print. It
@@ -882,6 +1113,10 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
         noteLabel="Full note"
         noteAria={`the full note for ${label}`}
         clear={liveViews.has(clauseId) ? { label: `clear the ${label} selection`, onPress: () => void view.clear(clauseId, `clear ${label}`) } : null}
+        // THE ONE RULE FOR WHERE A HANDLE IS OFFERED LIVES IN `handleOf`, so a
+        // card and a tile can never disagree about it: it answers `null` for
+        // the pane in the focus, whose slot belongs to the cursor.
+        arrange={handleOf(c.id)}
         height="fill"
       >
         <ChartFrame>
@@ -1016,6 +1251,17 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    */
   const tile = (c: ProtCell, wide: boolean): JSX.Element =>
     /*
+      THE PANE IS LIFTED INTO THE FOCUS, AND THIS IS ITS HOME. The box is held
+      open rather than collapsed, which is the whole price of *a focus change
+      swaps, it does not reflow* — collapsing it would put every pane after it
+      back on the move (`./workbench/ChartCard.tsx` · `PaneHome` argues it in
+      full). It is still a drop target, so a reader can arrange where this pane
+      will settle while it is still up there.
+    */
+    c.id === slots.focus ? (
+      <PaneHome key={c.id} id={c.id} label={desk.label(c.id)} said={homeSaid(desk.label(c.id))} arrange={handleOf(c.id)} />
+    ) : (
+    /*
       THE ONE PANE THAT SAYS IT RATHER THAN DRAWING IT — and the measurement is
       the argument.
 
@@ -1030,7 +1276,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       Its COUNT stays on it, because the card it comes from is the only place
       `185 residues · 2 chains drawn` is stated.
     */
-    c.id === STRUCTURE_VIEW && !wide ? (
+    c.id === STRUCTURE_VIEW ? (
       <ChartTile
         key={c.id}
         id={c.id}
@@ -1045,6 +1291,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
           the same counts, read where the picture cannot show them.
         */
         narrowed={narrowingSaid(c.narrowing, 'tile')}
+        arrange={handleOf(c.id)}
         promote={{ label: promoteChartLabel(desk.label(c.id)), onPress: () => setPromoted({ stage: here?.stage ?? null, id: c.id }) }}
       />
     ) : (
@@ -1073,6 +1320,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       */
       narrowed={narrowingSaid(c.narrowing, 'tile')}
       wide={wide}
+      arrange={handleOf(c.id)}
       promote={{ label: promoteChartLabel(desk.label(c.id)), onPress: () => setPromoted({ stage: here?.stage ?? null, id: c.id }) }}
     >
       {/*
@@ -1084,20 +1332,32 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       */}
       <ChartFrame>{(size) => c.render(size)}</ChartFrame>
     </ChartTile>
-    );
-  /** The rail, split by the shape each picture wants — wide along the bottom, square and tall down the side. */
-  const wide = rail.filter((c) => shapeOfView(c.id) === 'wide');
-  const tall = rail.filter((c) => shapeOfView(c.id) !== 'wide');
+    ));
   /**
-   * AND THE COLUMN'S OWN SPLIT: the panes that DRAW take `1fr` each, the one
-   * that says it instead takes its content's height.
+   * THE RAIL IS THE HOMES — not a split by the shape each picture wants.
    *
-   * A word pane in a `1fr` row is the same waste the three blocked cards were
-   * — it held a 127px row for two lines of text while the scatter beside it
-   * wanted every pixel.
+   * That inversion is the packet. The shapes decide the geometry ONCE
+   * ({@link stripCount}); after that a home is furniture and a pane sits in the
+   * home the record gives it. A square picture a reader drags into a strip home
+   * gets a wide box and reads a little worse there — that is their own choice,
+   * and it costs nobody else's pane a pixel.
    */
-  const drawnTall = tall.filter((c) => c.id !== STRUCTURE_VIEW);
-  const saidTall = tall.filter((c) => c.id === STRUCTURE_VIEW);
+  const wide = slots.strip.flatMap(paneOf);
+  const tall = slots.column.flatMap(paneOf);
+  /**
+   * AND THE COLUMN'S OWN TRACKS: a pane that DRAWS takes `1fr`, the one that
+   * says it instead takes its content's height.
+   *
+   * A word pane in a `1fr` row is the same waste the three blocked cards were —
+   * it held a 127px row for two lines of text while the scatter beside it
+   * wanted every pixel. This is the ONE thing a slot cannot decide for its
+   * occupant, and therefore the one place the swap law bends: a swap that takes
+   * the desk's single word pane out of the column changes that slot's track
+   * from `auto` to `1fr`, which resizes the panes above it. It is named here
+   * rather than hidden, and `tests/prot-arrangement.smoke.test.ts` asserts both
+   * cases — the drawing-to-drawing swap to the pixel, and this one as itself.
+   */
+  const columnTrack = (c: ProtCell): string => (c.id === STRUCTURE_VIEW ? 'auto' : 'minmax(0, 1fr)');
   /** The steps that will not run here and are not the one in the focus. */
   const waiting = cards.filter((b) => b.id !== promotedId);
 
@@ -1278,6 +1538,18 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
             <p style={{ margin: 0 }}>
               <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>this desk</span> {claim}
             </p>
+            {/*
+              AND WHAT THE RECORDED ARRANGEMENT NAMES THAT THIS DESK HAS NO PANE
+              FOR — said once, and the trace is never rewritten to match, because
+              that would forge the record of an act
+              (`./workbench/arrangement.ts` · `arrangementSaid`; the library's own
+              sheet keeps the same law). Absent when there is nothing to say.
+            */}
+            {arrangementSaid(arranged.missing).map((sentence) => (
+              <p key={sentence.slice(0, 40)} style={{ margin: '6px 0 0' }}>
+                <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>the arrangement</span> {sentence}
+              </p>
+            ))}
           </Disclosure>
           {/*
             THE BOOT'S OWN ACCOUNT — where the boot report's DETAIL went when the
@@ -1439,7 +1711,26 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
           They are the wide charts' waiting room: one press puts one of them in
           the focus, where it has the width it was drawn for.
         */}
-        <div style={{ gridColumn: 1, gridRow: 3, minWidth: 0, display: 'flex', gap: 10, alignItems: 'stretch' }}>
+        {/*
+          THE STRIP'S BOXES ARE SLOTS, NOT FLEX ITEMS — and this was a real
+          defect, caught in a browser and not by any fold.
+
+          It was `display: flex`, so each tile was sized by its CONTENT: the
+          moment one of the strip's homes showed the marker instead of its
+          picture, the marker took 141px and the two pictures beside it grew to
+          307px each. Measured exactly that way — *pressing column 1 MOVED
+          conservation: 24,610 307x150, was 24,610 141x150* — which is the swap
+          law broken by the layout rather than by the model. Equal grid columns
+          make a strip home the same box whatever is in it, which is what a slot
+          has to be.
+        */}
+        {/* `minHeight: 0` is load-bearing on a grid track, which the `gap`-and-
+            flex form did not need: without it a pane's own content height wins
+            over the row's, the row grows past the window and the PAGE scrolls —
+            and a page scrollbar narrows the whole instrument by its own width,
+            which moves every pane. Measured exactly that way once the strip
+            became a grid: a column pane at x=974 came back at x=962. */}
+        <div style={{ gridColumn: 1, gridRow: 3, minWidth: 0, minHeight: 0, overflow: 'hidden', display: 'grid', gap: 10, gridTemplateColumns: `repeat(${String(Math.max(1, wide.length))}, minmax(0, 1fr))`, alignItems: 'stretch' }}>
           {wide.map((c) => tile(c, true))}
         </div>
         {/*
@@ -1476,12 +1767,11 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
             // the drawings get `1fr` each; the ONE card of blocked steps takes
             // its content's height and no more (it was three cards at 59px —
             // 177px of a 583px column for three sentences)
-            gridTemplateRows: `${drawnTall.map(() => 'minmax(0, 1fr)').join(' ')} ${saidTall.map(() => 'auto').join(' ')} ${waiting.length === 0 ? '' : 'auto'}`.trim().replace(/\s+/g, ' '),
+            gridTemplateRows: `${tall.map(columnTrack).join(' ')} ${waiting.length === 0 ? '' : 'auto'}`.trim().replace(/\s+/g, ' '),
             overflow: 'hidden',
           }}
         >
-          {drawnTall.map((c) => tile(c, false))}
-          {saidTall.map((c) => tile(c, false))}
+          {tall.map((c) => tile(c, false))}
           {/* NO MARKS TO DRAW AND NOTHING TO FILTER: three steps that will not
               run here, in one card of three rows — each row its own control,
               opening its own card where the whole reason is. */}

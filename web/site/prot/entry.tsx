@@ -199,6 +199,23 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         claim={PROT_WORDS.title}
         credit={booted.credit}
         counts={surface.tables.counts}
+        /*
+          THE READER'S ARRANGEMENT OF THE DESK, LANDED — and it goes through the
+          VIEW, never beside it, for the reason `onSelectPicks` carries in full:
+          a dispatch beside the view the pictures are folded at is a SECOND
+          CURSOR, and the act lands while nothing on screen moves.
+
+          The door is the library's own cockpit one. `setLayout({ order })` lands
+          ONE `navigate` on `layout:dashboard` with the plain words the commit log
+          will show, and that commit is INERT by construction at the session tier
+          — it never enters a filter, never reaches `foldDiff` and can never move
+          a row count. It branches at the cursor like any act and `rebuildFold`
+          restores it, which is the whole reason the arrangement travels: seek
+          behind the swap and the desk comes back to how it was.
+
+          Nothing is read back through here: the desk reads `state.layout.order`.
+        */
+        onArrange={(order) => void view.setLayout({ order: [...order] })}
         onSearchAgain={onSearchAgain}
         record={<PageFoot booted={booted} surface={surface} onSearchAgain={onSearchAgain} />}
       />

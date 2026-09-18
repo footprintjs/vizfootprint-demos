@@ -499,9 +499,16 @@ describe('THE BAND IS GONE FROM THE COMPOSITION, and nothing prose-shaped replac
     expect(rowTracks(null)).toBe('minmax(0, 1fr) 10px minmax(0, 0.34fr)');
     // THE RIGHT COLUMN'S ROWS ARE NOT EQUAL: the panes that DRAW get `1fr`
     // each; the pane that says it instead, and the one card of blocked steps,
-    // take their content's height and no more
-    expect(desk).toContain("drawnTall.map(() => 'minmax(0, 1fr)')");
-    expect(desk).toContain("saidTall.map(() => 'auto')");
+    // take their content's height and no more.
+    //
+    // THE FOLD MOVED WITH THE SLOTS. The column used to be split by each pane's
+    // own shape (`drawnTall` / `saidTall`), which is exactly what made a focus
+    // change reflow the whole desk — so the column now renders the panes the
+    // SLOTS put in it, in slot order, and asks each one which track it wants
+    // (`protDesk.tsx` · `columnTrack`). The resting expression is unchanged:
+    // `minmax(0, 1fr) minmax(0, 1fr) auto auto`.
+    expect(desk).toContain('tall.map(columnTrack)');
+    expect(desk).toContain("c.id === STRUCTURE_VIEW ? 'auto' : 'minmax(0, 1fr)'");
     expect(desk).toContain("waiting.length === 0 ? '' : 'auto'");
     // AND THE ONE THING THAT MAY NOT COME BACK: a paragraph between the
     // stepper and the charts. The slice is exactly that stretch of the

@@ -93,7 +93,7 @@ import type { EntryNote } from '../../src/prot/entryNotes.js';
 import type { ProtRun } from '../../src/prot/orchestrator.js';
 import type { StructureArtifact, UnlandedRefusals } from '../../src/prot/session.js';
 import { emitIntent, type Row } from './derive.js';
-import { chainColorOf, zeroGuideOf, type Narrowing } from './workbench/charts.js';
+import { chainColorOf, declaredSilence, zeroGuideOf, type DeclaredSilence, type Narrowing } from './workbench/charts.js';
 import type { WorkbenchInk } from './workbench/tokens.js';
 
 export { STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, RANKING_VIEW, PAIRS_VIEW };
@@ -515,6 +515,18 @@ export interface NarrowingBasis {
   readonly label: (viewId: string) => string;
   /** The default edges the reach law declined, each with the map's own reason. */
   readonly declined: readonly DeclinedEdgeView[];
+  /**
+   * WHAT THIS PANE'S OWN DECLARATION SAYS ABOUT WHY NOTHING CAN REACH IT —
+   * `./workbench/charts.ts` · `declaredSilence`, folded off the two booleans the
+   * session serves per view, `null` for every pane that declares any voice.
+   *
+   * It OUTRANKS the three reasons below it, and that ordering is the point: a
+   * clause's `narrowed.reason`, a declined edge and *these rows carry no X* are
+   * all about a clause that SET OUT for this pane, and a reader who sees one
+   * reads a pane that is broken. A pane outside the grammar is not broken — no
+   * clause was ever about it — and only its declaration can say so.
+   */
+  readonly declared?: DeclaredSilence | null;
 }
 
 /**
@@ -531,6 +543,7 @@ export interface NarrowingBasis {
  */
 export function narrowingOf(basis: NarrowingBasis): Narrowing | null {
   const { selection, live, rows, total, inForce, unit, label, declined } = basis;
+  const declared = basis.declared ?? null;
   const self = selection.selfClauseId;
   const elsewhere = live.filter((viewId) => viewId !== self);
   if (elsewhere.length === 0) return null;
@@ -546,8 +559,8 @@ export function narrowingOf(basis: NarrowingBasis): Narrowing | null {
   */
   if (judged.length === 0) {
     const sources = reaching.length > 0 ? reaching.map(([viewId]) => viewId) : elsewhere;
-    const reason = reasonOf(reaching, sources, self, declined);
-    return { kind: 'unreachable', inForce: total, total, unit, from: sources.map(label), ...(reason === null ? {} : { reason }) };
+    const reason = declared?.reason ?? reasonOf(reaching, sources, self, declined);
+    return { kind: 'unreachable', inForce: total, total, unit, from: sources.map(label), ...(reason === null ? {} : { reason }), ...(declared === null ? {} : { reasonShort: declared.short }) };
   }
   const from = judged.map(([viewId]) => label(viewId));
   return inForce >= total ? { kind: 'nothing-cut', inForce: total, total, unit, from } : { kind: 'narrowed', inForce, total, unit, from };
@@ -929,9 +942,22 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   const live = useMemo(() => state.selections.filter((s) => s.value !== null).map((s) => s.viewId), [state.selections]);
   /** The default edges the reach law DECLINED, with the map's own reason — absent on a graph that declined none. */
   const declined = state.links?.declined ?? [];
+  /**
+   * WHY NO CLAUSE CAN REACH THE CONTACT TABLE, IN ITS OWN DECLARATION'S TERMS —
+   * and it is asked of the RECORD, never typed for this pane.
+   *
+   * `state.views` carries what the def declared, as the session projects it:
+   * `canProbe` and `selectionKinds`. The fold turns *no voice and no probe* into
+   * the one sentence a reader needs to tell *declared outside the grammar* from
+   * *broken* (`./workbench/charts.ts` · `declaredSilence`, which carries the
+   * measurement and the argument). It is `null` on a wire that serves no
+   * declaration, and it never appears while nothing is selected anywhere —
+   * `narrowingOf` is silent at rest, and a resting desk stays clean.
+   */
+  const pairsDeclared = useMemo(() => declaredSilence(state.views.find((v) => v.viewId === PAIRS_VIEW)), [state.views]);
   /** One pane's narrowing, asked the same way for all five — the cell hands its own counts and its own word for a mark. */
-  const narrowingAt = (selection: RenderSelection, rows: readonly RenderRow[], total: number, inForce: number, unit: string): Narrowing | null =>
-    narrowingOf({ selection, live, rows, total, inForce, unit, label: desk.label, declined });
+  const narrowingAt = (selection: RenderSelection, rows: readonly RenderRow[], total: number, inForce: number, unit: string, declared: DeclaredSilence | null = null): Narrowing | null =>
+    narrowingOf({ selection, live, rows, total, inForce, unit, label: desk.label, declined, declared });
 
   /**
    * WHICH ARM OF THE PLACEMENT PORT RAN — read off the port, never spelled
@@ -1495,7 +1521,7 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
         about that would look unaffected, which is indistinguishable from
         looking unconnected. The state and its reason are folded, never typed.
       */
-      narrowing: pairRows.length === 0 ? null : narrowingAt(pairsSelection, pairRows as readonly RenderRow[], pairRows.length, pairRows.length, 'rows'),
+      narrowing: pairRows.length === 0 ? null : narrowingAt(pairsSelection, pairRows as readonly RenderRow[], pairRows.length, pairRows.length, 'rows', pairsDeclared),
       caption: (
         <>
           {[

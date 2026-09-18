@@ -248,8 +248,20 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     // the conservation run drops its marks the same way the surface run does,
     // so its sentence counts the marks it really drew
     expect(claimed(said[CONSERVATION_VIEW] ?? null)).toBe(drawn[CONSERVATION_VIEW]);
-    // the receipt is the one pane no clause can be judged on, and it says that rather than nothing
-    expect(said[PAIRS_VIEW] ?? '').toContain('cannot be judged here');
+    /*
+      THE RECEIPT IS THE ONE PANE NO CLAUSE CAN BE ABOUT, and it says which of
+      the two that is.
+
+      It used to say *the selection elsewhere cannot be judged here* — the
+      sentence for a clause that SET OUT and could not be judged, which reads as
+      a pane that is BROKEN. This one is not: its rows are not in the data space
+      at all (`src/prot/def.ts` · `capabilities`: `canProbe: false` with no
+      `encodings`), so no clause can be ABOUT it, and the sentence is folded off
+      that declaration rather than typed (`web/src/workbench/charts.ts` ·
+      `declaredSilence`).
+    */
+    expect(said[PAIRS_VIEW] ?? '').toContain('declared outside the grammar');
+    expect(said[PAIRS_VIEW] ?? '').toContain('no clause can be about it');
     // nothing scrolled to say any of it
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800);
   });

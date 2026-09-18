@@ -544,6 +544,74 @@ export interface Narrowing {
    * sentence stops at the fact.
    */
   readonly reason?: string;
+  /**
+   * THE SHORT FORM OF THAT REASON, when the pane's own DECLARATION is what
+   * said it (`declaredSilence`) — the one clause a tile may not drop, because
+   * it is what tells *declared outside the grammar* from *broken*.
+   */
+  readonly reasonShort?: string;
+}
+
+/**
+ * WHAT A VIEW SAYS ABOUT ITS OWN VOICE, as much of it as this fold needs — the
+ * two DECLARED booleans the session serves per view (`SessionViewState.views[]`
+ * · `canProbe` / `selectionKinds`). Spelled structurally rather than imported,
+ * because the rules layer may not reach the library (`./README.md`, layer 3).
+ */
+export interface DeclaredVoice {
+  readonly canProbe: boolean;
+  readonly selectionKinds: readonly string[];
+}
+
+/**
+ * *DECLARED OUTSIDE THE GRAMMAR*, TOLD FROM *BROKEN* — the sentence a pane owes
+ * a reader when every other pane on the desk has just narrowed and it has not.
+ *
+ * ── THE DEFECT THIS ANSWERS, MEASURED ──────────────────────────────────────
+ * On the live page at 1280×800, selecting one residue leaves the contact table
+ * at *224 rows · 0 highlighted · scrollTop 0 · scrollHeight 9375* — scrollable,
+ * never scrolled, nothing marked and nothing narrowed, while every pane around
+ * it says what the selection did to it. The pane was not silent (it already
+ * said *224 of 224 rows still drawn — the selection elsewhere cannot be judged
+ * here*), but that sentence is the one a pane says when a clause set out and
+ * could not be judged — which reads as a pane that is BROKEN. This one is not:
+ * its rows are not in the data space at all, so there is no clause a gesture on
+ * it could even be ABOUT, and the def declares exactly that.
+ *
+ * ── AND IT IS READ OFF THE DECLARATION, NOT TYPED FOR ONE PANE ─────────────
+ * The two booleans are the session's own projection of what the def declared
+ * (`src/prot/def.ts` · `capabilities`: `{ viewId: PAIRS_VIEW, canProbe: false }`
+ * with no `encodings`). A pane that declares no voice and no probe is outside
+ * the grammar in both directions, and that is the whole fact. The day such a
+ * pane is given a voice the sentence disappears on its own — which is what
+ * *from the declaration rather than from a literal* has to mean to be worth
+ * anything.
+ *
+ * `null` for every pane that declares any voice at all, and for a wire that
+ * serves no declaration — an absence is absent, never a guess.
+ */
+export interface DeclaredSilence {
+  /** The whole sentence, for the focus slot, which has the room for it. */
+  readonly reason: string;
+  /**
+   * THE SHORT FORM, FOR A TILE — and it is not an abbreviation for tidiness.
+   *
+   * A tile's figure line drops the long clause when it runs out of room, which
+   * for every other narrowing state costs a reader the SOURCE's declared name —
+   * recoverable, and named in the desk's own omissions. Here it would cost the
+   * only thing that tells *declared outside the grammar* from *broken*, which
+   * is the whole point of the sentence. So the tile gets its own, short enough
+   * to survive the line.
+   */
+  readonly short: string;
+}
+
+export function declaredSilence(voice: DeclaredVoice | undefined): DeclaredSilence | null {
+  if (voice === undefined || voice.canProbe || voice.selectionKinds.length > 0) return null;
+  return {
+    reason: 'this pane is declared outside the grammar — it emits no selection and can be probed by none, so no clause can be about it and none can reach it',
+    short: 'declared outside the grammar — no clause can be about it',
+  };
 }
 
 /**
@@ -597,7 +665,7 @@ export function narrowingSaid(narrowing: Narrowing | null, room: NarrowingRoom):
   }
   return room === 'focus'
     ? `${figure(total)} of ${figure(total)} ${unit} still drawn — the selection in ${source} cannot be judged here${because}`
-    : `${figure(total)} of ${figure(total)} ${unit} still drawn — the selection elsewhere cannot be judged here`;
+    : `${figure(total)} of ${figure(total)} ${unit} still drawn — ${narrowing.reasonShort ?? 'the selection elsewhere cannot be judged here'}`;
 }
 
 /** What the floors are folded OUT of — every one of them a number the library or this page already carries. */

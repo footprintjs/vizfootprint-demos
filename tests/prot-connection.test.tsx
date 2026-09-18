@@ -270,8 +270,20 @@ describe('STATE 3 — a pane no clause can be judged on says THAT, and why', () 
     expect(said).toContain(reason!);
   });
 
-  it('and in the rail it says the short form rather than nothing', () => {
-    expect(tileLine(PAIRS_VIEW)).toBe(`${String(PAIR_ROWS.length)} of ${String(PAIR_ROWS.length)} rows still drawn — the selection elsewhere cannot be judged here`);
+  it('and in the rail it says the DECLARATION’s own short form, which is the one clause a tile may not drop', () => {
+    /*
+      IT USED TO SAY *the selection elsewhere cannot be judged here*, and that
+      was the defect: it is the sentence a pane says when a clause SET OUT for
+      it and could not be judged, which reads as a pane that is BROKEN. This one
+      is not — its rows are not in the data space at all, so no clause can even
+      be ABOUT it, and the def declares exactly that (`src/prot/def.ts` ·
+      `capabilities`: `canProbe: false` with no `encodings`). The tile's own
+      short form now carries the declared reason rather than the generic one,
+      because it is the only thing that tells the two apart and a tile that
+      dropped it would leave a reader unable to
+      (`web/src/workbench/charts.ts` · `declaredSilence`).
+    */
+    expect(tileLine(PAIRS_VIEW)).toBe(`${String(PAIR_ROWS.length)} of ${String(PAIR_ROWS.length)} rows still drawn — declared outside the grammar — no clause can be about it`);
   });
 });
 
