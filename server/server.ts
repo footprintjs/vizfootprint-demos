@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDesk, serveDoors } from './doors.js';
 import { createGridDesk, serveGridDoors } from './grid-doors.js';
+import { createProtDesk, serveProtDoors } from './prot-doors.js';
 import { MODEL } from '../src/nndss/analyst.js';
 import { loadGraphAsync, loadSnapshotAsync } from '../src/nndss/snapshot.js';
 import { loadGridAsync } from '../src/grid/snapshot.js';
@@ -72,11 +73,29 @@ function serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void 
   res.end(readFileSync(file));
 }
 
+/**
+ * THE THIRD DESK'S DOORS, and they exist for ONE stage.
+ *
+ * The protein desk is the client-only one: it performs stages 1 to 4 in a
+ * browser and the published build says out loud that it cannot perform stage 5,
+ * because a static page cannot hold the key that would call a model
+ * (`src/prot/plan.ts` · step 5). **This process is the local half of that
+ * sentence.** It holds no protein session — the page holds the dashboard, the
+ * commit log and the rows, and lands the ranking as an act on its own log —
+ * so all this desk carries is a DRIVER, and whether there is one at all is
+ * decided by what this environment offered (`./prot-doors.ts` ·
+ * `chooseHotspotDriver`, the one line here that reads a key).
+ */
+const protDesk = createProtDesk();
+console.log(`  hot spots (stage 5): ${protDesk.driver.mode === 'live' ? `live (ANTHROPIC_API_KEY present) · model ${protDesk.driver.model} · ${protDesk.driver.judge.weaker ? 'a weaker standing judge, on the same family of model' : 'a calibrated standing judge'}` : protDesk.driver.mode === 'scripted' ? 'scripted, because PROT_SCRIPTED=1 asked for it — no model is asked and the wire says so' : 'no key, so the stage cannot run here and says so rather than showing a scripted ranking (PROT_SCRIPTED=1 asks for that by name)'}`);
+
 // THE GRID'S DOORS COME FIRST, and the order is load-bearing: `serveDoors`
 // claims everything under `/api/`, so `/api/grid/rows` reaching it would be
-// answered `no door "grid/rows"` rather than reaching the grid at all.
+// answered `no door "grid/rows"` rather than reaching the grid at all. The
+// protein desk's doors are in front of it for exactly the same reason.
 const server = http.createServer((req, res) => {
-  void serveGridDoors(gridDesk, req, res)
+  void serveProtDoors(protDesk, req, res)
+    .then((handled) => (handled ? true : serveGridDoors(gridDesk, req, res)))
     .then((handled) => (handled ? true : serveDoors(desk, req, res)))
     .then((handled) => {
       if (!handled) serveStatic(req, res);

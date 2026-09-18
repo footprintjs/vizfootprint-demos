@@ -75,7 +75,7 @@ import { useProtProjection } from './protProjection.js';
 import { ActRow, RunNarrative, narrativeTitle } from './protTrace.js';
 import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type StepperStage } from './protStages.js';
 import { Count, Disclosure, RecordDrawer, RegionDivider, WorkbenchHeader, type DividerAction } from './workbench/Chrome.js';
-import { BlockedGroup, ChartCard, ChartTile, ViewerBox } from './workbench/ChartCard.js';
+import { BlockedGroup, ChartCard, ChartTile, Recommendation, ViewerBox } from './workbench/ChartCard.js';
 import { StageStepper } from './workbench/Stepper.js';
 import { methodLine } from './workbench/bands.js';
 import {
@@ -109,7 +109,7 @@ import {
   type RegionSplit,
   type SplitStop,
 } from './workbench/charts.js';
-import { BLOCKED_CARDS, focusVsCursor, stageWords, type BlockedCard } from './workbench/panel.js';
+import { focusVsCursor, railCards, stageWords, type BlockedCard, type HotspotCardInput } from './workbench/panel.js';
 import { STEPPER_LABEL, actsLabelOf, stepViews } from './workbench/steps.js';
 import { useWorkbenchInk } from './workbench/tokens.js';
 
@@ -174,6 +174,25 @@ export interface ProtDeskProps {
   readonly record: ReactNode;
   /** The way back to the search. */
   onSearchAgain(): void;
+  /**
+   * STAGE 5'S ANSWER, on a build that has one — and ABSENT on every build that
+   * cannot ask a model, which is what the published one is.
+   *
+   * With this absent the rail carries the blocked card the plan declares, word
+   * for word (`src/prot/plan.ts` · step 5), and this page is byte-identical to
+   * the one that shipped without stage 5. With it present the same slot
+   * carries what a model said, in the register this page keeps for that
+   * (`workbench/panel.ts` · `hotspotCard`).
+   */
+  readonly hotspots?: HotspotCardInput | null;
+  /**
+   * PUT THE MODEL'S PICKS INTO THE DESK'S LIVE SELECTION — the whole payoff of
+   * the stage, and it belongs to the PAGE rather than to this composition: a
+   * selection is a dispatch on the session, and the data layer is the only code
+   * that touches one (`./README.md`, layer 4). Absent where a page wires none,
+   * and the control is then absent too rather than dead.
+   */
+  onSelectPicks?(residues: readonly string[]): void;
 }
 
 /** What the fold holding the dashboard's own words is called. */
@@ -348,7 +367,7 @@ function rememberedSplit(): RegionSplit {
 }
 
 /** The whole workbench. See the file header for the four layers and what this file is allowed to do. */
-export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, record, onSearchAgain }: ProtDeskProps): JSX.Element {
+export function ProtDesk({ view, data, run, outcomes, checks, session, table, rowsNote, name, claim, credit, counts, record, onSearchAgain, hotspots = null, onSelectPicks }: ProtDeskProps): JSX.Element {
   // ── LAYER 4: the data ─────────────────────────────────────────────────────
   const state = useSessionView(view);
   const sheetPort = useMemo(() => sessionSheetData(session, { table }), [session, table]);
@@ -541,7 +560,13 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
   /** THE RAIL'S ORDER — by the plan step that owns each thing (`workbench/charts.ts` · `byPlanStep`). */
   const ownerOf = (id: string): StepperStage | null => stageOfChart(stages, id, desk.shown, actColumns);
   const pictures = useMemo(() => byPlanStep(cells.map((c) => ({ step: ownerOf(c.id)?.number ?? null, item: c }))), [cells, stages, desk.shown, actColumns]);
-  const cards = useMemo(() => byPlanStep(BLOCKED_CARDS.map((b) => ({ step: stages.find((s) => s.stage === b.id)?.number ?? null, item: b }))), [stages]);
+  /**
+   * THE CARDS OF WORDS — the blocked ones, with stage 5's REPLACED by its
+   * recommendation on a build that performed it (`workbench/panel.ts` ·
+   * `railCards`). Two cards for one step would be two answers to *what
+   * happened at stage 5*.
+   */
+  const cards = useMemo(() => byPlanStep(railCards(hotspots).map((b) => ({ step: stages.find((s) => s.stage === b.id)?.number ?? null, item: b }))), [stages, hotspots]);
 
   /**
    * THE FOCUS, AND THE RAIL — one picture (or the stage's own two) in the
@@ -792,7 +817,7 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       focused={focused}
       howToRead={null}
       legend={[]}
-      footLeft={b.tag}
+      footLeft={b.recommendation === undefined ? b.tag : `${b.recommendation.figures} · ${b.tag}`}
       // the stepper carries which step this card belongs to (see `card` above);
       // the footer keeps the KIND of blocked, which the stepper's word under
       // the mark also carries and which is this card's own subject
@@ -800,13 +825,13 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       note={
         <>
           <p style={{ margin: '0 0 6px' }}>
-            <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>what this step would answer</span> {b.label}
+            <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 10.5, opacity: 0.6, marginRight: 4 }}>{b.recommendation === undefined ? 'what this step would answer' : 'what this step answered'}</span> {b.label}
           </p>
           <p style={{ margin: 0 }}>{b.why}</p>
         </>
       }
       noteLabel="Full note"
-      noteAria={`the whole reason ${b.name} will not run on this build`}
+      noteAria={b.recommendation === undefined ? `the whole reason ${b.name} will not run on this build` : `what a model said at ${b.name}, what it cited, what was refused and what the judge read`}
       clear={null}
       // A BLOCKED STEP LANDED NO COMMIT, so its press ALWAYS parts the focus
       // from the cursor — this card is the one a reader is most often looking
@@ -815,10 +840,34 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
       cursorElsewhere={focused ? elsewhere : null}
       height="fill"
     >
-      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, flex: '1 1 0', minHeight: 0, padding: '6px 0' }}>
-        <p style={{ margin: 0, fontFamily: 'var(--pw-font-serif)', fontSize: focused ? 17 : 12.5, lineHeight: 1.45, color: 'var(--pw-prose)' }}>{b.short}</p>
-        <p style={{ margin: 0, fontSize: focused ? 12.5 : 11, lineHeight: 1.45, color: 'var(--pw-mid-2)' }}>{b.label}</p>
-      </div>
+      {/*
+        A STEP THAT RAN SHOWS WHAT IT SAID; a step that will not run shows why.
+        Same card, same slot, same `Full note` — what differs is that one of
+        them has an answer, and the answer is drawn in the register this page
+        keeps for something a model said (`workbench/ChartCard.tsx` ·
+        `Recommendation`).
+      */}
+      {b.recommendation === undefined ? (
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, flex: '1 1 0', minHeight: 0, padding: '6px 0' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--pw-font-serif)', fontSize: focused ? 17 : 12.5, lineHeight: 1.45, color: 'var(--pw-prose)' }}>{b.short}</p>
+          <p style={{ margin: 0, fontSize: focused ? 12.5 : 11, lineHeight: 1.45, color: 'var(--pw-mid-2)' }}>{b.label}</p>
+        </div>
+      ) : (
+        <Recommendation
+          {...b.recommendation}
+          focused={focused}
+          {...(onSelectPicks === undefined || b.recommendation.rows.length === 0
+            ? {}
+            : {
+                select: {
+                  // NOT MARKED FROM A LITERAL: the residues are the ones on the
+                  // answer, which are the ones the act landed
+                  label: `select these ${String(b.recommendation.rows.length)} residues across the desk`,
+                  onPress: () => onSelectPicks(b.recommendation === undefined ? [] : b.recommendation.rows.map((row) => row.residue)),
+                },
+              })}
+        />
+      )}
     </ChartCard>
   );
 
@@ -1285,7 +1334,8 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
               opening its own card where the whole reason is. */}
           {waiting.length === 0 ? null : (
             <BlockedGroup
-              label="the declared steps this build will not run, and which kind of blocked each one is"
+              label={waiting.some((b) => b.recommendation !== undefined) ? 'the declared steps of the plan with no picture of their own — what a model said, and which kind of blocked the rest are' : 'the declared steps this build will not run, and which kind of blocked each one is'}
+              heading={waiting.some((b) => b.recommendation !== undefined) ? 'declared \u00b7 one ran, the rest will not' : undefined}
               rows={waiting.map((b) => ({ id: b.id, name: b.name, tag: b.tag, short: b.short, promote: { label: promoteCardLabel(b.name), onPress: () => setPromoted({ stage: here?.stage ?? null, id: b.id }) } }))}
             />
           )}

@@ -87,7 +87,8 @@ import type { Row } from 'vizfootprint/data';
 import { CONSERVATION_VIEW, INTERFACE_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
 import { CONSERVATION_COLUMN, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from './analyses.js';
 import type { ConservationEvidence } from './conservationEvidence.js';
-import { runProtStages, type ProtRun, type ProtRunWatch } from './orchestrator.js';
+import { landAct, runProtStages, type ActOutcome, type ProtRun, type ProtRunWatch } from './orchestrator.js';
+import { HOTSPOTS_ACT, HOTSPOTS_INTENT, HOTSPOTS_STAGE, type HotspotAnswered, type HotspotSlot } from './hotspots.js';
 import { protTables, type ProtTables } from './etl.js';
 
 /**
@@ -186,6 +187,17 @@ export interface ProtSurface {
    * ran — see {@link probeTheUnlandedColumns}.
    */
   readonly refusals: UnlandedRefusals;
+  /**
+   * STAGE 5'S SLOT, on a surface whose host can perform stage 5 — and ABSENT
+   * on every other one.
+   *
+   * A static page holds no key, so nothing there can ask a model and the act
+   * is not declared at all (`./hotspots.ts` · `hotspotSlot` says why the
+   * declaration and the answer arrive at different moments). A host with a
+   * process in front of a model opens its surface WITH one and lands the
+   * answer through {@link landHotspots}.
+   */
+  readonly hotspots?: HotspotSlot;
 }
 
 /** The artifact, from text somebody already read — the one door both the node and the browser loaders end at. */
@@ -281,10 +293,10 @@ export async function residuesAt(session: InteractionSession, tables: ProtTables
  * {@link probeTheUnlandedColumns} and then `runProtStages`, or use the async
  * door, which does both in that order.
  */
-export function openProtSurface(artifact: StructureArtifact, evidence: ConservationEvidence | null = null): ProtSurface {
+export function openProtSurface(artifact: StructureArtifact, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): ProtSurface {
   const tables = protTables(artifact.text);
-  const dashboard = buildDashboard(protDef(tables, artifact.text, evidence));
-  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET };
+  const dashboard = buildDashboard(protDef(tables, artifact.text, evidence, hotspots?.analysis ?? null));
+  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET, ...(hotspots === null ? {} : { hotspots }) };
 }
 
 /**
@@ -321,10 +333,10 @@ const unrunResidues = (tables: ProtTables): ResiduesAtCursor => ({ rows: tables.
  * caller does with it, and `tests/prot-progression.test.ts` holds this cursor
  * still.
  */
-export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence: ConservationEvidence | null = null): Promise<ProtSurface> {
+export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): Promise<ProtSurface> {
   const tables = protTables(artifact.text);
-  const dashboard = await buildDashboardAsync(protDef(tables, artifact.text, evidence));
-  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET };
+  const dashboard = await buildDashboardAsync(protDef(tables, artifact.text, evidence, hotspots?.analysis ?? null));
+  return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET, ...(hotspots === null ? {} : { hotspots }) };
 }
 
 /**
@@ -338,8 +350,8 @@ export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence
  * stages) and the sentences from step two are kept, because a visitor arrives
  * at the end of it.
  */
-export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtRunWatch, evidence: ConservationEvidence | null = null): Promise<ProtSurface> {
-  const unrun = await openProtSurfaceUnrun(artifact, evidence);
+export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtRunWatch, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): Promise<ProtSurface> {
+  const unrun = await openProtSurfaceUnrun(artifact, evidence, hotspots);
   const refusals = await probeTheUnlandedColumns(unrun.session);
   // `watch` is the SCREEN's copy of the acts, act by act, and it changes nothing
   // about the run (`./orchestrator.ts` · ProtRunWatch): a host that passes none
@@ -367,4 +379,44 @@ export function protSurfaceProblems(surface: ProtSurface): readonly string[] {
     sentence === null && surface.run !== null ? [`the gesture at "${viewId}" was ACCEPTED before its stage ran — the column it reads was already there, so this desk's account of its own pipeline is wrong`] : [],
   );
   return [...acts, ...gestures];
+}
+
+/**
+ * STAGE 5'S ANSWER, FROZEN — the act dispatched the moment the ranking arrives.
+ *
+ * ── WHY IT IS ITS OWN DOOR AND NOT PART OF THE RUN ─────────────────────────
+ * The orchestrator's chart runs the stages whose evidence is the FILE and
+ * somebody else's published alignment; those can all land before the first
+ * paint. Stage 5's evidence is *what those stages landed*, so its answer
+ * cannot exist while they are dispatching, and the model that gives it lives
+ * behind a process with a key. So the act is dispatched later — through
+ * `./orchestrator.ts` · `landAct`, the one owner of the three-way distinction
+ * between a refusal, a result that was not ok and a throw, so stage 5's
+ * refusal reads exactly like every other stage's.
+ *
+ * ── AND IT LANDS BEFORE ANYTHING CHECKS IT ─────────────────────────────────
+ * This is the whole reason the door is one call: the answer is on the record,
+ * with the fact ids it cited, before anything compares it to what is known
+ * about those residues. The judge's verdicts came back WITH the answer and are
+ * NOT dispatched here — they ride beside the act (`./hotspots.ts` ·
+ * `HotspotAnswered.verdicts`), because a prediction whose commit also carried
+ * its check would be a prediction revised by the check.
+ *
+ * A surface with no slot is a surface whose host cannot perform stage 5, and
+ * that is a REFUSAL rather than a throw: it is the honest state of every static
+ * build of this desk.
+ */
+export async function landHotspots(surface: ProtSurface, answer: HotspotAnswered): Promise<ActOutcome> {
+  if (surface.hotspots === undefined) {
+    return {
+      stage: HOTSPOTS_STAGE,
+      act: HOTSPOTS_ACT,
+      commit: null,
+      refusal: `act "${HOTSPOTS_ACT}" was never declared on this surface — it was opened without a slot for stage 5, which is what every build that cannot ask a model does, so there is nothing here to land a ranking into`,
+      materialized: [],
+    };
+  }
+  surface.hotspots.offer(answer);
+  const landed = await landAct(surface.session, HOTSPOTS_ACT, HOTSPOTS_INTENT);
+  return { stage: HOTSPOTS_STAGE, act: HOTSPOTS_ACT, commit: landed.commit, refusal: landed.refusal, materialized: landed.materialized };
 }

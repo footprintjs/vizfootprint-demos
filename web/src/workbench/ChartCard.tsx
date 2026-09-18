@@ -46,7 +46,7 @@
  * the `colorOf` a chart accepts — and a thing the library cannot express is a
  * finding, not a licence to style its internals.
  */
-import { useState, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Chevron, GlassButton } from './Chrome.js';
 
 /** One of a stage's own numbers: the name of a figure, and the figure. Folded by the business layer off the acts' own answers, never counted here. */
@@ -524,10 +524,144 @@ export interface BlockedRow {
   readonly promote: { readonly label: string; onPress(): void };
 }
 
+// ── what a model said, in the register this page keeps for that ─────────────
+
+/**
+ * ONE RANKED RESIDUE — props, and the shape is declared HERE rather than
+ * imported, the {@link CardFact} precedent: a component that takes only props
+ * is a component that can later move into `vizfootprint-ui`, and one that
+ * imported the protein desk's own answer type could never move at all
+ * (`./README.md`, law 2). The rules layer's own `HotspotPick` is structurally
+ * this, which is what keeps the two from drifting without an import.
+ */
+export interface RecommendationRow {
+  readonly residue: string;
+  readonly rank: number;
+  readonly reason: string;
+  /** The fact ids this row's reason rests on. NEVER empty: a row with none is refused before it reaches a screen. */
+  readonly cites: readonly string[];
+}
+
+/** One second-source verdict, as props. */
+export interface RecommendationVerdict {
+  readonly of: string;
+  readonly judge: string;
+  readonly model: string | null;
+  readonly confidence: number;
+  readonly by: string;
+  readonly failed?: string;
+}
+
+export interface RecommendationProps {
+  /** The words in the corner — `a recommendation, not a measurement`. Never a literal in here. */
+  readonly tag: string;
+  /** One line of figures: how many ranked, how many facts served, how many refused. */
+  readonly figures: string;
+  readonly rows: readonly RecommendationRow[];
+  /** Every refusal, verbatim and by name. Shown, never counted away. */
+  readonly refused: readonly string[];
+  /** What the judge is and whether it is the weaker of the two, in the door's own words. */
+  readonly judge: string;
+  readonly verdicts: readonly RecommendationVerdict[];
+  /** Where the judge and the model disagreed — shown, resolved by nobody. */
+  readonly disagreements: readonly string[];
+  /** The sentence, when the stage ran and there is no ranking. */
+  readonly said: string | null;
+  readonly focused: boolean;
+  /** The control that puts the model's own picks into the desk's live selection. Absent where the page wires none. */
+  readonly select?: { readonly label: string; onPress(): void };
+}
+
+/**
+ * WHAT A MODEL SAID — and the whole job of this component is that it cannot be
+ * mistaken for the measured numbers around it.
+ *
+ * Three things do that, and none of them is a colour nobody declared:
+ *
+ *   - the TAG in the corner is `a recommendation, not a measurement`, and it
+ *     arrives as a prop from the one module that owns those words;
+ *   - the reason is in the SERIF face this page uses for prose and the cited
+ *     ids are in the MONO face it uses for numbers, so the sentence reads as a
+ *     sentence somebody wrote and the ids read as a reference;
+ *   - **every row shows its citations.** A row cannot be drawn without them —
+ *     a ranking that cited nothing never reaches this component, because it
+ *     was refused — so there is no state in which this card shows a rank with
+ *     nothing behind it.
+ *
+ * The REFUSALS and the DISAGREEMENTS are rendered, not summarised: a refusal
+ * counted and hidden is the silent omission this desk is built against, and a
+ * disagreement is a fact of the record that nothing here resolves.
+ */
+export function Recommendation({ tag, figures, rows, refused, judge, verdicts, disagreements, said, focused, select }: RecommendationProps): JSX.Element {
+  const MONO: CSSProperties = { fontFamily: 'var(--pw-font-mono)', fontSize: focused ? 10 : 9, letterSpacing: '0.03em', color: 'var(--pw-soft-2)' };
+  if (rows.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, flex: '1 1 0', minHeight: 0, padding: '6px 0' }}>
+        <span style={{ ...MONO, textTransform: 'uppercase' }}>{tag}</span>
+        <p role="status" style={{ margin: 0, fontFamily: 'var(--pw-font-serif)', fontSize: focused ? 15 : 12, lineHeight: 1.45, color: 'var(--pw-prose)' }}>
+          {said ?? 'the stage has not answered yet'}
+        </p>
+        {verdicts.length === 0 ? null : <p style={{ margin: 0, fontSize: focused ? 11.5 : 10, lineHeight: 1.4, color: 'var(--pw-mid-2)' }}>{judge}</p>}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 0', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <span style={{ ...MONO, textTransform: 'uppercase' }}>{tag}</span>
+      <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 3, minHeight: 0, overflow: 'auto' }}>
+        {rows.map((row) => (
+          <li key={row.residue} style={{ borderTop: '1px solid var(--pw-rule-faint)', paddingTop: 3, minWidth: 0 }}>
+            <span style={{ ...MONO, color: 'var(--pw-mid)', marginRight: 5 }}>{row.rank}</span>
+            <b style={{ fontFamily: 'var(--pw-font-mono)', fontSize: focused ? 11 : 10, fontWeight: 600, color: 'var(--pw-mid)' }}>{row.residue}</b>
+            {focused ? <span style={{ fontFamily: 'var(--pw-font-serif)', fontSize: 13, lineHeight: 1.4, color: 'var(--pw-prose)' }}> — {row.reason}</span> : null}
+            {/* THE CITATIONS, on every row, in the face this page uses for a reference */}
+            <span style={{ ...MONO, marginLeft: 5 }}>cites {row.cites.join(' ')}</span>
+          </li>
+        ))}
+      </ol>
+      <span style={{ ...MONO, color: 'var(--pw-soft)' }}>{figures}</span>
+      {select === undefined ? null : (
+        <button
+          type="button"
+          onClick={select.onPress}
+          style={{ font: 'inherit', fontFamily: 'var(--pw-font-sans)', fontSize: focused ? 11 : 10, alignSelf: 'flex-start', cursor: 'pointer', color: 'var(--pw-accent)', background: 'none', border: 0, padding: 0, textAlign: 'left' }}
+        >
+          {select.label}
+        </button>
+      )}
+      {refused.length === 0 ? null : (
+        <ul aria-label="what the model said that was refused, and why" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {refused.map((sentence) => (
+            <li key={sentence} style={{ fontSize: focused ? 11 : 9.5, lineHeight: 1.35, color: 'var(--pw-refuse-ink)' }}>
+              {focused ? sentence : sentence.split(' — ')[0]}
+            </li>
+          ))}
+        </ul>
+      )}
+      {disagreements.length === 0 ? null : (
+        <ul aria-label="where the standing judge and the model disagreed" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {disagreements.map((sentence) => (
+            <li key={sentence} style={{ fontSize: focused ? 11 : 9.5, lineHeight: 1.35, color: 'var(--pw-mid-2)' }}>
+              {focused ? sentence : sentence.split(' — ')[0]}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export interface BlockedGroupProps {
   /** The section's accessible name. */
   readonly label: string;
   readonly rows: readonly BlockedRow[];
+  /**
+   * The words over the rows. Defaults to what this card has always said —
+   * passed only where it would be WRONG, which is a build where one of these
+   * steps really ran (`../protDesk.tsx`): a header claiming *will not run
+   * here* over a row that just did would be the card contradicting the log.
+   */
+  readonly heading?: string;
 }
 
 /**
@@ -548,7 +682,7 @@ export interface BlockedGroupProps {
  * per step — rather than one control that would have to pick a step for the
  * reader.
  */
-export function BlockedGroup({ label, rows }: BlockedGroupProps): JSX.Element {
+export function BlockedGroup({ label, rows, heading = 'declared \u00b7 will not run here' }: BlockedGroupProps): JSX.Element {
   return (
     <section
       aria-label={label}
@@ -566,7 +700,7 @@ export function BlockedGroup({ label, rows }: BlockedGroupProps): JSX.Element {
         minWidth: 0,
       }}
     >
-      <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-soft)' }}>declared · will not run here</span>
+      <span style={{ fontFamily: 'var(--pw-font-mono)', fontSize: 9, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--pw-soft)' }}>{heading}</span>
       {rows.map((row) => (
         <button
           key={row.id}

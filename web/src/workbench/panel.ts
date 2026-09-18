@@ -83,10 +83,11 @@ import { CONSERVATION_ACT, CONTACTS_ACT, PAIRS_ACT, SURFACE_ACT } from '../../..
 import { SCORE_IS, SCORE_IS_NOT } from '../../../src/prot/conservation.js';
 import { PLACEMENT_HERE, PLACEMENT_STRATEGIES } from '../../../src/prot/placement.js';
 import { PROT_BLOCKED, type Blocker } from '../../../src/prot/plan.js';
+import { HOTSPOTS_STAGE, HOTSPOT_TAG, type HotspotOutcome } from '../../../src/prot/hotspots.js';
 import type { ProtCounts } from '../../../src/prot/etl.js';
 import type { ProtRun } from '../../../src/prot/orchestrator.js';
 import type { StageState, StepperStage } from '../protStages.js';
-import type { CardFact } from './ChartCard.js';
+import type { CardFact, RecommendationRow, RecommendationVerdict } from './ChartCard.js';
 
 /** How many of the recorder's own sentences reach the card. The rest are in the record drawer — see the file header. */
 export const NARRATIVE_LINES = 3;
@@ -213,11 +214,158 @@ export interface BlockedCard {
   readonly label: string;
   /** `not available here`, `not on this build`, `not built yet` — the three kinds, distinguishable IN the card and not only on the mark. */
   readonly tag: string;
-  readonly blockedBy: Blocker;
+  /** Which kind of blocked, or `null` for the ONE card that is not blocked at all — see {@link RecommendationView}. */
+  readonly blockedBy: Blocker | null;
   /** What the card says where a picture would be: the reason's own first clause. */
   readonly short: string;
   /** The whole reason, behind the card's own `Full note`. */
   readonly why: string;
+  /**
+   * PRESENT ON EXACTLY ONE CARD, and only where something performed stage 5:
+   * what a model said, in the register this page keeps for that. A card with
+   * this is not a blocked card any more — it is a card of words where a
+   * blocked card used to be, which is why it arrives through the same slot
+   * rather than through a fifth band of its own.
+   */
+  readonly recommendation?: RecommendationView;
+}
+
+/**
+ * WHAT A MODEL SAID, folded for the screen — and every field of it is READ off
+ * the answer rather than composed about a protein.
+ *
+ * ── THE ONE THING THIS SHAPE IS FOR ───────────────────────────────────────
+ * A rank is not a measurement, and the page may not let it read as one. So the
+ * tag rides ON the view (never a literal in a component), every row carries
+ * THE FACT IDS IT CITED, and the judge's own sentence and its disagreements
+ * are fields rather than decisions: a disagreement is shown, resolved by
+ * nobody.
+ *
+ * `rows` is EMPTY on a stage that ran and did not answer, and `said` is then
+ * the sentence — one of {@link HotspotOutcome}'s, verbatim, so a reader learns
+ * whether the stage did not run, ran and refused, or ran and answered.
+ */
+/**
+ * Typed against `./ChartCard.tsx`'s OWN props (the {@link CardFact}
+ * precedent), so what this fold answers IS what the component takes and the
+ * composition spreads it. `HotspotPick` and `HotspotVerdict` are structurally
+ * those rows, which is how the two sides stay one shape with no import across
+ * the boundary that would pin the component to this desk.
+ */
+export interface RecommendationView {
+  /** `a recommendation, not a measurement` — the one owner is `src/prot/hotspots.ts`. */
+  readonly tag: string;
+  /** The model that was asked, in the caller's own words. `null` where nothing was. */
+  readonly model: string | null;
+  /** One line of figures: how many ranked, how many facts served, how many rankings refused. */
+  readonly figures: string;
+  /** The ranked residues, in the model's own order. */
+  readonly rows: readonly RecommendationRow[];
+  /** Every refusal, verbatim and by name — the hallucination door's record, shown and never counted away. */
+  readonly refused: readonly string[];
+  /** What the judge is, and whether it is the weaker of the two. */
+  readonly judge: string;
+  readonly verdicts: readonly RecommendationVerdict[];
+  /** Where the judge and the model disagreed. Empty is an absence and is absent. */
+  readonly disagreements: readonly string[];
+  /** The sentence, when there is no ranking to show. `null` when there is one. */
+  readonly said: string | null;
+}
+
+/** What the page hands the fold: the stage's own answer, and what the door said about the judge behind it. */
+export interface HotspotCardInput {
+  readonly outcome: HotspotOutcome;
+  /** The door's own sentence about which judge ran (`server/prot-doors.ts` · `ProtStateWire.judge`). */
+  readonly judge: string;
+}
+
+/**
+ * STAGE 5'S CARD, where its blocked card used to be.
+ *
+ * It keeps the blocked card's SHAPE — a name, a tag, one line where a picture
+ * would be, the whole story behind `Full note` — because the shape is right: a
+ * step with no chart says what it has to say at the size and in the position
+ * of the thing it is about (`./README.md`), and nothing about that changes
+ * when the thing it has to say is a ranking.
+ *
+ * What changes is the TAG. A blocked card's corner carries which kind of
+ * blocked; this one carries *a recommendation, not a measurement*, and that is
+ * the whole of how the page says what register this is in.
+ */
+export function hotspotCard(step: { readonly name: string; readonly label: string }, input: HotspotCardInput): BlockedCard {
+  const view = recommendationOf(input);
+  return {
+    id: HOTSPOTS_STAGE,
+    name: step.name,
+    label: step.label,
+    tag: view.tag,
+    blockedBy: null,
+    // THE COMPACT ROW'S LINE, and it is CUT AT A PUNCTUATION BOUNDARY exactly
+    // as a blocked card's is ({@link firstClause}): a failure sentence names
+    // its reason in full and the rail's row is one line of ten-pixel text, so
+    // the whole sentence goes where the whole reason always goes — the card,
+    // one press away, and the `Full note` under it. Never re-worded, never cut
+    // mid-word, and never the only copy.
+    short: view.said === null ? view.figures : firstClause(view.said),
+    why:
+      `A MODEL WAS ASKED, and what it said is a recommendation rather than a measurement. ${view.model === null ? '' : `The model asked was ${view.model}. `}` +
+      `${view.said === null ? '' : `WHAT HAPPENED ON THIS RUN: ${view.said} `}` +
+      `Every rank below cites the ids of the facts its reason rests on — facts this run's own stages established, served to the model one per id, never computed a second time for its benefit. ` +
+      `A residue it named that this run's residue table has no row for was refused by name, and so was a citation naming a fact the ledger does not hold. ` +
+      `${view.verdicts.length === 0 ? 'No second source read the evidence on this run.' : `A standing judge read the evidence as a second source: ${view.judge}`} ` +
+      `${view.disagreements.length === 0 ? 'It agreed with the model about what the evidence was worth.' : `IT DID NOT AGREE WITH THE MODEL, and both readings are on the record: ${view.disagreements.join(' · ')}`} ` +
+      `${view.refused.length === 0 ? 'Nothing it said was refused.' : `${num(view.refused.length)} of the things it said were refused: ${view.refused.join(' · ')}`}`,
+    recommendation: view,
+  };
+}
+
+/** The answer, folded — one function, so the card and the record drawer cannot say it two ways. */
+export function recommendationOf({ outcome, judge }: HotspotCardInput): RecommendationView {
+  if (!outcome.ok) {
+    return {
+      tag: HOTSPOT_TAG,
+      model: null,
+      figures: 'nothing ranked',
+      rows: [],
+      refused: [],
+      judge,
+      verdicts: outcome.verdicts,
+      disagreements: [],
+      said: outcome.sentence,
+    };
+  }
+  return {
+    tag: HOTSPOT_TAG,
+    model: outcome.model,
+    figures: [
+      `${num(outcome.picks.length)} ${outcome.picks.length === 1 ? 'residue' : 'residues'} ranked`,
+      `${num(outcome.served)} ${outcome.served === 1 ? 'fact' : 'facts'} served`,
+      outcome.refused.length === 0 ? null : `${num(outcome.refused.length)} refused`,
+      outcome.disagreements.length === 0 ? null : `${num(outcome.disagreements.length)} judge ${outcome.disagreements.length === 1 ? 'disagreement' : 'disagreements'}`,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(' · '),
+    rows: outcome.picks,
+    refused: outcome.refused,
+    judge,
+    verdicts: outcome.verdicts,
+    disagreements: outcome.disagreements,
+    said: null,
+  };
+}
+
+/**
+ * THE CARDS OF WORDS IN THE RAIL — the blocked ones, with stage 5's REPLACED
+ * by its recommendation where something performed it.
+ *
+ * Replaced rather than added: two cards for one step would be two answers to
+ * *what happened at stage 5*, and the published build's answer is the one that
+ * is wrong on a build that just ran it. `null` gives back
+ * {@link BLOCKED_CARDS} exactly.
+ */
+export function railCards(input: HotspotCardInput | null): readonly BlockedCard[] {
+  if (input === null) return BLOCKED_CARDS;
+  return BLOCKED_CARDS.map((card) => (card.id === HOTSPOTS_STAGE ? hotspotCard(card, input) : card));
 }
 
 /**

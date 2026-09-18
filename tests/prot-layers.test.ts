@@ -141,6 +141,12 @@ describe('RULE 3 — the theme is the only place a colour lives', () => {
     // the page's own foot is styled here too since the follow-up round, so it
     // is judged by the same rule as everything else that draws
     { name: 'web/site/prot/entry.tsx', source: code(readFileSync(join(process.cwd(), 'web', 'site', 'prot', 'entry.tsx'), 'utf8')) },
+    // THE SERVED PAGE IS JUDGED BY THE SAME RULE, and it has to be: it is the
+    // second composition of this desk (the local one, where stage 5 runs —
+    // `web/src/protServed.tsx`), it draws a foot and a card of its own, and a
+    // page exempt from the theme's one law would be a page where a colour could
+    // land without anybody noticing.
+    { name: 'web/src/protServed.tsx', source: code(readFileSync(join(process.cwd(), 'web', 'src', 'protServed.tsx'), 'utf8')) },
   ];
 
   for (const { name, source } of drawn) {

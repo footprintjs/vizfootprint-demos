@@ -243,7 +243,7 @@ export const NO_CONSERVATION_EVIDENCE =
  * which says the same thing about React).
  */
 type LibraryChart = ReturnType<AnalysisDef['build']>;
-const libraryChart = (chart: RunnableFlowChart): LibraryChart => chart as unknown as LibraryChart;
+export const libraryChart = (chart: RunnableFlowChart): LibraryChart => chart as unknown as LibraryChart;
 
 /** What every act's `toRunInput` hands its flowchart: the alignment, and which bytes. See the file header. */
 interface ActArgs {
@@ -556,7 +556,7 @@ function conservationAnalysis(evidence: ConservationEvidence | null): AnalysisDe
  * a file needs node, and this one runs in a browser (`./snapshot.ts` and
  * `./http.ts` are the two doors that fetch it).
  */
-export function protAnalyses(structureText: string, evidence: ConservationEvidence | null = null): Readonly<Record<string, AnalysisSlot>> {
+export function protAnalyses(structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null): Readonly<Record<string, AnalysisSlot>> {
   // THE ORDER IS {@link PROT_ACT_ORDER}'S, and `tests/prot-def.test.ts` pins
   // that: a registry in a different order from the list the orchestrator
   // dispatches off would make the def's own key order a second, silent
@@ -571,8 +571,34 @@ export function protAnalyses(structureText: string, evidence: ConservationEviden
     [PAIRS_ACT]: pairsAnalysis(structureText) as unknown as AnalysisSlot,
     [CONTACTS_ACT]: contactsAnalysis(structureText) as unknown as AnalysisSlot,
     [SURFACE_ACT]: surfaceAnalysis(structureText) as unknown as AnalysisSlot,
+    /**
+     * THE FIFTH ACT, AND ONLY WHERE SOMETHING CAN PERFORM IT.
+     *
+     * Stage 5 needs a model, and a static page cannot hold the key that would
+     * call one (`./plan.ts` · step 5). So the slot arrives from OUTSIDE:
+     * whoever has a process standing in front of a model builds it
+     * (`./hotspots.ts` · `hotspotSlot`) and hands it in, and a def built
+     * without one declares four acts exactly as it always did — the same
+     * bytes, the same registry, the same order. An act is never declared for a
+     * stage nothing here can run, which is the law `./plan.ts`'s own judge
+     * keeps: *declaring a stage IN THE DEF means the orchestrator dispatches
+     * acts for it, and for step 5 that would be a LIE.*
+     *
+     * It is an opaque `AnalysisSlot` rather than an import, so this module —
+     * the one owner of the four acts every build performs — does not depend on
+     * the one that can only sometimes perform a fifth.
+     */
+    ...(hotspots === null ? {} : { [HOTSPOTS_ACT_KEY]: hotspots }),
   };
 }
+
+/**
+ * The key the fifth act is filed under, spelled here because this is the
+ * registry that files it — and JUDGED against `./hotspots.ts` · `HOTSPOTS_ACT`
+ * by that module at load, the `ACT_TABLE` precedent: two spellings of one name
+ * is the thing this repository refuses, and a cycle is not the way to prevent it.
+ */
+export const HOTSPOTS_ACT_KEY = 'residueHotspots';
 
 /**
  * THE THREE STAGES AND THEIR ACTS, IN THE ORDER THEY MUST LAND — the list the

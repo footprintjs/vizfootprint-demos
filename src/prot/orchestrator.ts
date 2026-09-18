@@ -106,8 +106,14 @@ const causeFor = (intent: string): Cause => ({ requestedBy: 'system', computedBy
  *     symmetry mates the minted key cannot tell apart. A throw out of an act is
  *     information, and losing it would leave an operator with an empty chart
  *     and no sentence.
+ *
+ * EXPORTED, because stage 5 dispatches an act this chart does not run: its
+ * answer arrives after the run (`./hotspots.ts` — a model has to be asked
+ * first), so `./session.ts` · `landHotspots` dispatches it later and through
+ * THIS function, so the three-way distinction above is made in one place for
+ * every act on this desk rather than twice with two vocabularies.
  */
-async function landAct(session: InteractionSession, act: string, intent: string): Promise<{ readonly commit: string | null; readonly refusal: string | null; readonly materialized: readonly string[]; readonly output: unknown }> {
+export async function landAct(session: InteractionSession, act: string, intent: string): Promise<{ readonly commit: string | null; readonly refusal: string | null; readonly materialized: readonly string[]; readonly output: unknown }> {
   try {
     const answer = await session.declareAnalysis(act, { cause: causeFor(intent) });
     const materialized = answer.materialized ?? [];

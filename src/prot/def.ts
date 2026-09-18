@@ -746,7 +746,13 @@ export function protGrains(): readonly { readonly viewId: string; readonly keys:
  * this file a host can vouch for (`./http.ts` and `./session.ts` say why no
  * carrier will vouch for more).
  */
-export function protDef(tables: ProtTables, structureText: string, evidence: ConservationEvidence | null = null): DashboardDef {
+/**
+ * `hotspots` is the FIFTH ACT'S SLOT, and it is absent on every build that
+ * cannot perform stage 5 (`./plan.ts` · step 5: a static page cannot hold the
+ * key that would call a model). A def built without one declares the four acts
+ * it always did, byte for byte — see `./analyses.ts` · `protAnalyses`.
+ */
+export function protDef(tables: ProtTables, structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null): DashboardDef {
   return {
     meta: { title: 'A protein complex — vizfootprint on one PDB entry' },
     data: protSources(tables.residues),
@@ -766,7 +772,7 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
     // dispatched by `./orchestrator.ts`, three stages in order — and `PROT_STAGES`
     // is the one list that says which act belongs to which stage, so the
     // captions and the chart cannot disagree about it.
-    analyses: protAnalyses(structureText, evidence),
+    analyses: protAnalyses(structureText, evidence, hotspots),
     encodings: protEncodings(),
     grains: protGrains(),
     // THE HONEST CAPABILITY ENVELOPE, one view at a time.

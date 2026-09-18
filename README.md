@@ -285,9 +285,34 @@ npm install
 npm run data:fetch      # only to refresh the snapshot — it is committed
 npm run data:geo        # only to regenerate the map shapes — they are committed
 npm run serve           # http://localhost:5290/api/state  (put ANTHROPIC_API_KEY in .env for a live analyst)
-npm run web:dev         # http://localhost:5291
+npm run web:dev         # http://localhost:5291 — and http://localhost:5291/prot/ for the served protein desk
 npm test
 ```
+
+### The protein desk has a SERVED page too, and it is local-only by design
+
+`http://localhost:5291/prot/` (with `npm run serve` beside it) is the same
+protein desk with a process behind it, and the process buys **exactly one
+thing: stage 5, the hot spot recommendation.** Stages 1 to 4 run in the browser
+on both pages — the archive, InterPro and the two Mol\* engines all answer a
+page directly — and stage 5 needs a model, which needs a key, and *a key
+shipped inside a page's own bytes is a key given away.*
+
+So **the published desk goes on saying it cannot perform that stage**, with its
+measured reason, and that is the architecture rather than a shortfall
+(`src/prot/plan.ts` · step 5). The served page is for somebody who cloned the
+project and wants to watch the whole pipeline: the door asks a model
+(`server/prot-doors.ts`), the answer is a **recommendation** whose every rank
+cites the ids of the facts this run's own stages established, a residue the
+run's residue table has no row for is **refused by name**, and a standing
+judge's reading of the same evidence is recorded beside the answer with its
+disagreements shown rather than smoothed over. With no `ANTHROPIC_API_KEY` in
+the environment the door says *that*, which is a different sentence from the
+published build's — and `PROT_SCRIPTED=1 npm run serve` asks, by name, for the
+scripted driver instead, so the whole stage can be watched with no key and no
+network at all. It says which in three places at once (the mode, the model
+string, the judge's own sentence), because a scripted ranking must never be
+mistakable for one a model gave.
 
 The other two demos have their own commands. The grid desk is served
 (`npm run grid:dev`); the exoplanet desk was built for the static site and has

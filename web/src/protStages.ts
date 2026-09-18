@@ -216,6 +216,49 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
     materialized: [],
   });
   /**
+   * A STEP THE PLAN DECLARES, THE DEF DOES NOT, AND SOMETHING PERFORMED ANYWAY
+   * — stage 5, on a build with a process standing in front of a model.
+   *
+   * ── WHY THIS ARM EXISTS AT ALL ─────────────────────────────────────────────
+   * The plan publishes `hotspots` as *declared, and this build cannot perform
+   * it*, and that is TRUE OF THE PUBLISHED BUILD and false of a local one. The
+   * plan is not edited for it and must not be: a static page really cannot hold
+   * the key, the def really dispatches nothing for it, and the load-time judge
+   * that keeps those two honest stays exactly as it is
+   * (`src/prot/plan.ts` · `judgeThePlan`).
+   *
+   * What changes is the RUN's account of itself. An act for a plan-only step in
+   * `outcomes` is a host saying *I performed this*, and it can only have got
+   * there by dispatching a real act on the real session
+   * (`src/prot/session.ts` · `landHotspots`). So the outcome wins over the
+   * blocked card, in exactly the way a landed act wins over a not-run circle
+   * for every other stage — and a host that performed nothing hands over no
+   * outcome and gets today's screen, byte for byte.
+   *
+   * `declared` is the number of acts that came back rather than a list's
+   * length, because nothing declares how many acts this step dispatches: the
+   * def has never heard of it.
+   */
+  const performed = (step: PlanStep, acts: readonly ActOutcome[]): Omit<StepperStage, 'number' | 'name' | 'blockedBy' | 'landsAtRoot'> => {
+    const refusals = acts.flatMap((a) => (a.refusal === null ? [] : [a.refusal]));
+    const materialized = acts.flatMap((a) => a.materialized);
+    const landedCommits = acts.flatMap((a) => (a.commit === null ? [] : [a.commit]));
+    return {
+      stage: step.stage,
+      label: step.question ?? step.name,
+      state: refusals.length > 0 ? 'refused' : 'landed',
+      subtitle: refusals.length > 0 ? `${plural(refusals.length, 'act', 'acts')} of this step ${refusals.length === 1 ? 'was' : 'were'} refused` : landedSubtitle(acts, materialized),
+      // THE REFUSAL SENTENCES, VERBATIM, and NOT the plan's own reason: the
+      // plan says this build cannot perform the step, and on a build that just
+      // did, printing that paragraph would be the screen contradicting the log
+      detail: refusals.length === 0 ? null : refusals.join(' · '),
+      acts,
+      declared: acts.length,
+      commit: landedCommits.length === 0 ? null : landedCommits[landedCommits.length - 1]!,
+      materialized,
+    };
+  };
+  /**
    * AND THE LAYOUT: the plan's order, the plan's numbers, the plan's short
    * names.
    *
@@ -224,15 +267,23 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
    * through this map and off the screen.
    */
   const folded = new Map([...runnable, ...unavailable].map((stage) => [stage.stage, stage]));
-  return PROT_PLAN.map((step): StepperStage => ({
-    ...(folded.get(step.stage) ?? planOnly(step)),
-    number: step.step,
-    name: step.name,
-    blockedBy: step.blockedBy,
-    // the step the def dispatches nothing for and nothing is blocking: the
-    // parse, whose answer is true before the record starts
-    landsAtRoot: !folded.has(step.stage) && step.blockedBy === null,
-  }));
+  return PROT_PLAN.map((step): StepperStage => {
+    /** What this run says it did for a step the def declares nothing for — empty for every other step. */
+    const performedActs = folded.has(step.stage) ? [] : outcomes.filter((o) => o.stage === step.stage);
+    return {
+      ...(folded.get(step.stage) ?? (performedActs.length > 0 ? performed(step, performedActs) : planOnly(step))),
+      number: step.step,
+      name: step.name,
+      // A STEP SOMETHING PERFORMED IS NOT BLOCKED, whatever the plan says about
+      // the build that publishes it: the blocker is the PUBLISHED build's and
+      // the outcome is THIS run's, and a mark that said both would be the
+      // stepper holding two ideas of the same fact.
+      blockedBy: performedActs.length > 0 ? null : step.blockedBy,
+      // the step the def dispatches nothing for and nothing is blocking: the
+      // parse, whose answer is true before the record starts
+      landsAtRoot: !folded.has(step.stage) && performedActs.length === 0 && step.blockedBy === null,
+    };
+  });
 }
 
 /**

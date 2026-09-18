@@ -353,3 +353,45 @@ The same bridge sets `--vzf-text-scale: 0.85`, the library's own density hook, b
 ## The one place two copies of a value exist, and the pin that keeps them one
 
 The library's charts take a categorical colour through a **function** (`colorOf`), not through a stylesheet, so the two chain hues have to exist in TypeScript as well as in CSS. `tokens.ts` · `CHAIN_INK` carries the same bytes `theme.css` carries, for an environment with no stylesheet, and `tests/prot-theme.test.ts` **parses the stylesheet and fails when the two disagree**. The stylesheet is the owner; the copy is pinned, never trusted.
+
+## A NUMBER A MODEL GAVE IS IN A REGISTER OF ITS OWN, AND IT CARRIES ITS CITATIONS
+
+Stage 5 is the one number on this desk that nothing measured. A model was shown the facts stages 1 to 4 established and asked which residues it would call hot spots; what came back is **a recommendation, not a measurement**, and the page may never let it read as one.
+
+It lands in the SLOT its blocked card used to occupy (`ChartCard.tsx · Recommendation`, folded by `panel.ts · hotspotCard` / `railCards`), because that shape was already right: *a step with no chart says what it has to say at the size and in the position of the thing it is about.* What changes is not the shape, it is three things inside it — and none of them is a colour nobody declared:
+
+| the rule | how it is kept | what breaks it |
+|---|---|---|
+| the card says which register it is in | the tag in its corner is `a recommendation, not a measurement`, and it arrives as a **prop** from the one module that owns those words (`src/prot/hotspots.ts · HOTSPOT_TAG`) | a literal in the component; a tag that says `landed` like a measured stage's |
+| **every row shows the fact ids it cited** | `RecommendationRow.cites` is not optional, and a ranking that cited nothing never reaches a screen — it was refused (`src/prot/hotspots.ts · REFUSE_CITES_NOTHING`) | a row drawn without its ids; a count of citations instead of the ids |
+| a sentence somebody wrote reads as one | the reason is in `--pw-font-serif` (this page's prose face) and the ids in `--pw-font-mono` (its number face), so the two cannot be scanned as one kind of thing | putting the reason in Mono beside the counts |
+| a refusal is shown, never counted | `refused` is rendered as its own list, verbatim, with the name the model gave | `3 refused` with the sentences behind a fold nobody opens |
+| a disagreement is shown, resolved by nobody | `disagreements` is its own list beside the ranking, and **the ranking stays** | dropping the ranking because the judge disagreed; averaging two sources into one verdict |
+
+**The hallucination door is the load-bearing one.** A residue the model names that this run's residue table has no row for is refused *by name, with the name it gave*:
+
+```
+the model named "Z:999" and this run's residue table has no row for it — a prediction
+about a residue that is not in the evidence is refused by name, and nothing of that
+ranking was landed
+```
+
+`tests/prot-hotspot-card.test.tsx` renders that sentence out of the card, and `tests/prot-hotspots.test.ts` produces it from a real run on the `mock` provider.
+
+### The stage's columns land on `residues` like every other stage's, and that is the whole point
+
+`hotspot_rank`, `hotspot_cites` and `hotspot_reason` go on the same table, under the same key, through the same columns channel the contacts, the surface and the conservation stages use (`src/prot/hotspots.ts · hotspotsAnalysis`). So the picks are **in the data space**, the Sheet shows them, and the card's one control puts them into the desk's live selection with a single dispatch at a view the def already declares — `interface`, whose category channel binds `residue_key`. A pick lands, the 3D view recolours, the scatter dims and the two runs narrow, **through the machinery that was already there**. No new chart kind, no new link, and the residues are the ones on the answer rather than marked from a literal.
+
+`hotspot_cites` in the data is the `conservation_basis` precedent, and the argument is the same one: *a rank whose fact ids were only ever on a card would be a number a reader could quote with nothing behind it.*
+
+### And the card has three states, because a reader must learn which happened
+
+| state | what the card shows |
+|---|---|
+| **a ranking** | the rows, their citations, one line of figures, every refusal, every disagreement |
+| **ran and answered nothing** | the stage's own sentence — unreachable, timed out, refused, malformed, cited nothing, every ranking refused — verbatim, in place of the rows (`src/prot/hotspots.ts · HotspotFailure`) |
+| **nothing to ask** | the door's sentence about having **no key**, which is deliberately NOT the published build's reason: a server is standing here and has nothing to ask (`server/prot-doors.ts · chooseHotspotDriver`) |
+
+### The published desk is untouched, and that is asserted rather than intended
+
+`ProtDesk`'s `hotspots` prop is ABSENT on the static page, `railCards(null)` hands back `BLOCKED_CARDS` itself, and stage 5's mark still says *not on this build* with its whole measured reason behind its `Full note`. A static page cannot hold the key that would call a model — **that is the architecture and not a shortfall** — and `tests/prot-hotspot-card.test.tsx` and `tests/prot-plan.test.ts` are what stop a later edit making the Pages build claim otherwise. The served page (`web/src/protServed.tsx`, local only) is where the prop is filled.
