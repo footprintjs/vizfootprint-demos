@@ -34,8 +34,8 @@
     "site:dev": "vite --config web/site.vite.config.ts"
   },
   "dependencies": {
-    "agentfootprint": "^9.89.0",
-    "agentfootprint-lens": "^0.47.1",
+    "agentfootprint": "^9.109.1",
+    "agentfootprint-lens": "^0.64.0",
     "molstar": "^5.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
