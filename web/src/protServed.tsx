@@ -53,7 +53,8 @@
  */
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createSessionView, sessionSource } from 'vizfootprint-ui';
+import { cellOrderToLayoutValue, createSessionView, sessionSource } from 'vizfootprint-ui';
+import { ARRANGEMENT_PROP, ARRANGEMENT_SCOPE } from './workbench/arrangement.js';
 import 'vizfootprint-ui/styles.css';
 import { loadStructureOverHttp, readCommittedOverHttp, PROT_COMMITTED_READS, type HttpWatch } from '../../src/prot/http.js';
 import { conservationEvidenceFor } from '../../src/prot/conservationEvidence.js';
@@ -493,17 +494,28 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         a dispatch beside the view the pictures are folded at is a SECOND
         CURSOR, and the act lands while nothing on screen moves.
 
-        The door is the library's own cockpit one. `setLayout({ order })` lands
-        ONE `navigate` on `layout:dashboard` with the plain words the commit log
-        will show, and that commit is INERT by construction at the session tier
-        — it never enters a filter, never reaches `foldDiff` and can never move
-        a row count. It branches at the cursor like any act and `rebuildFold`
-        restores it, which is the whole reason the arrangement travels: seek
-        behind the swap and the desk comes back to how it was.
+        The door is the library's GENERIC layout one. `setLayoutNote` lands ONE
+        `navigate` on `layout:protein-desk` — THIS desk's own scope, where it
+        used to borrow the cockpit's `layout:dashboard` because no door existed
+        for a third-party scope — and that commit is INERT by construction at
+        the session tier: it never enters a filter, never reaches `foldDiff` and
+        can never move a row count. It branches at the cursor like any act and
+        `rebuildFold` restores it, which is the whole reason the arrangement
+        travels: seek behind the swap and the desk comes back to how it was.
 
-        Nothing is read back through here: the desk reads `state.layout.order`.
+        `words` is THIS DESK'S OWN SENTENCE and the door requires it, so the
+        commit rail reads what the desk says its act did instead of the machine
+        list `layout order: a, b, c`. And the door ANSWERS: its refusal is
+        returned rather than left for the caller to discover by re-reading the
+        fold.
+
+        Nothing is read back through here: the desk reads its own scope off
+        `state.layouts`.
       */
-      onArrange={(order) => void view.setLayout({ order: [...order] })}
+      onArrange={async (order, words) => {
+        const done = await view.setLayoutNote({ scope: ARRANGEMENT_SCOPE, prop: ARRANGEMENT_PROP, value: cellOrderToLayoutValue([...order]), words });
+        return done.ok ? null : done.sentence;
+      }}
       boot={bootSteps(booted.report)}
       onSearchAgain={onSearchAgain}
       record={<ServedFoot booted={booted} onSearchAgain={onSearchAgain} />}

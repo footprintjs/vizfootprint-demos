@@ -17,17 +17,15 @@
  * layout note.
  */
 import { describe, expect, it } from 'vitest';
-import { LAYOUT_DASHBOARD_VIEW_ID, parseLayout } from 'vizfootprint-ui';
+import { LAYOUT_DASHBOARD_VIEW_ID, cellOrderFromLayoutValue, cellOrderToLayoutValue } from 'vizfootprint-ui';
 import {
   ARRANGEMENT_PROP,
   ARRANGEMENT_SCOPE,
-  ARRANGEMENT_SEPARATOR,
   arrangePanes,
   arrangementSaid,
   defaultPaneOrder,
   dropLabel,
   heldLabel,
-  paneNameRefusal,
   pickUpLabel,
   slotsOf,
   stripSlots,
@@ -44,22 +42,32 @@ const says = (id: string): boolean => id === STRUCTURE_VIEW;
 const base = (): readonly string[] => defaultPaneOrder(PANES, wants, says);
 
 describe('the identity and the codec are the library’s own, not a second grammar', () => {
-  it('lands under `layout:dashboard` — the scope pinned against the door the act goes through', () => {
-    expect(`layout:${ARRANGEMENT_SCOPE}`).toBe(LAYOUT_DASHBOARD_VIEW_ID);
+  it('lands under THIS DESK’S OWN scope, not the cockpit’s — which is the whole re-pin', () => {
+    // It used to be `layout:dashboard`: this desk rode the cockpit's scope
+    // because the library had no door for a third-party one. It has now
+    // (`vizfootprint-ui` · `SessionView.setLayoutNote`), so the act lands where
+    // it is ABOUT — and the two must stay different, or the desk is back to
+    // sharing a scope with a surface it is not.
+    expect(`layout:${ARRANGEMENT_SCOPE}`).toBe('layout:protein-desk');
+    expect(`layout:${ARRANGEMENT_SCOPE}`).not.toBe(LAYOUT_DASHBOARD_VIEW_ID);
+    expect(ARRANGEMENT_PROP).toBe('panes');
   });
 
-  it('rides the cockpit’s `order` prop, and round-trips through the cockpit’s own reader', () => {
+  it('round-trips through the LIBRARY’S codec, which is the same one the door writes with', () => {
     const order = [...base()];
-    // exactly what `SessionView.setLayout({ order })` writes…
-    const value = order.join(ARRANGEMENT_SEPARATOR);
-    // …and exactly what `SessionViewState.layout.order` reads back
-    expect(parseLayout({ [ARRANGEMENT_PROP]: value }).order).toEqual(order);
+    expect(cellOrderFromLayoutValue(cellOrderToLayoutValue(order))).toEqual(order);
   });
 
-  it('refuses the one name the joined codec cannot carry, rather than writing it down as two', () => {
-    expect(paneNameRefusal('surface')).toBeNull();
-    expect(paneNameRefusal('a,b')).toContain('cannot be written down');
-    expect(paneNameRefusal('   ')).toContain('cannot be arranged');
+  it('CARRIES A NAME THE OLD WORKAROUND REFUSED — the reason the refusal was deleted', () => {
+    // This desk used to refuse a pane whose name held the separator, because
+    // the cockpit's codec joined an order with one. The library's codec now
+    // writes JSON wherever the joined form would not read back byte-for-byte,
+    // so the name rides — and keeping the refusal would have left this desk as
+    // the one place a legal name is still illegal.
+    const awkward = ['a,b', 'surface'];
+    expect(cellOrderFromLayoutValue(cellOrderToLayoutValue(awkward))).toEqual(awkward);
+    // …and a plain order still writes the bytes it always wrote
+    expect(cellOrderToLayoutValue(['surface', 'rama'])).toBe('surface,rama');
   });
 });
 

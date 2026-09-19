@@ -66,6 +66,7 @@ import {
   useSessionView,
   type SessionView,
   type SheetSessionLike,
+  cellOrderFromLayoutValue,
 } from 'vizfootprint-ui';
 import type { EntryCredit, ProtCounts } from '../../src/prot/etl.js';
 import type { ActOutcome, ProtRun } from '../../src/prot/orchestrator.js';
@@ -80,6 +81,8 @@ import { actColumnsOf, chartsOfStage, stageAtCursor, stepperStages, type HostSte
 import { Count, Disclosure, RecordDrawer, RegionDivider, WorkbenchHeader, type DividerAction } from './workbench/Chrome.js';
 import { BlockedGroup, ChartCard, ChartTile, PaneHome, Recommendation, ViewerBox, type ArrangeHandle } from './workbench/ChartCard.js';
 import {
+  ARRANGEMENT_PROP,
+  ARRANGEMENT_SCOPE,
   arrangePanes,
   arrangementSaid,
   defaultPaneOrder,
@@ -87,7 +90,6 @@ import {
   heldLabel,
   heldSaid,
   homeSaid,
-  paneNameRefusal,
   pickUpLabel,
   slotsOf,
   stripSlots,
@@ -252,16 +254,26 @@ export interface ProtDeskProps {
    *
    * The order is a permutation of this desk's pane ids
    * (`./workbench/arrangement.ts` · `swapPanes`), and the page hands it to the
-   * library's own cockpit door: `view.setLayout({ order })`, which lands ONE
-   * inert commit on `layout:dashboard` that folds, branches per cursor and
-   * replays. **Nothing is read back through this prop** — the arrangement at
-   * the cursor comes off the record (`state.layout.order`), so a seek restores
-   * it and a reload does too.
+   * library's GENERIC layout door — `view.setLayoutNote({ scope, prop, value,
+   * words })` — which lands ONE inert commit on `layout:protein-desk` that
+   * folds, branches per cursor and replays. **Nothing is read back through this
+   * prop**: the arrangement at the cursor comes off the record, so a seek
+   * restores it and a reload does too.
+   *
+   * IT USED TO BE THE COCKPIT'S OWN DOOR, and the two things that changed are
+   * the whole re-pin. The act now lands under THIS DESK'S scope rather than
+   * borrowing `layout:dashboard`, because the library gained a door for a
+   * third-party scope. And `words` is required, so the rail shows what this
+   * desk says its act did — *"swap A with B…"* — where it used to show the
+   * machine list `layout order: a, b, c`.
+   *
+   * It answers the session's refusal or `null`, which the caller SAYS rather
+   * than assuming the act landed.
    *
    * Absent where a page wires none, and the handles are then absent rather than
    * dead.
    */
-  onArrange?(order: readonly string[]): void;
+  onArrange?(order: readonly string[], words: string): Promise<string | null>;
 }
 
 /** What the boot's own account is called in the record drawer — the detail the centred line cannot carry. */
@@ -713,13 +725,19 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    * THE ARRANGEMENT AT THIS CURSOR — read off the RECORD and never off a
    * boolean this component keeps, exactly as the paint control's direction is.
    *
-   * `state.layout.order` is the library's own cockpit cell order, folded from
-   * the `layout:dashboard` commits on the active path up to the cursor
-   * (`vizfootprint-ui` · `parseLayout`). So a seek behind a swap shows the
-   * earlier arrangement, a seek forward shows the later one, and a reload shows
-   * whatever the record says — with no help from this file.
+   * It is read off `state.layouts` — scope → prop → value, as the fold holds it
+   * — at THIS DESK'S own scope, and decoded with the library's own codec
+   * (`vizfootprint-ui` · `cellOrderFromLayoutValue`), which is the same codec
+   * the door writes with. One grammar, one owner, both directions. It used to
+   * be `state.layout.order`, the cockpit's parsed scope, because this desk had
+   * to ride it.
+   *
+   * So a seek behind a swap shows the earlier arrangement, a seek forward shows
+   * the later one, and a reload shows whatever the record says — with no help
+   * from this file.
    */
-  const arranged = useMemo(() => arrangePanes(defaults, state.layout.order), [defaults, state.layout.order]);
+  const recordedOrder = useMemo(() => cellOrderFromLayoutValue(state.layouts?.[ARRANGEMENT_SCOPE]?.[ARRANGEMENT_PROP]), [state.layouts]);
+  const arranged = useMemo(() => arrangePanes(defaults, recordedOrder), [defaults, recordedOrder]);
   /** How many HOMES the bottom strip has — a constant of the geometry, folded once over every pane (`arrangement.ts` · `stripSlots`). */
   const stripCount = useMemo(() => stripSlots(arranged.panes, (id) => shapeOfView(id) === 'wide'), [arranged.panes]);
   /**
@@ -794,24 +812,28 @@ export function ProtDesk({ view, data, run, outcomes, checks, session, table, ro
    * ONE SWAP, LANDED — the only place an arrangement is written, and the only
    * place a pane name is judged.
    *
-   * The value is a permutation of the ids this desk holds; the cockpit's own
-   * codec joins it with a comma, so a name carrying one is REFUSED here with
-   * the reason rather than written down as two names
-   * (`./workbench/arrangement.ts` · `paneNameRefusal`). An act that would change
-   * nothing lands nothing.
+   * The value is a permutation of the ids this desk holds. THIS DESK NO LONGER
+   * JUDGES A PANE'S NAME: it used to refuse one carrying a comma, because the
+   * cockpit's codec joined an order with one — the library's codec now writes
+   * JSON where the joined form would not read back, so the name rides and the
+   * refusal was deleted rather than left as the one place a legal name is still
+   * illegal.
+   *
+   * AND THE DOOR'S ANSWER IS READ, NOT ASSUMED. `setLayoutNote` hands back what
+   * the session said; until it did, a host could only learn its arrangement was
+   * refused by re-reading the fold, which is the door-drops-the-refusal shape
+   * this library has now filed against thirteen doors. An act that would change
+   * nothing lands nothing and says nothing.
    */
   const landSwap = (a: string, b: string): void => {
     setHeld(null);
     if (onArrange === undefined) return;
     const next = swapPanes(arranged.panes, a, b);
     if (next === null) return;
-    const refused = next.map(paneNameRefusal).find((reason) => reason !== null);
-    if (refused !== undefined && refused !== null) {
-      setSaid(refused);
-      return;
-    }
     setSaid(null);
-    onArrange(next);
+    void onArrange(next, dropLabel(a, b)).then((refusal) => {
+      if (refusal !== null) setSaid(refusal);
+    });
   };
   /**
    * THE KEYBOARD PATH, AND IT IS THE SAME ACT — press to pick up, press another

@@ -51,36 +51,46 @@
  */
 
 /**
- * THE SCOPE THE ARRANGEMENT LANDS UNDER — the library's own cockpit scope, so
- * the identity on the trace is `layout:dashboard`.
+ * THE SCOPE THE ARRANGEMENT LANDS UNDER — THIS DESK'S OWN, so the identity on
+ * the trace is `layout:protein-desk`.
  *
- * STATED here rather than imported for the reason `SHEET_LAYOUT_PREFIX` is
- * stated in the library's own sheet arrangement: the rules layer may not reach
- * the library at all (`./README.md`, layer 3; `tests/prot-layers.test.ts` rule
- * 2). It is a COPY, and `tests/prot-arrangement.test.ts` pins it against what
- * the door actually lands.
+ * IT USED TO BE THE COCKPIT'S. This desk had to ride `layout:dashboard.order`
+ * because the library had no door for a third-party scope — three fixed props
+ * is not a vocabulary — and a cell permutation was honestly what this is. The
+ * library's generic door (`vizfootprint-ui` · `SessionView.setLayoutNote`,
+ * shipped as the lift of this desk's own packet) means the arrangement now
+ * lands where it is about, and a second arrangement prop here would have
+ * somewhere to go.
+ *
+ * STATED rather than imported for the reason the library states its own
+ * prefixes: the rules layer may not reach the library at all (`./README.md`,
+ * layer 3; `tests/prot-layers.test.ts` rule 2). `tests/prot-arrangement.test.ts`
+ * pins it against what the door actually lands.
  */
-export const ARRANGEMENT_SCOPE = 'dashboard';
-
-/** The arrangement prop the pane order rides — `LayoutChange.order`, beside `preset` and `focus`. */
-export const ARRANGEMENT_PROP = 'order';
-
-/** What the cockpit's codec joins an order with (`vizfootprint-ui` · `parseLayout`). A name holding it cannot ride. */
-export const ARRANGEMENT_SEPARATOR = ',';
+export const ARRANGEMENT_SCOPE = 'protein-desk';
 
 /**
- * WHY A PANE'S NAME COULD NOT RIDE THIS CODEC — `null` when it can.
- *
- * The cockpit's `order` is a joined string, so a name carrying the separator
- * would come back as two names and an arrangement nobody asked for. Refusing is
- * the only honest answer: repairing the name would forge the record of an act,
- * and dropping it silently would land an order missing a pane.
+ * The arrangement prop the pane order rides — this desk's own word for it, no
+ * longer borrowed from the cockpit's `order`.
  */
-export function paneNameRefusal(id: string): string | null {
-  if (id.trim().length === 0) return 'a pane with no name cannot be arranged — the cockpit’s order carries names, and a blank one names nothing';
-  if (id.includes(ARRANGEMENT_SEPARATOR)) return `the pane "${id}" carries a "${ARRANGEMENT_SEPARATOR}", which is what the cockpit’s order joins names with — this arrangement cannot be written down without changing its name`;
-  return null;
-}
+export const ARRANGEMENT_PROP = 'panes';
+
+/**
+ * THERE IS NO SEPARATOR REFUSAL HERE ANY MORE, and its removal is the point of
+ * the re-pin.
+ *
+ * This desk used to refuse a pane whose name held a comma, because the
+ * cockpit's codec joined an order with one and such a name would come back as
+ * two panes. The library's codec now writes JSON whenever the joined form would
+ * not read back byte-for-byte (`vizfootprint-ui` · `cellOrderToLayoutValue`),
+ * so the name rides. Keeping the refusal would leave this desk as the one place
+ * where a legal name is still illegal — a workaround outliving the thing it
+ * worked around, which is worse than the original gap because nobody would know
+ * to look for it.
+ *
+ * A BLANK name is not refused here either: the door judges a layout note's
+ * SHAPE and the desk has no pane named by a blank string to arrange.
+ */
 
 /** The arrangement this desk is actually in, and what the trace names that this desk does not have. */
 export interface ArrangedPanes {

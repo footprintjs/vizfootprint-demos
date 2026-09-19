@@ -45,7 +45,8 @@
  */
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { createSessionView, sessionSource } from 'vizfootprint-ui';
+import { cellOrderToLayoutValue, createSessionView, sessionSource } from 'vizfootprint-ui';
+import { ARRANGEMENT_PROP, ARRANGEMENT_SCOPE } from '../../src/workbench/arrangement.js';
 import 'vizfootprint-ui/styles.css';
 import { loadStructureOverHttp, readCommittedOverHttp } from '../../../src/prot/http.js';
 import { conservationEvidenceFor } from '../../../src/prot/conservationEvidence.js';
@@ -205,7 +206,7 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
           a dispatch beside the view the pictures are folded at is a SECOND
           CURSOR, and the act lands while nothing on screen moves.
 
-          The door is the library's own cockpit one. `setLayout({ order })` lands
+          The door is the library's GENERIC layout one. `setLayoutNote` lands
           ONE `navigate` on `layout:dashboard` with the plain words the commit log
           will show, and that commit is INERT by construction at the session tier
           — it never enters a filter, never reaches `foldDiff` and can never move
@@ -215,7 +216,10 @@ function StaticProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
 
           Nothing is read back through here: the desk reads `state.layout.order`.
         */
-        onArrange={(order) => void view.setLayout({ order: [...order] })}
+        onArrange={async (order, words) => {
+          const done = await view.setLayoutNote({ scope: ARRANGEMENT_SCOPE, prop: ARRANGEMENT_PROP, value: cellOrderToLayoutValue([...order]), words });
+          return done.ok ? null : done.sentence;
+        }}
         onSearchAgain={onSearchAgain}
         record={<PageFoot booted={booted} surface={surface} onSearchAgain={onSearchAgain} />}
       />

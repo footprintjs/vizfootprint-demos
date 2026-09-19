@@ -350,8 +350,14 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader arrange
       // is, which is this desk's one folding shape.
       await page.locator('button[aria-label^="the commit log"]').first().click();
       await page.waitForTimeout(900);
-      const row = page.locator('button[data-commit][title^="layout order"]').last();
+      // THE ROW IS FOUND BY THIS DESK'S OWN WORDS, and that is the re-pin.
+      // It used to be found by `title^="layout order"` — the machine list the
+      // cockpit's door composed for itself. The generic door requires the HOST's
+      // words, so the rail now reads what this desk says its act did, and a row
+      // that still said "layout order" would mean the words never reached it.
+      const row = page.locator('button[data-commit][title^="swap "]').last();
       expect(await row.count(), 'the swap landed no commit the log can name').toBe(1);
+      expect(await page.locator('button[data-commit][title^="layout order"]').count(), 'the rail is still showing the machine list instead of this desk’s words').toBe(0);
       say(`  the act on the log: ${String(await row.getAttribute('title'))}`);
       await row.click();
       await page.waitForTimeout(1200);
