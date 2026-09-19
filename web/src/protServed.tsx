@@ -354,18 +354,20 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
         `point`, and the library's own law is that a view declaring only point
         ACCEPTS a match.
       */
+      // A REFUSED GESTURE IS NEVER SWALLOWED — and this is the THIRD shape of
+      // that guard on this line. The first `void`ed the promise, so a refused
+      // emission looked exactly like one that was accepted and changed nothing,
+      // which is the failure this desk is built against. The second caught a
+      // rejection the door never threw, so it guarded nothing at all. The door
+      // ANSWERS now, so the reader gets the session's own sentence.
       void view
         .emit(
           INTERFACE_VIEW,
           { rawValue: { values: [...picks] }, encoding: { kind: 'match', field: RESIDUE_KEY } },
           `keep the ${String(picks.length)} residues a model ranked as hot spots, so every other picture on this desk narrows to them`,
         )
-        .catch((error: unknown) => {
-          // A REFUSED GESTURE IS NEVER SWALLOWED. The first version of this
-          // `void`ed the promise, so a session that refused the emission looked
-          // exactly like one that accepted it and changed nothing — which is
-          // the failure this desk is built against.
-          setPickRefusal(error instanceof Error ? error.message : String(error));
+        .then((done) => {
+          if (!done.ok) setPickRefusal(done.sentence);
         });
     },
     [view],
@@ -389,31 +391,24 @@ function ServedProtDesk({ booted, onSearchAgain }: { readonly booted: Booted; on
    * `RANK_DECLARED`: a rank is a PLACE, like `resnum`), never a widened house
    * rule.
    *
-   * ── AND THE REFUSAL IS NOT SWALLOWED, WHICH TOOK A READ-BACK ───────────────
-   * `view.reencode` answers `Promise<void>` and drops the session's own
-   * rejection (a FINDING, reported: a host cannot learn from that door that its
-   * rebind was refused). So this asks the RECORD afterwards — the encoding fold
-   * at the cursor — and if the channel is not carrying what was asked for, the
-   * page says so beside its other checks rather than leaving a control that
-   * looks like it worked.
+   * ── AND THE REFUSAL IS THE SESSION'S OWN WORDS, WHICH IT DID NOT USED TO BE ─
+   * This page used to ask the RECORD afterwards — a second `overview()` round
+   * trip, re-reading the encoding fold at the cursor, and if the channel was not
+   * carrying what was asked for it printed a sentence THIS PAGE wrote, standing
+   * in for one the session had already said and thrown away. That was a
+   * workaround for a FINDING this desk filed, and the library has since taken
+   * it: eighteen doors now hand back what the session said, so the whole
+   * read-back is deleted and the reader gets the reason rather than this page's
+   * guess at it.
    */
   const onPaintByRank = useCallback(
     (bound: boolean): void => {
       const field = bound ? 'chain' : HOTSPOT_RANK_COLUMN;
-      void view
-        .reencode(STRUCTURE_VIEW, 'color', field)
-        .then(async () => {
-          const over = await surface.session.overview();
-          const now = (over.encodings as Readonly<Record<string, Readonly<Record<string, string>>>> | undefined)?.[STRUCTURE_VIEW]?.['color'];
-          if (now !== field) {
-            setPickRefusal(
-              `the 3D view's colour channel was asked for "${field}" and is carrying "${now ?? 'nothing'}" — the session refused the rebind, and the door this page rebinds through does not hand back the sentence it refused with`,
-            );
-          }
-        })
-        .catch((error: unknown) => setPickRefusal(error instanceof Error ? error.message : String(error)));
+      void view.reencode(STRUCTURE_VIEW, 'color', field).then((done) => {
+        if (!done.ok) setPickRefusal(done.sentence);
+      });
     },
-    [view, surface.session],
+    [view],
   );
   /**
    * ASK THE MODEL AGAIN — on the LIVE session, and the earlier refusal STAYS.
