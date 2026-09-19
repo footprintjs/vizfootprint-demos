@@ -107,6 +107,7 @@ const REFUSED: readonly ActOutcome[] = [ALL_LANDED[0]!, ALL_LANDED[1]!, landedAc
 const RUN: ProtRun = {
   outcomes: ALL_LANDED,
   conservation: null,
+  annotation: null,
   narrative: [
     'Stage "Every non-covalent contact in the entry" started.',
     'Stage "Every non-covalent contact in the entry" wrote 3 columns.',
@@ -369,18 +370,20 @@ describe('THE CONSERVATION STAGE SAYS WHICH METHOD PLACED ITS NUMBERS — on its
 });
 
 describe('A STAGE THAT WILL NOT RUN HERE GETS A CARD, and the reason is inside it', () => {
-  it('is one card per declared stage that will not run — two now, each a different kind of blocked', () => {
+  it('is one card per declared stage that will not run — ONE now, and the count is the story', () => {
     /*
-      IT WAS THREE. The conservation stage was one of them, declared to the def
-      as unavailable on a measured reason that turned out to answer the wrong
-      question, and it is a landed stage with a picture now
-      (`src/prot/analyses.ts` · `PROT_UNAVAILABLE_STAGES` records the reversal).
-      The card list is folded from `PROT_BLOCKED`, so it followed without this
-      file being edited for anything but the count.
+      IT WAS THREE, THEN TWO, AND IT IS ONE. The conservation stage was one of
+      them, declared to the def as unavailable on a measured reason that turned
+      out to answer the wrong question; the annotation stage was another,
+      blocked by US with nothing external in the way, and it was built. Both are
+      landed stages with pictures now (`src/prot/analyses.ts` ·
+      `PROT_UNAVAILABLE_STAGES` and `src/prot/plan.ts` · step 6 record the two
+      reversals). The card list is folded from `PROT_BLOCKED`, so it followed
+      without this file being edited for anything but the count.
     */
     expect(BLOCKED_CARDS.map((c) => c.id)).toEqual(PROT_BLOCKED.map((s) => s.stage));
-    expect(BLOCKED_CARDS).toHaveLength(2);
-    expect(BLOCKED_CARDS.map((c) => c.tag)).toEqual(['not on this build', 'not built yet']);
+    expect(BLOCKED_CARDS).toHaveLength(1);
+    expect(BLOCKED_CARDS.map((c) => c.tag)).toEqual(['not on this build']);
     expect(PROT_UNAVAILABLE_STAGES).toEqual([]);
   });
 
@@ -404,7 +407,7 @@ describe('A STAGE THAT WILL NOT RUN HERE GETS A CARD, and the reason is inside i
   });
 
   it('draws the card with the words where the marks would be — and NO chart, no axis, no frame pretending to be one', async () => {
-    const card = BLOCKED_CARDS[1]!;
+    const card = BLOCKED_CARDS[0]!;
     const panel = await mount(
       <ChartCard
         id={`stage:${card.id}`}

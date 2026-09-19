@@ -69,3 +69,12 @@ export function readCommittedFile(file: string): Promise<string> {
 export function conservationProvenance(at: URL = CONSERVATION_PROVENANCE): Record<string, unknown> {
   return JSON.parse(readFileSync(at, 'utf8')) as Record<string, unknown>;
 }
+
+/** Where what is already known lives, and what the fetch recorded about it. */
+export const ANNOTATION_DIR = new URL('annotation/', ENTRY_DIR);
+export const ANNOTATION_PROVENANCE = new URL('PROVENANCE.json', ANNOTATION_DIR);
+
+/** What the annotation fetch recorded — read from the file it wrote, never retyped. */
+export function annotationProvenance(at: URL = ANNOTATION_PROVENANCE): Record<string, unknown> {
+  return JSON.parse(readFileSync(at, 'utf8')) as Record<string, unknown>;
+}

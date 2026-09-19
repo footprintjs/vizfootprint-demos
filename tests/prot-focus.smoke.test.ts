@@ -44,7 +44,7 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { buildSiteIfMissing, startProtSite, type SiteHandle } from './protSiteServer.js';
 import { EXAMPLE_ENTRY } from '../src/prot/archive.js';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, KNOWN_VIEW, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { PAIRS_ACT } from '../src/prot/analyses.js';
 import { PROT_PLAN } from '../src/prot/plan.js';
 
@@ -266,6 +266,72 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the stepper respon
       expect(now.current).toEqual(now.bars);
       expect(now.current).toEqual([1]);
     }, 120_000);
+  });
+
+  /*
+    ── DEFECT 3 — A PRESS PROMOTED THE RIGHT PANE AND THE PANE WAS BLANK ──────
+    Measured on the served page: pressing step 6 moved the focus to stage 6's
+    own chart, and the chart had NOTHING IN IT. Its height was the SURFACE
+    stage's column, which lands last, so at the cursor the press seeks to — the
+    stage's own commit — the height was not on the rows and every mark was
+    dropped.
+
+    Every assertion on this desk passed through it, including the two above,
+    because each of them asked WHICH pane was promoted and none asked whether
+    the pane had anything in it. So this presses all six columns the way a
+    reader does and COUNTS THE MARKS in whatever comes up. The fold-level law
+    is pinned in `tests/prot-progression.test.ts`; this is the same claim where
+    a reader would meet it.
+  */
+  describe('DEFECT 3 — every press puts something on screen, and the marks are counted', () => {
+    beforeAll(async () => {
+      await closeTheRecord(page);
+      // back to the head, so every stage's columns are on the rows again
+      await page.locator('nav ol li:nth-child(3) button').click();
+      await page.waitForTimeout(1200);
+    });
+
+    it('presses each of the six columns and finds marks in what it promoted — or a card of words, never an empty picture', async () => {
+      for (let column = 1; column <= 6; column += 1) {
+        const control = page.locator(`nav ol li:nth-child(${String(column)}) button`);
+        expect(await control.count(), `column ${String(column)} is not a control`).toBe(1);
+        await control.click();
+        await page.waitForTimeout(1400);
+        const promoted = await page.evaluate(() => {
+          const pane = document.querySelector('[data-chart][data-focused="true"]');
+          if (pane === null) return null;
+          return {
+            id: pane.getAttribute('data-chart') ?? '?',
+            marks: pane.querySelectorAll('circle.vzf-line-dot, circle.vzf-dot, rect.vzf-barrect').length,
+            rows: pane.querySelectorAll('tbody tr').length,
+            // a WebGL viewer draws no marks at all, and a card of words draws none either
+            canvas: pane.querySelectorAll('canvas').length,
+            said: (pane.textContent ?? '').replace(/\s+/g, ' '),
+          };
+        });
+        expect(promoted, `pressing column ${String(column)} promoted nothing`).not.toBeNull();
+        say(`  column ${String(column)} → ${promoted!.id}: ${String(promoted!.marks)} marks, ${String(promoted!.rows)} rows, ${String(promoted!.canvas)} canvas`);
+        /*
+          THE ONE SENTENCE A WORKING DESK MAY NOT SHOW: the promoted pane's own
+          refusal. A card of words for the step this build cannot perform is a
+          different thing and is allowed — it IS its step's content.
+        */
+        expect(promoted!.said, `column ${String(column)} promoted a picture that says nothing landed`).not.toContain('nothing to draw yet');
+        if (promoted!.id.startsWith('stage:')) continue;
+        expect(
+          promoted!.marks + promoted!.rows + promoted!.canvas,
+          `column ${String(column)} promoted "${promoted!.id}" and it is EMPTY — the press worked and the reader was shown nothing`,
+        ).toBeGreaterThan(0);
+      }
+      // …and stage 6's own chart really is the one step 6 promotes, with its
+      // four named residues on it
+      await page.locator('nav ol li:nth-child(6) button').click();
+      await page.waitForTimeout(1200);
+      const six = await page.evaluate((id) => document.querySelector(`[data-chart="${id}"][data-focused="true"]`)?.querySelectorAll('rect.vzf-barrect').length ?? -1, KNOWN_VIEW);
+      say(`  and step 6 promotes stage 6's own chart with ${String(six)} marks`);
+      expect(six).toBe(4);
+      expect(pageErrors, `the page threw: ${pageErrors.join(' · ')}`).toEqual([]);
+    }, 180_000);
   });
 
   describe('DEFECT 2 — a mark in a rail tile can be pressed, and the tile says how hard that is', () => {

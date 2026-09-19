@@ -32,7 +32,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement, type ReactElement } from 'react';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { PROT_ENCODINGS, PROT_ENCODINGS_ALL, PROT_VIEWS, RANKING_ENCODING, RANKING_VIEW, RESIDUES_TABLE, RESIDUE_KEY, protDef } from '../src/prot/def.js';
-import { INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN } from '../src/prot/analyses.js';
+import { INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, UNIPROT_SITE_COLUMN } from '../src/prot/analyses.js';
 import { HOTSPOT_RANK_COLUMN, HOTSPOT_TAG, HOTSPOT_WANT, askHotspots, hotspotLedger, hotspotSlot, scriptedHotspotModel, scriptedJudge } from '../src/prot/hotspots.js';
 import { PROT_PLAN, planStepOf } from '../src/prot/plan.js';
 import { protTables } from '../src/prot/etl.js';
@@ -363,6 +363,11 @@ describe('a press on stage 5 promotes this picture — and stage 4 does not own 
     { stage: 'conservation', act: 'residueConservation', commit: 'c-cons', refusal: null, materialized: ['conservation', 'conservation_basis'] },
     { stage: 'interactions', act: 'interactionPairs', commit: 'c-pairs', refusal: null, materialized: [] },
     { stage: 'interactions', act: 'residueContacts', commit: 'c-contacts', refusal: null, materialized: ['contacts', INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN] },
+    // STAGE 6'S ACT IS IN THIS RUN because a real run lands it — and its
+    // absence would have handed stage 6's picture to the interactions stage,
+    // whose `contacts` column is its HEIGHT. A fixture missing a stage is a
+    // fixture that answers the ownership question for the wrong desk.
+    { stage: 'annotation', act: 'residueAnnotation', commit: 'c-annotation', refusal: null, materialized: [UNIPROT_SITE_COLUMN, 'uniprot_note', 'pfam_domain'] },
     { stage: 'surface', act: 'residueSurface', commit: 'c-surface', refusal: null, materialized: [SASA_COLUMN, RELATIVE_SASA_COLUMN] },
     { stage: 'hotspots', act: 'residueHotspots', commit: 'c-hotspots', refusal: null, materialized: [HOTSPOT_RANK_COLUMN, 'hotspot_cites', 'hotspot_reason'] },
   ];
@@ -389,6 +394,9 @@ describe('a press on stage 5 promotes this picture — and stage 4 does not own 
     expect(stageOfChart(STAGES, 'interface', SHOWN, COLUMNS)?.stage).toBe('interactions');
     expect(stageOfChart(STAGES, 'surface', SHOWN, COLUMNS)?.stage).toBe('surface');
     expect(stageOfChart(STAGES, 'conservation', SHOWN, COLUMNS)?.stage).toBe('conservation');
+    // and stage 6's, which borrows its height from stage 4 exactly as stage 5's
+    // borrows from it — the later stage owns both
+    expect(stageOfChart(STAGES, 'known', SHOWN, COLUMNS)?.stage).toBe('annotation');
     // the two drawn from the file's own columns are still the parse's
     expect(stageOfChart(STAGES, 'structure', SHOWN, COLUMNS)?.stage).toBe('search');
     expect(stageOfChart(STAGES, 'rama', SHOWN, COLUMNS)?.stage).toBe('search');
@@ -442,8 +450,19 @@ describe('the view is declared ONLY where the act is, so the published definitio
     expect(shape(PUBLISHED)).toBe(shape(protDef(TABLES, TEXT, EVIDENCE)));
   });
 
-  it('the served def declares the eighth view, its capability, its grain and its words', () => {
-    expect(Object.keys(SERVED.actors)).toEqual(['structure', 'rama', 'conservation', 'interface', 'surface', RANKING_VIEW, 'pairs', 'sheet']);
+  it('the served def declares stage 5’s view, its capability, its grain and its words — and the published list untouched around it', () => {
+    /*
+      THE PUBLISHED LIST IS `PROT_VIEWS` and this assertion is about where
+      stage 5's view is SPLICED INTO it, which is the only thing about the
+      registry this stage owns. It used to be a literal of seven names plus
+      `ranking`; stage 6 then added a view every build declares, and a literal
+      would have made a stage-6 fact fail a stage-5 test. So the published order
+      comes from the constant and what is asserted is the splice: after the
+      surface stage's pictures, before the receipt.
+    */
+    const published = [...PROT_VIEWS];
+    const at = published.indexOf('pairs');
+    expect(Object.keys(SERVED.actors)).toEqual([...published.slice(0, at), RANKING_VIEW, ...published.slice(at)]);
     expect(SERVED.encodings).toEqual(PROT_ENCODINGS_ALL);
     // A POINT and nothing else — a bar chart has no brush, and one bar is one
     // residue

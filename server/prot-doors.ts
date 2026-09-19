@@ -56,7 +56,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { browserAnthropic, type LLMProvider } from 'agentfootprint/providers';
-import { PROT_CONSERVATION_FILES, PROT_FILES } from '../src/data/files.js';
+import { PROT_ANNOTATION_FILES,
+  PROT_CONSERVATION_FILES, PROT_FILES } from '../src/data/files.js';
 import {
   HOTSPOT_TAG,
   HOTSPOT_WANT,
@@ -371,7 +372,7 @@ export type HotspotFrame = { readonly report: HotspotReport } | { readonly answe
  * served at all: a door that joined a path from a request would be a door that
  * reads this repository.
  */
-export const PROT_SERVED_FILES: readonly string[] = [...Object.values(PROT_FILES), ...PROT_CONSERVATION_FILES];
+export const PROT_SERVED_FILES: readonly string[] = [...Object.values(PROT_FILES), ...PROT_CONSERVATION_FILES, ...PROT_ANNOTATION_FILES];
 
 /** What a committed file IS, by its extension — the `web/site.vite.config.ts` · `DATA_TYPES` vocabulary, and nothing guessed. */
 const TYPES: Readonly<Record<string, string>> = {

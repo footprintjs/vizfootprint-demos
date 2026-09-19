@@ -174,7 +174,19 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
     page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     page.on('pageerror', (e) => pageErrors.push(String(e)));
     await page.goto(`${site.protUrl}?entry=${EXAMPLE_ENTRY}`);
-    await page.waitForSelector('[data-chart][data-focused="true"] circle.vzf-line-dot', { timeout: 120_000 });
+    /*
+      THE DESK IS READY WHEN THE SURFACE RUN HAS ITS MARKS — named by the PANE
+      rather than by whichever one is focused.
+
+      It used to wait on `[data-focused="true"] circle.vzf-line-dot`, which was
+      a wait on the focused pane being a LINE. The focus is derived from where
+      the cursor stands (`web/src/protDesk.tsx`: the stage at the cursor owns
+      the focus), so the hero is the LAST stage's picture — and when stage 6
+      landed, the hero became its bar and this wait timed out on a desk that was
+      perfectly healthy. The run is on screen either way, so waiting on it is
+      the same readiness with none of the coupling.
+    */
+    await page.waitForSelector(`[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 120_000 });
     await settle();
   }, 300_000);
 
@@ -239,7 +251,19 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
       }
     }, SPLIT_STORAGE_KEY);
     await page.reload();
-    await page.waitForSelector('[data-chart][data-focused="true"] circle.vzf-line-dot', { timeout: 120_000 });
+    /*
+      THE DESK IS READY WHEN THE SURFACE RUN HAS ITS MARKS — named by the PANE
+      rather than by whichever one is focused.
+
+      It used to wait on `[data-focused="true"] circle.vzf-line-dot`, which was
+      a wait on the focused pane being a LINE. The focus is derived from where
+      the cursor stands (`web/src/protDesk.tsx`: the stage at the cursor owns
+      the focus), so the hero is the LAST stage's picture — and when stage 6
+      landed, the hero became its bar and this wait timed out on a desk that was
+      perfectly healthy. The run is on screen either way, so waiting on it is
+      the same readiness with none of the coupling.
+    */
+    await page.waitForSelector(`[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 120_000 });
     await page.waitForTimeout(400);
     await settle();
   };
@@ -361,7 +385,19 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the reader moves t
     expect(before.stored, 'the boundary was moved and nothing was remembered').not.toBeNull();
     say(`  this browser remembers: ${SPLIT_STORAGE_KEY} = ${before.stored ?? 'nothing'}`);
     await page.reload();
-    await page.waitForSelector('[data-chart][data-focused="true"] circle.vzf-line-dot', { timeout: 120_000 });
+    /*
+      THE DESK IS READY WHEN THE SURFACE RUN HAS ITS MARKS — named by the PANE
+      rather than by whichever one is focused.
+
+      It used to wait on `[data-focused="true"] circle.vzf-line-dot`, which was
+      a wait on the focused pane being a LINE. The focus is derived from where
+      the cursor stands (`web/src/protDesk.tsx`: the stage at the cursor owns
+      the focus), so the hero is the LAST stage's picture — and when stage 6
+      landed, the hero became its bar and this wait timed out on a desk that was
+      perfectly healthy. The run is on screen either way, so waiting on it is
+      the same readiness with none of the coupling.
+    */
+    await page.waitForSelector(`[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 120_000 });
     await page.waitForTimeout(500);
     const after = await measure(page);
     say(`  after a reload the satellite column is ${String(after.panes.find((p) => p.id === RAMA_VIEW)?.w ?? 0)}px and the page is ${String(after.page)}px`);

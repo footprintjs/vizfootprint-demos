@@ -8,7 +8,7 @@
  * (`web/site/boot.tsx` · `Reading`) that says the page *is fetching the
  * committed files and running the same ETL the server runs*. True, and true
  * for the whole of a boot in which the page really performs six http reads, an
- * ETL, a dashboard build, three probe gestures, four stages and a model call.
+ * ETL, a dashboard build, four probe gestures, four stages and a model call.
  * **Every one of those is a fact the page held and threw away.**
  *
  * ── THE LAW, AND IT DECIDES EVERY LINE BELOW ───────────────────────────────
@@ -271,7 +271,7 @@ export interface BootNow {
  * The order of the checks is the order the boot reports in reverse — the newest
  * thing reported is what is happening — and it is the boot's real order
  * (`web/src/protServed.tsx` · `boot`): the structure file, the parse, the
- * conservation files, the build, the probes, the three stages, the ask.
+ * conservation files, the build, the probes, the four stages, the ask.
  *
  * ── THE TWO RULES ON THE WORDING, and both are the author's ────────────────
  * **A number appears only where it is the point.** *6 of 6* is the point;
@@ -339,6 +339,13 @@ const STAGE_DOING: Readonly<Record<string, (rows: number) => string>> = {
   conservation: (rows) => `placing ${count(rows)} residues in their family’s alignment`,
   surface: (rows) => `rolling a solvent probe over ${count(rows)} residues`,
   interactions: () => 'finding every contact across the interface',
+  // STAGE 6 is the second stage dispatched and the sixth step published, and
+  // the line says what it DOES rather than what it is called — which is the
+  // rule the three above it keep.
+  // LOOKING UP and not *asking*: the model's own line starts with `asking`
+  // (`askingSaid`), and two steps whose lines open with one verb are two steps a
+  // reader — and a test — cannot tell apart at a glance.
+  annotation: () => 'looking up what is already known about these sequences',
 };
 
 const stageDoing = (stage: string, rows: number): string => STAGE_DOING[stage]?.(rows) ?? `running ${nameOf(stage)}`;
@@ -407,7 +414,19 @@ export function bootSteps(report: BootReport): readonly BootStepView[] {
     if (acts.length === 0) return step(stage, nameOf(stage), stage === waiting ? 'doing' : 'pending', stage === waiting ? 'running now — its acts are in flight' : 'declared, and not dispatched yet');
     return step(stage, nameOf(stage), 'landed', stageLine(acts));
   });
-  return [reads, parsed, built, probed, ...stages, hotspotStep(report, step)];
+  /*
+    THE MODEL'S ROW SITS AT ITS OWN PLAN STEP, not at the end.
+
+    It used to be appended last, which was the same thing while stage 5 was the
+    last step of the pipeline. Stage 6 is dispatched too now, and appending
+    would have put step 6 BEFORE step 5 in a list whose whole claim is that it
+    is the reader's order. So the rows are laid out by the plan's own step
+    number (`src/prot/plan.ts` · `planStepOf`), which is the one declaration of
+    where each step belongs.
+  */
+  const asked = hotspotStep(report, step);
+  const ordered = [...stages, asked].sort((a, b) => (planStepOf(a.key)?.step ?? 0) - (planStepOf(b.key)?.step ?? 0));
+  return [reads, parsed, built, probed, ...ordered];
 }
 
 /**
@@ -429,17 +448,17 @@ function hotspotStep(report: BootReport, step: (key: string, name: string, state
 }
 
 /**
- * THE THREE STAGES THE RUN DISPATCHES, in the PLAN's published order — spelled
+ * THE FOUR STAGES THE RUN DISPATCHES, in the PLAN's published order — spelled
  * here rather than read off `PROT_STAGES`, because the plan's order and the
  * orchestrator's differ (`src/prot/plan.ts` says why: the def dispatches
- * contacts before surface and the pipeline names surface third).
+ * contacts before surface, and it dispatches the annotation stage SECOND while
+ * the pipeline publishes it sixth).
  *
  * The boot report is a reader's list, so it is the reader's order. With the
- * parse above them and stage 5 below, these are steps 2, 3 and 4 of the six the
- * plan publishes, which is why the page's own sentence says *four stages*
- * (`web/src/protServed.tsx` · the `Reading` line) and this list holds three.
+ * parse above them and stage 5 among them, these are steps 2, 3, 4 and 6 of the
+ * six the plan publishes.
  */
-const DISPATCHED_STEPS: readonly string[] = ['conservation', 'surface', 'interactions'];
+const DISPATCHED_STEPS: readonly string[] = ['conservation', 'surface', 'interactions', 'annotation'];
 
 /**
  * THE SAME THREE, IN THE ORDER THE ORCHESTRATOR DISPATCHES THEM — read off the

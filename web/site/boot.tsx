@@ -49,7 +49,7 @@ const CARD: React.CSSProperties = { maxWidth: '46rem', background: '#fff', borde
  * it is what three of the four demos have. The author asked the obvious
  * question of the FOURTH one — *"why is this not live status support instead of
  * this static text?"* — while watching a boot that really performs six http
- * reads, an ETL, a dashboard build, three probe gestures, four stages and a
+ * reads, an ETL, a dashboard build, four probe gestures, four stages and a
  * model call, and reported none of them.
  *
  * So `instead` REPLACES the paragraph for a page that can report its own boot

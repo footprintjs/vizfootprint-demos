@@ -1,0 +1,86 @@
+{
+  "what": "What is already KNOWN about this entry’s sequences — the functional annotation stage’s evidence. Nothing here is computed and nothing is re-worded: every value the stage lands is the source’s own word, and the only thing this desk computes is where each of them sits on this entry’s own rows.",
+  "entry": "1AY7",
+  "uniprot": {
+    "service": "UniProt (UniProtKB) — the reviewed entry for one accession, asked for BY FIELD",
+    "at": "https://rest.uniprot.org/uniprotkb/<ACCESSION>.json?fields=accession,sequence,ft_act_site,ft_binding,ft_site,ft_disulfid,ft_crosslnk,ft_mod_res,ft_carbohyd,ft_lipid",
+    "asked": [
+      "accession",
+      "sequence",
+      "ft_act_site",
+      "ft_binding",
+      "ft_site",
+      "ft_disulfid",
+      "ft_crosslnk",
+      "ft_mod_res",
+      "ft_carbohyd",
+      "ft_lipid"
+    ],
+    "reads": "the SITE features of the sequence — what is known about a RESIDUE — each with the source’s own TYPE word, its own DESCRIPTION verbatim and the reference positions it covers, plus the sequence length the positions are of. Secondary structure, the whole-chain `Chain` feature, `Mutagenesis` and `Sequence conflict` are NOT asked for, and the page says which fields were asked for so an absent type reads as nobody asked rather than as there are none.",
+    "license": {
+      "statement": "UniProt is released under the Creative Commons Attribution 4.0 International (CC BY 4.0) licence: “We have chosen to apply the Creative Commons Attribution 4.0 International (CC BY 4.0) License to all copyrightable parts of our databases.”",
+      "dedication": "CC BY 4.0",
+      "policyPage": "https://www.uniprot.org/help/license",
+      "attribution": "The UniProt Consortium, UniProt: the Universal Protein Knowledgebase. The desk names the accession wherever it shows a word read out of one of these records, and every such word is quoted rather than paraphrased."
+    },
+    "files": [
+      {
+        "accession": "P05798",
+        "sequenceLength": 96,
+        "features": [
+          "Active site 54..54",
+          "Active site 85..85",
+          "Disulfide bond 7..96"
+        ],
+        "file": "P05798-uniprot.json",
+        "bytes": 1224,
+        "sha256": "73ec8260f519b68dea9168d5e035dcad7b99609e6bf232a0d754f1d872a4c966"
+      },
+      {
+        "accession": "P11540",
+        "sequenceLength": 90,
+        "features": [],
+        "file": "P11540-uniprot.json",
+        "bytes": 413,
+        "sha256": "e9dbe9aee9942f1091174828c86fc8864294184402082d519852b9feeb09e9b0"
+      }
+    ]
+  },
+  "epitopes": {
+    "service": "IEDB (Immune Epitope Database) — the query API’s epitope search, by source antigen",
+    "at": "https://query-api.iedb.org/epitope_search?parent_source_antigen_iri=eq.UNIPROT:<ACCESSION>",
+    "reads": "every epitope the database records for that source antigen, with the positions of the antigen it covers.",
+    "answered": "BOTH accessions of this entry answer `[]`. That is a real answer — the service was asked and named none — and it is committed as such so the example’s “no known epitopes” is a fact this repository holds rather than a silence a missing file would also produce.",
+    "license": {
+      "statement": "IEDB data are free to use: “The IEDB is freely available to the scientific community” and its contents are released for use without restriction, with attribution requested by citation.",
+      "policyPage": "https://www.iedb.org/citeiedb_v3.php",
+      "attribution": "Vita R, et al. The Immune Epitope Database (IEDB): 2018 update. Nucleic Acids Res. The desk names the service and the accession it asked about wherever it says how many epitopes are known."
+    },
+    "files": [
+      {
+        "accession": "P05798",
+        "epitopes": 0,
+        "file": "P05798-epitopes.json",
+        "bytes": 3,
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      {
+        "accession": "P11540",
+        "epitopes": 0,
+        "file": "P11540-epitopes.json",
+        "bytes": 3,
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      }
+    ]
+  },
+  "reused": {
+    "what": "Two of this stage’s four reads are NOT downloaded here, because this repository already holds them.",
+    "files": [
+      "../conservation/1AY7-entities.json",
+      "../conservation/<ACCESSION>-pfam.json"
+    ],
+    "why": "the archive’s entity record carries the four hops from a UniProt position to a row of this desk (`src/prot/mapping.ts`), and InterPro’s Pfam match record carries the domain ranges — both are already downloaded, recorded and committed by `data/prot/conservation/fetch.mjs`. A second copy would be a second answer to one question the day either source revises, with nobody to arbitrate, so this stage reads those files and this entry points at them."
+  },
+  "retrievedAt": "2026-09-19T02:04:10.070Z",
+  "note": "Regenerating re-downloads both. A UniProt release can add, move or re-describe a feature, and the IEDB gains epitopes continuously — which changes the digests recorded here, which is the point of recording them."
+}

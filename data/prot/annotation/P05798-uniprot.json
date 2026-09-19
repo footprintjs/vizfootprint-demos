@@ -1,0 +1,58 @@
+{
+  "entryType": "UniProtKB reviewed (Swiss-Prot)",
+  "primaryAccession": "P05798",
+  "features": [
+    {
+      "type": "Active site",
+      "location": {
+        "start": {
+          "value": 54,
+          "modifier": "EXACT"
+        },
+        "end": {
+          "value": 54,
+          "modifier": "EXACT"
+        }
+      },
+      "description": "Proton acceptor"
+    },
+    {
+      "type": "Active site",
+      "location": {
+        "start": {
+          "value": 85,
+          "modifier": "EXACT"
+        },
+        "end": {
+          "value": 85,
+          "modifier": "EXACT"
+        }
+      },
+      "description": "Proton donor"
+    },
+    {
+      "type": "Disulfide bond",
+      "location": {
+        "start": {
+          "value": 7,
+          "modifier": "EXACT"
+        },
+        "end": {
+          "value": 96,
+          "modifier": "EXACT"
+        }
+      },
+      "description": ""
+    }
+  ],
+  "sequence": {
+    "value": "DVSGTVCLSALPPEATDTLNLIASDGPFPYSQDGVVFQNRESVLPTQSYGYYHEYTVITPGARTRGTRRIITGEATQEDYYTGDHYATFSLIDQTC",
+    "length": 96,
+    "molWeight": 10576,
+    "crc64": "FA4DB2FD0BA8A7E4",
+    "md5": "53488C4307DBE052F6706504EE6C5A5C"
+  },
+  "extraAttributes": {
+    "uniParcId": "UPI00001106BF"
+  }
+}

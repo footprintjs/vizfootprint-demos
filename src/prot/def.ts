@@ -1,5 +1,5 @@
 /**
- * THE PROTEIN DESK'S DEFINITION — one table, seven views, four declared acts,
+ * THE PROTEIN DESK'S DEFINITION — one table, eight views, five declared acts,
  * and the first third-party chart this repository has ever hosted.
  *
  * ── The file, and whose it is ───────────────────────────────────────────────
@@ -40,7 +40,7 @@
  * Mol*'s own interaction engine, and a second rolls a solvent probe over it.
  * A third cites a curated family alignment somebody else published and places
  * this entry's residues in it. Each lands its evidence as a commit with its own
- * chart — so three of the seven views ARRIVE, and the read of any of them is
+ * chart — so four of the eight views ARRIVE, and the read of any of them is
  * refused in the library's own words
  * until its stage has ended and again the moment a reader steps the cursor back
  * behind that commit. That progression is what this desk is now for; every
@@ -73,7 +73,10 @@ import type { EncodingRules } from 'vizfootprint/def';
 import type { ProseDecl } from 'vizfootprint/prose';
 import type { ActorMeta } from 'vizfootprint/selection';
 import type { ProtTables, ResidueRow } from './etl.js';
-import { ACT_KEY_COLUMN, ACT_TABLE, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PAIRS_ACT, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, protAnalyses } from './analyses.js';
+import { ACT_KEY_COLUMN, ACT_TABLE, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_COLUMN, EPITOPE_COLUMN, INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, INTERACTIONS_TABLE, PAIRS_ACT, PFAM_DOMAIN_COLUMN, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, UNIPROT_NOTE_COLUMN, UNIPROT_SITE_COLUMN, protAnalyses } from './analyses.js';
+import { ANNOTATION_SOURCES, NARROWEST } from './annotationFold.js';
+import { UNIPROT_SITE_FIELDS } from './annotation.js';
+import type { AnnotationEvidence } from './annotationEvidence.js';
 import type { ConservationEvidence } from './conservationEvidence.js';
 // STAGE 5's column NAME, from the module that owns it — this file declares what
 // the column IS on a chart and never a second spelling of what it is called.
@@ -128,11 +131,33 @@ export const CONSERVATION_VIEW = 'conservation';
  * statement worth making rather than leaving to be discovered.
  */
 export const PAIRS_VIEW = 'pairs';
+/**
+ * STAGE 6'S CHART — one mark per residue somebody has already NAMED, as
+ * exposed as the solvent probe found it.
+ *
+ * ── WHY IT IS NOT SPELLED `annotation` ─────────────────────────────────────
+ * That is the STAGE's id (`./analyses.ts` · `ANNOTATION_STAGE`), and the desk's
+ * focus slot holds either a picture or a step's card and finds each by id
+ * (`web/src/protDesk.tsx` · `promotedCard` / `promotedCell`), so a view sharing
+ * a stage's name would make one promotion match two things. {@link RANKING_VIEW}
+ * made the same choice one stage earlier and for the same reason.
+ *
+ * ── AND WHY IT IS DECLARED ON EVERY BUILD, unlike stage 5's ────────────────
+ * A view over `hotspot_rank` on a build that can never ask a model would be
+ * refused forever, so that one is gated on its act's slot. This stage's sources
+ * answer a browser directly — no key, no server — so the PUBLISHED build really
+ * does perform it, and its picture belongs in the seven every build declares.
+ * The chart is still declared BEFORE its column exists, like the three act-fed
+ * ones beside it: the read is what judges a binding, so a gesture here is
+ * refused in the library's own words until the act lands and refused again the
+ * moment a reader steps behind that commit.
+ */
+export const KNOWN_VIEW = 'known';
 /** The residue table. */
 export const SHEET_VIEW = 'sheet';
 
-/** Every view this def declares ON EVERY BUILD, in the order a reader meets them. Stage 5's is the eighth and is not here — see {@link RANKING_VIEW}. */
-export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, PAIRS_VIEW, SHEET_VIEW] as const;
+/** Every view this def declares ON EVERY BUILD, in the order a reader meets them. Stage 5's is the ninth and is not here — see {@link RANKING_VIEW}. */
+export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, KNOWN_VIEW, PAIRS_VIEW, SHEET_VIEW] as const;
 
 /**
  * STAGE 5'S OWN CHART — six marks, one per ranked residue, each one pressable.
@@ -258,6 +283,20 @@ const RANKING: ActorMeta = {
   actor: 'user',
   label: 'The residues a model ranked as hot spots',
   does: 'press a mark to select that one residue — the 3D view lights it, the backbone-angle scatter keeps its dot, both runs narrow and the sheet drops to its row. The height is a COUNT the interactions stage landed; the rank is the order and the colour, never the height',
+};
+/**
+ * STAGE 6'S CHART, DECLARED AS AN ACTOR — and the `does` says the one thing
+ * about the picture a reader has to know: the HEIGHT is not the annotation.
+ *
+ * The colour is what somebody already published about the residue; the height
+ * is a count the interactions stage landed one commit earlier. It is borrowed
+ * from an EARLIER stage deliberately — see the encoding's own comment for the
+ * law, and for what binding a later stage's column cost when this chart did it.
+ */
+const KNOWN: ActorMeta = {
+  actor: 'user',
+  label: 'The residues somebody has already named, and how many contacts each one is in',
+  does: 'press a mark to select that one residue — the 3D view lights it, both runs narrow and the sheet drops to its row. The colour is the SOURCE\u2019S OWN WORD for what the residue is; the height is how many non-covalent contacts that residue is in, which the interactions stage counted one commit EARLIER — a picture may borrow a column from a stage that lands before it and never from one that lands after',
 };
 const PAIRS: ActorMeta = {
   actor: 'user',
@@ -573,6 +612,65 @@ export const PROT_ENCODINGS: readonly ViewEncodingDecl[] = [
     why both chains are drawn over one numbering and told apart by colour.
   */
   { viewId: CONSERVATION_VIEW, chartKind: 'line', channels: ['x', 'y', 'color'], initial: { x: 'resnum', y: CONSERVATION_COLUMN, color: 'chain' } },
+  /*
+    STAGE 6'S SURFACE — three channels, and the middle one carries a law this
+    packet learned the hard way, IN A BROWSER, after shipping the other one.
+
+    THE COLOUR IS THE ANNOTATION. `uniprot_site` is a WORD — `Active site`,
+    `Disulfide bond` — so it is a discrete dimension and belongs exactly where a
+    discrete column belongs: on `color`. There is no height it could honestly
+    take, because *Active site* is not an amount. So the height has to be
+    BORROWED from a stage that measured something, which is what every two-stage
+    picture on this desk does ({@link RANKING_ENCODING} borrows one too).
+
+    ── AND A PICTURE MAY ONLY BORROW FROM A STAGE THAT LANDS EARLIER ─────────
+    This binding was `relative_sasa` for one release and it was WRONG, and the
+    reason is worth more than the fix. Burial is the scientific pairing a reader
+    wants — *is the residue somebody already named the buried one?* — and
+    `relative_sasa` is the SURFACE stage's column, which lands LAST. So at stage
+    6's own commit the height did not exist yet, `interfaceBars` dropped every
+    row, and pressing step 6 promoted this chart with NOTHING IN IT. Measured on
+    the served page: *4 of 185 residues named* at the head and *0 of 185* at
+    every cursor before the surface commit.
+
+    THE LAW, stated where the binding is: **a picture may borrow a column from a
+    stage that lands EARLIER in the log, never from one that lands later.** It is
+    the other half of the ownership rule (`web/src/protStages.ts` ·
+    `chartsOfStage`: a picture drawn from two stages belongs to the LATER one) —
+    the two only agree when the OWNER is the last of the picture's ingredients to
+    land. Stage 5's chart kept it by accident and this one had to be made to:
+    `./analyses.ts` · `PROT_STAGES` dispatches the annotation stage after the
+    interactions stage and before the surface stage, which is the one position
+    that satisfies both this law and the desk's own *the cursor comes to rest on
+    the surface run* law.
+
+    `y` IS `contacts`, the count of every non-covalent contact the residue is in,
+    which the interactions stage lands one commit earlier. It is a COUNT, so a
+    length is the honest shape and taller genuinely means more of them; and it is
+    on ALL FOUR of the committed entry's named residues (measured: 1, 4, 5, 2),
+    so the marks have no holes. `interface_contacts` was the other candidate that
+    lands in time and is ruled out by the same measurement: it is 0 on three of
+    the four, which is three invisible bars.
+
+    ── AND WHAT THE BURIAL PAIRING COST, said plainly ────────────────────────
+    It is off this chart's height, and it is NOT off the desk: the annotation
+    lands on the same key the surface area does, so the pairing is one rebind
+    away and the SENTENCE is folded from the two landed columns wherever both are
+    on the rows (`web/src/protCells.tsx`, which names the most buried of the
+    named residues). What was lost from the picture was in any case not being
+    drawn: `relative_sasa` for `A:85` is exactly 0, so the mark that carried the
+    whole payoff had ZERO HEIGHT and a reader saw nothing there.
+
+    `category` IS THE RESIDUE KEY, because that is the channel `VizBar` emits on
+    and a press has to be one residue (the `interface` bar's own argument, two
+    charts along).
+
+    AND IT IS THE SECOND PICTURE ON THIS DESK DRAWN FROM TWO STAGES' COLUMNS:
+    `contacts` is stage 4's and `uniprot_site` is stage 6's, so the ownership
+    fold hands it to stage 6 — the stage it could not be drawn without. At stage
+    4's cursor this chart has no site column and therefore no marks at all.
+  */
+  { viewId: KNOWN_VIEW, chartKind: 'bar', channels: ['category', 'y', 'color'], initial: { category: RESIDUE_KEY, y: CONTACTS_COLUMN, color: UNIPROT_SITE_COLUMN } },
 ];
 
 /**
@@ -846,6 +944,30 @@ function protProse(tables: ProtTables, rank: boolean): readonly ProseDecl[] {
           },
         ]),
     {
+      viewId: KNOWN_VIEW,
+      slots: {
+        title: { text: 'What is already known about these residues', author: { kind: 'human', by: 'the dashboard author' }, levels: ['construction'] },
+        altShort: {
+          text: 'A bar chart of the residues somebody has already named, coloured by what the source calls each one and as tall as the number of contacts that residue is in. Press a bar to select that residue. Empty until the stage that looks them up has landed.',
+          author: { kind: 'human' },
+          levels: ['construction'],
+        },
+        altLong: {
+          text:
+            `One mark per residue that a published source has already NAMED, out of the ${String(counts.residues)} in this entry. ` +
+            `NOTHING ON THIS PICTURE IS THIS DESK'S OPINION: the colour is ${ANNOTATION_SOURCES.sites}'s own word for what the residue is — \u201cActive site\u201d, \u201cDisulfide bond\u201d — quoted and never re-classified, and the residue it sits on was found by carrying that source's own position through the archive's own residue-number mapping. A position this entry has no row for lands nothing and is counted. ` +
+            `WHICH FIELDS WERE ASKED FOR is itself part of the answer: ${UNIPROT_SITE_FIELDS.join(', ')} — the SITE features, what is known about a RESIDUE. An absent kind of site means nobody asked, which is a different statement from there being none, and the card says which. ` +
+            `THE HEIGHT IS NOT THE ANNOTATION. It is the number of non-covalent contacts that residue is in — a count the interactions stage landed ONE COMMIT EARLIER — so taller means more contacts. The height is borrowed from a stage that lands BEFORE this one, and that is a law rather than a preference: a picture whose height came from a LATER stage draws nothing at its own commit, which is exactly what this chart did for a release when it borrowed the surface stage's exposure. ` +
+            `THE ABSENCE IS THE FILTER, and it is most of the entry: a residue no source named carries no word at all and so has no mark, which is why the caption counts the marks against the whole table rather than printing a bare number. ` +
+            `WHERE TWO FACTS MET ON ONE RESIDUE one column could not hold both, and ${NARROWEST}.`,
+          author: { kind: 'human' },
+          levels: ['construction'],
+          basis: { columns: [RESIDUE_KEY, CONTACTS_COLUMN, UNIPROT_SITE_COLUMN, UNIPROT_NOTE_COLUMN, PFAM_DOMAIN_COLUMN, EPITOPE_COLUMN] },
+        },
+        howToRead: { author: { kind: 'derived' } },
+      },
+    },
+    {
       viewId: PAIRS_VIEW,
       // NO `howToRead`, for the same reason the sheet has none: it declares no
       // encoding surface, so there are no bindings to derive a line from.
@@ -971,7 +1093,7 @@ export function protGrains(rank: boolean): readonly { readonly viewId: string; r
  * key that would call a model). A def built without one declares the four acts
  * it always did, byte for byte — see `./analyses.ts` · `protAnalyses`.
  */
-export function protDef(tables: ProtTables, structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null): DashboardDef {
+export function protDef(tables: ProtTables, structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null, annotation: AnnotationEvidence | null = null): DashboardDef {
   /**
    * CAN THIS BUILD PERFORM STAGE 5 — the ONE condition, asked once and read by
    * everything the stage declares: its column, its view, its actor, its
@@ -995,6 +1117,9 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
       [CONSERVATION_VIEW]: CONSERVATION,
       [INTERFACE_VIEW]: INTERFACE,
       [SURFACE_VIEW]: SURFACE,
+      // STAGE 6'S CHART, in {@link PROT_VIEWS}' own order — declared on every
+      // build, because every build performs the stage.
+      [KNOWN_VIEW]: KNOWN,
       // STAGE 5'S CHART, at the place the plan puts its step: after the three
       // stages whose evidence it reads. A spread of `{}` adds no key, which is
       // what keeps the published registry the seven it always was.
@@ -1006,7 +1131,7 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
     // dispatched by `./orchestrator.ts`, three stages in order — and `PROT_STAGES`
     // is the one list that says which act belongs to which stage, so the
     // captions and the chart cannot disagree about it.
-    analyses: protAnalyses(structureText, evidence, hotspots),
+    analyses: protAnalyses(structureText, evidence, hotspots, annotation),
     encodings: protEncodings(rank),
     grains: protGrains(rank),
     // THE HONEST CAPABILITY ENVELOPE, one view at a time.
@@ -1083,6 +1208,10 @@ export function protDef(tables: ProtTables, structureText: string, evidence: Con
       // bar's for the same reason, and by the library's own SET-1 law it also
       // ACCEPTS the match the rail's other stage-5 control lands.
       ...(rank ? [{ viewId: RANKING_VIEW, canProbe: true, encodings: ['point' as const] }] : []),
+      // STAGE 6'S CHART emits a POINT and nothing else, for the reason the two
+      // bars beside it do: `VizBar`'s gesture is a press on one bar, and one bar
+      // IS one residue here. Not an interval — a bar chart has no brush.
+      { viewId: KNOWN_VIEW, canProbe: true, encodings: ['point'] },
       { viewId: PAIRS_VIEW, canProbe: false },
       { viewId: SHEET_VIEW, canProbe: false },
     ],

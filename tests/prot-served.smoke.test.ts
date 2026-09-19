@@ -31,6 +31,7 @@ import { EXAMPLE_ENTRY } from '../src/prot/archive.js';
 import { CONSERVATION_VIEW, INTERFACE_VIEW, RAMA_VIEW, RANKING_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { HOTSPOT_RANK_COLUMN, HOTSPOT_TAG } from '../src/prot/hotspots.js';
 import { BLOCKED_TAG } from '../src/prot/plan.js';
+import { PROT_COMMITTED_READS } from '../src/prot/http.js';
 
 const CHROME = process.env['VZF_CHROME'];
 
@@ -236,9 +237,12 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the served desk bo
     */
     for (const sample of duringBoot) expect(sample.said).not.toContain('content-length is the size of what came over the wire');
     // the acts, in the author's own words: present tense, one at a time
-    expect(lines.some((line) => /^reading the committed files( · \d of 6)?$/.test(line ?? ''))).toBe(true);
+    // THE TOTAL IS THE DECLARED ONE, never a hand count: `PROT_COMMITTED_READS`
+    // is `src/data/files.ts` counted, and a number typed here goes stale the
+    // next time a stage commits a file — which is exactly what it did.
+    expect(lines.some((line) => new RegExp(`^reading the committed files( · \\d+ of ${String(PROT_COMMITTED_READS)})?$`).test(line ?? ''))).toBe(true);
     /*
-      AND THE THREE DISPATCHED STAGES, EACH IN ITS OWN DECLARED WORDS.
+      AND THE FOUR DISPATCHED STAGES, EACH IN ITS OWN DECLARED WORDS.
 
       **The parse, the build and the probes are NOT asserted here, and that is a
       measurement rather than an omission**: those three complete inside ONE
@@ -249,7 +253,7 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the served desk bo
       `tests/prot-boot.test.tsx` walks all three. Forcing a paint so the screen
       looked busier would be this desk inventing a moment it did not have.
     */
-    expect(lines.some((line) => /^(placing|rolling|finding) /.test(line ?? ''))).toBe(true);
+    expect(lines.some((line) => /^(placing|rolling|finding|looking up) /.test(line ?? ''))).toBe(true);
     expect(lines.some((line) => /^(asking |answering|thinking|the model is reading|it read |scoring)/.test(line ?? ''))).toBe(true);
     // AND NO BYTE COUNT REACHES IT: a number only where it is the point
     for (const sample of duringBoot) expect(sample.line ?? '').not.toMatch(/\d{3},\d{3}/);
@@ -283,10 +287,20 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the served desk bo
       expect(sample.said, 'the served boot marked stage 5 with the published build’s blocker').not.toContain(BLOCKED_TAG['this build']);
       expect(sample.said).not.toContain('not on this build');
     }
-    // and step 6 — which really is ours and not built — still says so, so the
-    // fix did not silence the marks it was not about
-    expect(duringBoot.some((sample) => sample.said.includes(BLOCKED_TAG.us))).toBe(true);
-    say(`stage 5 during boot: never "${BLOCKED_TAG['this build']}" across ${String(duringBoot.length)} samples; step 6 still "${BLOCKED_TAG.us}"`);
+    /*
+      AND THE FIX DID NOT SILENCE THE MARKS IT WAS NOT ABOUT.
+
+      This used to be asserted against STEP 6, which really was *ours and not
+      built* and said so through every boot. Step 6 is built, so there is no
+      second blocked column left to prove the point with — and the property is
+      asserted directly instead: every OTHER column carries a mark of its own
+      through the boot, so the stage-5 fix is a fix to one column and not a
+      blanket silence.
+    */
+    expect(duringBoot.every((sample) => sample.said.includes('Functional Annotation'))).toBe(true);
+    expect(duringBoot.every((sample) => sample.said.includes('Hot Spot Prediction'))).toBe(true);
+    expect(duringBoot.some((sample) => sample.said.includes(BLOCKED_TAG.us))).toBe(false);
+    say(`stage 5 during boot: never "${BLOCKED_TAG['this build']}" across ${String(duringBoot.length)} samples; and no column says "${BLOCKED_TAG.us}" any more, because step 6 was built`);
   });
 
   it('THE CARD SAYS WHAT IT IS — a recommendation, with every rank’s citations', async () => {
@@ -489,9 +503,11 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the served desk bo
 
       So stage 5 declares its own chart (`src/prot/def.ts` · `RANKING_VIEW`) and
       the press promotes it with nothing bound anywhere. The sentence STAYS in
-      the code and keeps its own test (`tests/prot-hotspot-marks.test.tsx`),
-      because stage 6 will be exactly that case the day it lands — but no
-      reader meets it on this desk any more, and that is what is asserted here.
+      the code and keeps its own test (`tests/prot-hotspot-marks.test.tsx`) —
+      and stage 6, which was named here as the case that would need it, landed
+      with a picture of its own instead (`tests/prot-annotation.test.ts` asserts
+      both halves). So no reader meets it on a working desk at all now, and the
+      sentence waits for the next stage whose columns no chart takes up.
     */
     await openNoteOf(page, STRUCTURE_CARD); // the desk starts with the 3D view's colour on `chain`
     const five = page.getByRole('button', { name: /^move the desk to stage 5/ });
@@ -625,15 +641,20 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the served desk bo
     /*
       THE PROBES' OWN COUNTS, and why a refusal is the answer that step wanted.
 
-      FOUR on THIS build and three on the published one, and that is the count
+      FIVE on THIS build and four on the published one, and that is the count
       moving with a fact rather than a pin going stale: stage 5's own chart is
       declared only where its act is (`src/prot/def.ts` · `RANKING_VIEW`), so a
-      page that can ask a model has a fourth chart whose column no act has
-      landed yet and makes a fourth gesture at it
-      (`src/prot/session.ts` · `probeTheUnlandedColumns`). The published page
-      still makes three, which `tests/prot-boot.test.tsx` holds.
+      page that can ask a model has one more chart whose column no act has
+      landed yet and makes one more gesture at it
+      (`src/prot/session.ts` · `probeTheUnlandedColumns`).
+
+      IT WAS FOUR AND THREE UNTIL STAGE 6 LANDED. That stage's own chart is
+      declared on EVERY build — its sources answer a browser directly, so the
+      published page really performs it — so both counts moved by one and the
+      DIFFERENCE between them, which is what this assertion is about, is
+      unchanged and still stage 5's alone.
     */
-    expect(said).toContain('4 gestures made, 4 refused by the library');
+    expect(said).toContain('5 gestures made, 5 refused by the library');
     /*
       AND THE STATES IN WORDS, for a reader who cannot see a mark. They are
       lower-case in the DOM and upper-cased by the stylesheet, which is the

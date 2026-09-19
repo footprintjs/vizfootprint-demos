@@ -5,7 +5,7 @@
  *
  * ── WHAT WAS WRONG, measured in a browser rather than argued ────────────────
  * The boot read the residue rows ONCE (`src/prot/session.ts` · `residuesAt`)
- * and handed them to the cells as data. Every column the three stages land is
+ * and handed them to the cells as data. Every column the four stages land is
  * resolved AT THE CURSOR, so a boot-time answer is the boot's cursor forever:
  * clicking a trace row seeked the record and nothing on screen changed — 565
  * marks before, 565 after. The library was not at fault. It re-reads at a
@@ -89,7 +89,7 @@ export function useResiduesAtCursor(view: SessionView, session: InteractionSessi
   // hands out `emptyState()` until its first read resolves, and its `cursor` is
   // null for the same reason its `views` are empty — not because the session is
   // at the root. Reading on that state would throw away the boot's own answer
-  // and fetch it again. This def declares seven views — eight on a build that
+  // and fetch it again. This def declares eight views — nine on a build that
   // can perform stage 5 (`src/prot/def.ts` · `PROT_VIEWS` and `RANKING_VIEW`)
   // — so an empty list is the placeholder and nothing else.
   const snapshot = state.views.length > 0;

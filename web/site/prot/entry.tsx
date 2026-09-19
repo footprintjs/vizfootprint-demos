@@ -36,7 +36,14 @@
  *      (`src/prot/conservationEvidence.ts`). The committed example reads five
  *      committed files and calls no service; every other entry costs three
  *      small reads, each refusing in a sentence.
- *   6. the dashboard, the three stages, and a session view over an IN-PROCESS
+ *   5c. WHAT IS ALREADY KNOWN about those sequences, which the functional
+ *      annotation stage lands (`src/prot/annotationEvidence.ts`). The committed
+ *      example reads four more committed files and calls no service; every
+ *      other entry costs two small reads per chain, each refusing in a
+ *      sentence. THIS IS THE STEP THIS PAGE COULD NOT TAKE until the stage was
+ *      built — it was blocked by US and by nothing external, and the way that
+ *      ends is by doing the work.
+ *   6. the dashboard, the four stages, and a session view over an IN-PROCESS
  *      session (`sessionSource`), not a poll.
  *
  * The one thing this page owns that the other three do not is the CREDIT line,
@@ -50,6 +57,7 @@ import { ARRANGEMENT_PROP, ARRANGEMENT_SCOPE } from '../../src/workbench/arrange
 import 'vizfootprint-ui/styles.css';
 import { loadStructureOverHttp, readCommittedOverHttp } from '../../../src/prot/http.js';
 import { conservationEvidenceFor } from '../../../src/prot/conservationEvidence.js';
+import { annotationEvidenceFor } from '../../../src/prot/annotationEvidence.js';
 import { entryCredit, protTables, skippedTotal, type EntryCredit } from '../../../src/prot/etl.js';
 import { PROT_WORDS, RESIDUES_TABLE } from '../../../src/prot/def.js';
 import { openProtSurfaceAsync, protSurfaceProblems, type ProtSurface } from '../../../src/prot/session.js';
@@ -116,7 +124,20 @@ async function boot(entry: string, onOutcome: (outcome: ActOutcome) => void): Pr
    * is not what a reader of the example should get.
    */
   const evidence = await conservationEvidenceFor(entry, { committed: readCommittedOverHttp(siteBase()), archive: browserArchive });
-  const surface = await openProtSurfaceAsync(read.artifact, { onOutcome }, evidence);
+  /**
+   * STEP 5c — WHAT IS ALREADY KNOWN ABOUT THIS ENTRY'S SEQUENCES, gathered
+   * BEFORE the dashboard is built, exactly as 5b is and for the same reason.
+   *
+   * AND THIS IS THE STEP THE PUBLISHED PAGE COULD NOT TAKE UNTIL NOW. Step 6 of
+   * the plan was blocked by US — work outstanding, with nothing external in the
+   * way — and the way it was unblocked was by doing the work rather than by
+   * finding a server: UniProt, InterPro and the IEDB all answer a browser
+   * directly, so a static page really performs this stage. The committed
+   * example reads four committed files and calls NO service at all, the same
+   * routing the bytes and the alignments get.
+   */
+  const annotation = await annotationEvidenceFor(entry, { committed: readCommittedOverHttp(siteBase()), archive: browserArchive });
+  const surface = await openProtSurfaceAsync(read.artifact, { onOutcome }, evidence, null, annotation);
   return {
     ok: true,
     booted: {
@@ -397,7 +418,7 @@ function Page(): JSX.Element {
   const opening = useRef<string | null>(null);
 
   const run = useCallback((entry: string): void => {
-    // ALREADY OPENING THIS ONE — do nothing. A boot runs three stages, two of them over Mol*'s
+    // ALREADY OPENING THIS ONE — do nothing. A boot runs four stages, two of them over Mol*'s
     // engines, so a double-click on a result row, or React's development-mode
     // double effect, would otherwise run the whole pipeline twice for the same
     // entry. Opening a DIFFERENT entry replaces this one, and the answer to the
@@ -458,7 +479,7 @@ function Page(): JSX.Element {
   if (phase.status === 'reading') {
     return (
       <Reading
-        what={`entry ${phase.entry}${phase.entry === EXAMPLE_ENTRY ? " from this repository's own committed bytes" : ' from the archive'}, the 3D viewer that draws it, and the three stages that place its residues in their families' alignments, find its contacts and measure its surface`}
+        what={`entry ${phase.entry}${phase.entry === EXAMPLE_ENTRY ? " from this repository's own committed bytes" : ' from the archive'}, the 3D viewer that draws it, and the four stages that place its residues in their families' alignments, find its contacts, measure its surface and look up what is already known about it`}
         extra={
           // THE SAME STEPPER a reader will use on the desk, already on screen
           // and filling as each act lands. Nothing is seekable here and the note

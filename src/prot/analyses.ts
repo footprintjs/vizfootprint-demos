@@ -1,12 +1,13 @@
 /**
- * THE FOUR DECLARED ACTS — everything this desk computes beyond what the file
- * says, as analyses the session performs and the log records.
+ * THE FIVE DECLARED ACTS — everything this desk computes beyond what the file
+ * says, and everything it CITES, as analyses the session performs and the log
+ * records.
  *
  * Before this module the protein desk landed NOTHING: every column it drew was
  * read off the entry's own coordinate records, and `./session.ts` said so. Now
- * three stages run and the screen gains a picture when each one ends — two of
- * them declared analyses over the same committed bytes, and the third over a
- * curated alignment somebody else published.
+ * four stages run and the screen gains a picture when each one ends — two of
+ * them declared analyses over the same committed bytes, and the other two over
+ * work somebody else published and versioned.
  *
  * | stage         | act                | channel   | what lands                                               |
  * |---------------|--------------------|-----------|----------------------------------------------------------|
@@ -14,8 +15,9 @@
  * | interactions  | {@link CONTACTS_ACT} | `columns` | `contacts`, `interface_contacts`, `interface_separation`  |
  * | surface       | {@link SURFACE_ACT}  | `columns` | `sasa`, `relative_sasa`                                   |
  * | conservation  | {@link CONSERVATION_ACT} | `columns` | `conservation`, `conservation_basis`                  |
+ * | annotation    | {@link ANNOTATION_ACT} | `columns` | `uniprot_site`, `uniprot_note`, `pfam_domain`, `epitope` |
  *
- * ── AND THE FOURTH ACT IS THE ONE WHOSE DATA IS NOT THIS FILE'S ────────────
+ * ── AND TWO OF THE ACTS READ NO BYTE OF THIS FILE ──────────────────────────
  * Three of them compute over the entry's own coordinates. The conservation act
  * CITES a curated family alignment this project did not build — accession and
  * version read out of the alignment's own header — and computes only where our
@@ -23,6 +25,14 @@
  * wherever it shows one of its numbers (`./placement.ts`). It is also the act
  * that emptied `PROT_UNAVAILABLE_STAGES`, and that list's own note is where
  * the reversal is written down.
+ *
+ * The ANNOTATION act goes one step further and computes NOTHING AT ALL: every
+ * value it lands is a word UniProt, InterPro or the IEDB published, quoted
+ * verbatim, and the only work is carrying each of them from a reference
+ * position onto the row it is about (`./annotationFold.ts`). It is the act that
+ * unblocked the plan's step 6, which was blocked by US — work outstanding, with
+ * nothing external in the way — and `./plan.ts`'s own step is where that
+ * reversal is written down.
  *
  * ── WHY STAGE A LANDS TWO ACTS, AND NOT ONE ─────────────────────────────────
  * This is the packet's finding, so it is written where the shape it forced
@@ -86,6 +96,9 @@ import { PLACEMENT_HERE, PLACEMENT_STRATEGIES } from './placement.js';
 import { headlessEntry } from './molstar.js';
 import { protInteractions, residueContactColumns, type DroppedContacts, type InteractionCounts, type InteractionRow } from './interactions.js';
 import { protSurface, type SurfaceCounts } from './surface.js';
+import { UNIPROT_SITE_FIELDS } from './annotation.js';
+import { ANNOTATION_SOURCES, foldAnnotation, NARROWEST, ONE_MEMBER_DATABASE, type AnnotationCounts } from './annotationFold.js';
+import type { AnnotationEvidence } from './annotationEvidence.js';
 
 // ── the names, once ──────────────────────────────────────────────────────────
 
@@ -94,6 +107,10 @@ export const PAIRS_ACT = 'interactionPairs';
 export const CONTACTS_ACT = 'residueContacts';
 export const SURFACE_ACT = 'residueSurface';
 export const CONSERVATION_ACT = 'residueConservation';
+export const ANNOTATION_ACT = 'residueAnnotation';
+
+/** The stage id step 6 of the plan carries, spelled once — the join between the plan, the def and the stepper. */
+export const ANNOTATION_STAGE = 'annotation';
 
 /** The table {@link PAIRS_ACT} cuts. Never a declared table — see the file header. */
 export const INTERACTIONS_TABLE = 'interactions';
@@ -132,6 +149,27 @@ export const RELATIVE_SASA_COLUMN = 'relative_sasa';
  */
 export const CONSERVATION_COLUMN = 'conservation';
 export const CONSERVATION_BASIS_COLUMN = 'conservation_basis';
+
+/**
+ * The columns {@link ANNOTATION_ACT} lands on `residues` — four of them, and
+ * every value is the SOURCE'S OWN WORD.
+ *
+ * `uniprot_site` is UniProt's own type word (`Active site`, `Disulfide bond`)
+ * and `uniprot_note` its own description (`Proton acceptor`), quoted and never
+ * re-worded; `pfam_domain` is the accession InterPro matched; `epitope` is the
+ * IEDB's own identifier. All four are ABSENT where the source names nothing —
+ * never `"none"`, never an empty string and never a category this desk
+ * invented.
+ *
+ * `uniprot_note` is a SECOND column rather than a suffix on the first, and that
+ * is the same ruling `conservation_basis` is: two facts joined into one string
+ * cannot be filtered apart, and a reader who wants every active site does not
+ * want to match on the word `Proton`.
+ */
+export const UNIPROT_SITE_COLUMN = 'uniprot_site';
+export const UNIPROT_NOTE_COLUMN = 'uniprot_note';
+export const PFAM_DOMAIN_COLUMN = 'pfam_domain';
+export const EPITOPE_COLUMN = 'epitope';
 
 /**
  * WHAT EACH COLUMN OF THE INTERACTION TABLE MEANS — declared here because
@@ -219,6 +257,26 @@ export interface ConservationOutput extends ColumnsOutput {
   readonly counts: ConservationCounts | null;
   readonly refusals: readonly string[];
 }
+
+/**
+ * The annotation act's answer — the four columns' counts, every source's own
+ * row, and every sentence a reader must see.
+ *
+ * `refusals` rides out on the output for the reason `ConservationOutput`'s does
+ * and one grain finer: a chain with no UniProt reference is annotated by
+ * nothing while the other chain's annotation stands, AND a single service that
+ * would not answer takes only its own column down while the other two's
+ * evidence stays on the desk. So this act LANDS and still has things to say.
+ */
+export interface AnnotationOutput extends ColumnsOutput {
+  /** `null` only where no evidence was gathered at all — see {@link NO_ANNOTATION_EVIDENCE}. */
+  readonly counts: AnnotationCounts | null;
+  readonly refusals: readonly string[];
+}
+
+/** What a def built with no annotation evidence says — the same shape as {@link NO_CONSERVATION_EVIDENCE}, one stage along. */
+export const NO_ANNOTATION_EVIDENCE =
+  'nothing already known about this entry’s sequences was gathered, so no residue carries a site, a domain or an epitope. What is known is read before the dashboard is built — from the files this repository committed for the example, or from the services for any other entry — and this dashboard was built without it.';
 
 /** What a def built with no family evidence says — the fifth refusal, and the one that is about this build rather than about the data. */
 export const NO_CONSERVATION_EVIDENCE =
@@ -548,6 +606,129 @@ function conservationAnalysis(evidence: ConservationEvidence | null): AnalysisDe
 }
 
 /**
+ * WHAT THE ANNOTATION ACT'S ARGS CARRY — the alignment, and the CITATION.
+ *
+ * Not the records' bytes, for the reason {@link ConservationArgs} gives: what
+ * rides is what a reader of the log needs to check the claim — which accession
+ * each chain was asked about, which source said what, and how many things each
+ * one named. A source that ANSWERED AND NAMED NONE is on this log as exactly
+ * that, which is the difference between *none are known* and *nobody asked*
+ * surviving the trip onto the record.
+ */
+interface AnnotationArgs {
+  readonly residueKeys: readonly string[];
+  readonly entry: string | null;
+  readonly asked: readonly { readonly chain: string; readonly accession: string | null; readonly source: string; readonly answered: boolean; readonly named: number }[];
+  /** The UniProt return fields this stage asked for — so an absent type on the log reads as nobody asked. */
+  readonly fields: readonly string[];
+}
+
+/**
+ * STAGE 6 — WHAT IS ALREADY KNOWN ABOUT EACH RESIDUE, as columns on `residues`.
+ *
+ * ── THE SECOND ACT ON THIS DESK WHOSE DATA IS SOMEBODY ELSE'S, and it makes
+ * no claim of its own at all ────────────────────────────────────────────────
+ * The conservation act cites an alignment and COMPUTES a score over it. This
+ * one computes nothing: every value it lands is a word UniProt, InterPro or the
+ * IEDB published, quoted verbatim. What it does is carry each of those from the
+ * coordinate system it was stated in — a UniProt position — onto the rows this
+ * desk keys by `"<chain>:<resnum>"`, through the hops `./mapping.ts` owns and
+ * the conservation stage already pinned (`./annotationFold.ts` has the table
+ * and the worked non-identity case).
+ *
+ * ── AND IT RUNS ON THE PUBLISHED BUILD ─────────────────────────────────────
+ * Unlike stage 5, which needs a key a static page cannot hold, all of this
+ * stage's sources answer a browser directly with
+ * `access-control-allow-origin: *`. So it is declared on EVERY build, like the
+ * four acts beside it, and `./plan.ts`'s step 6 is no longer blocked by us.
+ *
+ * ── A COLUMN IS WRITTEN ONLY WHERE SOMETHING LANDED, and for the epitope
+ * column that is the whole honesty test ─────────────────────────────────────
+ * The conservation act already keeps this law — writing 185 nulls puts a column
+ * on the table that means nothing, while writing nothing leaves the session to
+ * refuse a read of it by name. Here it matters more: the IEDB ANSWERS for this
+ * entry and names no epitope, so `epitope` is written by nobody, and a version
+ * of this act that declared the column anyway would make the session report a
+ * gap and the stepper read the stage as REFUSED — a service that answered
+ * turned into a failure by the shape of the output. So the declared columns are
+ * the ones that were WRITTEN, and the fact that a source answered and named
+ * none rides out on the counts where the card prints it as a sentence
+ * (`./annotationFold.ts` · `namedNone`).
+ */
+function annotationAnalysis(evidence: AnnotationEvidence | null): AnalysisDef<readonly KeyedRow[], AnnotationOutput> {
+  return {
+    id: ANNOTATION_ACT,
+    kind: 'transform',
+    produces: 'columns',
+    inputs: RESIDUE_INPUTS,
+    honesty: {
+      notes:
+        `NOTHING HERE IS COMPUTED AND NOTHING IS RE-WORDED: every value is the source's own word — ${ANNOTATION_SOURCES.sites}'s own feature type and its own description verbatim, the ${ANNOTATION_SOURCES.domains} accession, the ${ANNOTATION_SOURCES.epitopes}'s own epitope identifier. ` +
+        `WHICH FIELDS WERE ASKED FOR: ${UNIPROT_SITE_FIELDS.join(', ')} — the SITE features, what is known about a RESIDUE. An absent type means nobody asked, which is a different statement from there are none. ` +
+        `A reference position is NOT a residue number, and every fact is carried across that gap by the archive's own aligned regions and residue-number mapping; a position this entry has no row for lands NOTHING and is counted. ` +
+        `WHERE TWO FACTS MEET ON ONE RESIDUE: ${NARROWEST}. ${ONE_MEMBER_DATABASE}. ` +
+        'A source that was asked and named none is an ANSWER and is reported as one — never a blank, never a failure.',
+    },
+    build: () =>
+      libraryChart(
+        flowChart<{ readonly uniprot_site: readonly (string | null)[]; readonly uniprot_note: readonly (string | null)[]; readonly pfam_domain: readonly (string | null)[]; readonly epitope: readonly (string | null)[]; readonly counts: AnnotationCounts | null; readonly refusals: readonly string[] }>(
+          'Put what is already known about these sequences on the residues it is about',
+          (scope) => {
+            const args = scope.$getArgs() as unknown as AnnotationArgs;
+            if (evidence === null) {
+              scope.$setValue('counts', null);
+              scope.$setValue('refusals', [NO_ANNOTATION_EVIDENCE]);
+              return;
+            }
+            const fold = foldAnnotation(evidence, args.residueKeys);
+            // ONE COLUMN AT A TIME, and only where it has values — see the doc
+            // comment above for why the epitope column is the case that
+            // decides the shape.
+            if (fold.counts.sited > 0) scope.$setValue(UNIPROT_SITE_COLUMN, fold.uniprot_site);
+            if (fold.counts.noted > 0) scope.$setValue(UNIPROT_NOTE_COLUMN, fold.uniprot_note);
+            if (fold.counts.domained > 0) scope.$setValue(PFAM_DOMAIN_COLUMN, fold.pfam_domain);
+            if (fold.counts.epitoped > 0) scope.$setValue(EPITOPE_COLUMN, fold.epitope);
+            scope.$setValue('counts', fold.counts);
+            scope.$setValue('refusals', fold.refusals);
+          },
+          'carry-what-is-known',
+        ).build(),
+      ),
+    toRunInput: (rows): AnnotationArgs => ({
+      residueKeys: keysOf(rows),
+      entry: evidence?.entry ?? null,
+      // THE CITATION, ON THE LOG: which chain, which accession, which source,
+      // whether it answered and how many things it named.
+      asked: (evidence?.chains ?? []).flatMap((chain) =>
+        (
+          [
+            [ANNOTATION_SOURCES.sites, chain.sites],
+            [ANNOTATION_SOURCES.domains, chain.domains],
+            [ANNOTATION_SOURCES.epitopes, chain.epitopes],
+          ] as const
+        ).map(([source, answer]) => ({ chain: chain.chain, accession: chain.accession, source, answered: answer.answered, named: answer.named.length })),
+      ),
+      fields: UNIPROT_SITE_FIELDS,
+    }),
+    readOutput: ({ snapshot }): AnalysisResult<AnnotationOutput> => {
+      const state = snapshot.sharedState as Readonly<Record<string, unknown>>;
+      /** Declared only where the stage really wrote it — see the doc comment above. */
+      const written = (column: string): Readonly<Record<string, { readonly type: OutputColumnType }>> => (valuesAt(state, column).length === 0 ? {} : { [column]: { type: 'string' as const } });
+      return {
+        ok: true,
+        output: {
+          as: 'columns',
+          table: ACT_TABLE,
+          columns: { ...written(UNIPROT_SITE_COLUMN), ...written(UNIPROT_NOTE_COLUMN), ...written(PFAM_DOMAIN_COLUMN), ...written(EPITOPE_COLUMN) },
+          counts: (state['counts'] as AnnotationCounts | null) ?? null,
+          refusals: (valuesAt(state, 'refusals') as readonly string[]) ?? [],
+        },
+      };
+    },
+  };
+}
+
+/**
  * THE THREE ACTS, as the def declares them — over the bytes the def was built
  * on.
  *
@@ -556,7 +737,7 @@ function conservationAnalysis(evidence: ConservationEvidence | null): AnalysisDe
  * a file needs node, and this one runs in a browser (`./snapshot.ts` and
  * `./http.ts` are the two doors that fetch it).
  */
-export function protAnalyses(structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null): Readonly<Record<string, AnalysisSlot>> {
+export function protAnalyses(structureText: string, evidence: ConservationEvidence | null = null, hotspots: AnalysisSlot | null = null, annotation: AnnotationEvidence | null = null): Readonly<Record<string, AnalysisSlot>> {
   // THE ORDER IS {@link PROT_ACT_ORDER}'S, and `tests/prot-def.test.ts` pins
   // that: a registry in a different order from the list the orchestrator
   // dispatches off would make the def's own key order a second, silent
@@ -570,9 +751,23 @@ export function protAnalyses(structureText: string, evidence: ConservationEviden
     [CONSERVATION_ACT]: conservationAnalysis(evidence) as unknown as AnalysisSlot,
     [PAIRS_ACT]: pairsAnalysis(structureText) as unknown as AnalysisSlot,
     [CONTACTS_ACT]: contactsAnalysis(structureText) as unknown as AnalysisSlot,
+    /*
+      THE FOURTH ACT EVERY BUILD DECLARES — stage 6, and it reads no byte of this
+      file either.
+
+      Its evidence is what UniProt, InterPro and the IEDB have already published
+      about this entry's sequences, gathered before the dashboard is built
+      (`./annotationEvidence.ts`) exactly as the conservation stage's is. It is
+      declared UNCONDITIONALLY, unlike the hotspots slot below it, because all
+      of its sources answer a browser directly: nothing has to stand in front of
+      them, so a static page performs this stage and `./plan.ts`'s step 6 says
+      so. A def built with no evidence declares the act anyway and lands its own
+      refusal — see `NO_ANNOTATION_EVIDENCE`.
+    */
+    [ANNOTATION_ACT]: annotationAnalysis(annotation) as unknown as AnalysisSlot,
     [SURFACE_ACT]: surfaceAnalysis(structureText) as unknown as AnalysisSlot,
     /**
-     * THE FIFTH ACT, AND ONLY WHERE SOMETHING CAN PERFORM IT.
+     * THE SIXTH ACT, AND ONLY WHERE SOMETHING CAN PERFORM IT.
      *
      * Stage 5 needs a model, and a static page cannot hold the key that would
      * call one (`./plan.ts` · step 5). So the slot arrives from OUTSIDE:
@@ -601,7 +796,7 @@ export function protAnalyses(structureText: string, evidence: ConservationEviden
 export const HOTSPOTS_ACT_KEY = 'residueHotspots';
 
 /**
- * THE THREE STAGES AND THEIR ACTS, IN THE ORDER THEY MUST LAND — the list the
+ * THE FOUR STAGES AND THEIR ACTS, IN THE ORDER THEY MUST LAND — the list the
  * orchestrator dispatches off and the captions name their stage from, so the
  * words on screen and the commits on the log cannot spell the acts differently.
  *
@@ -611,11 +806,15 @@ export const HOTSPOTS_ACT_KEY = 'residueHotspots';
  *
  * CONSERVATION IS FIRST, for two reasons that agree: the PLAN publishes it as
  * step 2, the earliest analysis stage of the pipeline (`./plan.ts`), and it is
- * the one act that parses no headless structure — so the first picture to
+ * one of the two acts that parse no headless structure — so the first picture to
  * arrive is the one that costs the least to land. The two interaction acts and
  * the surface act read the same two things after it (the entry's bytes and the
  * residue keys) and still land in the order they always did, which is why the
  * cursor comes to rest on the surface run exactly as it did before.
+ *
+ * THE ANNOTATION STAGE IS FOURTH, and its own note below is where the two laws
+ * that pin it there are written down — both of them learned by being wrong in a
+ * browser first.
  */
 export const PROT_STAGES: readonly {
   readonly stage: string;
@@ -642,6 +841,49 @@ export const PROT_STAGES: readonly {
     acts: [
       { id: PAIRS_ACT, intent: 'find every non-covalent contact Mol*\'s interaction engine reports between residues of this entry, and cut one row per contact — dropping, with a reason and a count, every contact with an end the residues table has no row for' },
       { id: CONTACTS_ACT, intent: 'fold those contacts onto the residues they touch: how many each residue is in, how many of those cross to a different chain, and the tightest of the crossing ones — absent, never zero, for a residue that touches no other chain' },
+    ],
+  },
+  /*
+    STAGE 6 IS DISPATCHED FOURTH, AND THE PLAN STILL PUBLISHES IT SIXTH — and
+    the POSITION is the whole of what this comment is about, because two laws
+    pin it and only one slot satisfies both.
+
+    THE FIRST LAW is this list's own, stated by the conservation stage above:
+    *the cursor comes to rest on the surface run exactly as it did before*. The
+    commit at the head is what the desk opens focused on (`web/src/protDesk.tsx`:
+    the stage at the cursor owns the focus), so the SURFACE stage has to stay
+    last. Dispatching this stage after it made its own four-mark bar the desk's
+    opening picture — measured on the real served page — which is a change to
+    what every reader first sees, made by a dispatch order rather than by a
+    decision.
+
+    THE SECOND LAW is the one this stage taught the desk, also by being wrong in
+    a browser first: **a picture may borrow a column from a stage that lands
+    EARLIER, never from one that lands later** (`./def.ts`, the `known` entry of
+    `PROT_ENCODINGS`, carries the argument). Stage 6's chart borrows its HEIGHT,
+    so every stage it borrows from has to have landed by the time its own commit
+    is the cursor. Dispatched SECOND — which is where it sat for one release, on
+    the reasonable-sounding argument that the two acts reading no byte of the
+    file should land first — its height had not landed and pressing step 6
+    promoted an EMPTY chart. *4 of 185 residues named* at the head and *0 of 185*
+    at every earlier cursor.
+
+    After the interactions stage and before the surface stage is the one slot
+    where both hold: the surface run is still the last thing to land, and
+    `contacts` is on the rows by the time this act commits.
+  */
+  {
+    stage: ANNOTATION_STAGE,
+    // THE PLAN'S OWN SHORT NAME FOR STEP 6 IS `Functional Annotation`; this is
+    // the SENTENCE, which is what the def declares and the panel, the card feet
+    // and the seek control carry (`./plan.ts` says which list owns which).
+    label: 'What is already known about each residue',
+    acts: [
+      {
+        id: ANNOTATION_ACT,
+        intent:
+          'ask what is already known about each chain\'s sequence — UniProt\'s own site features with its own descriptions, the Pfam domain InterPro matched, and every epitope the IEDB records — and land each of them on the residue it is about, carried from the reference sequence\'s numbering onto this file\'s by the archive\'s own aligned regions: the source\'s own word, never re-classified, absent where the source names nothing, and a reference position this entry has no row for dropped and counted rather than guessed at',
+      },
     ],
   },
   {

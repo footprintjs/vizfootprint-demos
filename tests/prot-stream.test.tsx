@@ -55,6 +55,7 @@ const run: ProtRun = {
   contacts: null,
   surface: null,
   conservation: null,
+  annotation: null,
 };
 
 const LEDGER = hotspotLedger(

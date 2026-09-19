@@ -80,8 +80,12 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { VizBar, VizLine, VizScatter, VizTable, bindRenderer, brightPredicate, keepPredicate, type BarDatum, type BoundRenderer, type ChartEmission, type ContractGap, type DeclinedEdgeView, type LinePoint, type RenderRow, type RenderSelection, type ScatterDatum, type SelectionClauseView } from 'vizfootprint-ui';
 import type { DeskChart, DeskProjection } from 'vizfootprint-studio/desk';
 import { PAINT_COLOR, PAINT_MEANING, PAINT_WORDS, VALUE_PALETTE, molstarRenderer, type PaintWord } from './molstarRenderer.js';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, RANKING_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
-import { CONSERVATION_COLUMN, INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from '../../src/prot/analyses.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, KNOWN_VIEW, PAIRS_VIEW, RAMA_VIEW, RANKING_VIEW, RESIDUE_KEY, STRUCTURE_VIEW, SURFACE_VIEW } from '../../src/prot/def.js';
+import { CONSERVATION_COLUMN, CONTACTS_COLUMN, INTERACTION_COLUMNS, INTERFACE_CONTACTS_COLUMN, RELATIVE_SASA_COLUMN, SASA_COLUMN, UNIPROT_NOTE_COLUMN, UNIPROT_SITE_COLUMN } from '../../src/prot/analyses.js';
+// STAGE 6'S OWN WORDS, from the modules that own them: the overlap rule, the
+// asked-for field list and the sentence a source that named nothing earns.
+import { ANNOTATION_SOURCES, NARROWEST, landedNowhere, namedNone } from '../../src/prot/annotationFold.js';
+import { UNIPROT_SITE_FIELDS } from '../../src/prot/annotation.js';
 // STAGE 5's COLUMN AND ITS REGISTER — the column name so the caption can ask
 // what the channel is bound to, and the words so no literal about a
 // recommendation lives in this file (`src/prot/hotspots.ts` owns both).
@@ -96,7 +100,7 @@ import { emitIntent, type Row } from './derive.js';
 import { chainColorOf, declaredSilence, zeroGuideOf, type DeclaredSilence, type Narrowing } from './workbench/charts.js';
 import type { WorkbenchInk } from './workbench/tokens.js';
 
-export { STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, RANKING_VIEW, PAIRS_VIEW };
+export { STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFACE_VIEW, SURFACE_VIEW, KNOWN_VIEW, RANKING_VIEW, PAIRS_VIEW };
 
 /*
  * THERE WAS A `PROT_STORY_FIGURE` HERE — the four cells the Story tab's figure
@@ -120,7 +124,7 @@ export interface ProtDeskData {
   /** The file the 3D view draws, as the host holds it (no version — see `src/prot/session.ts`). */
   readonly structure: StructureArtifact;
   /**
-   * What the three stages landed, and the pair table they cut — `null` on a
+   * What the four stages landed, and the pair table they cut — `null` on a
    * surface whose stages were never run. The two act-fed cells read their
    * counts from here and RECOMPUTE none of them.
    */
@@ -378,10 +382,106 @@ export function rankedBars(residues: readonly Row[], categoryField: string, valu
  * in some rank's own colour.
  */
 export function rankPaint(residues: readonly Row[], categoryField: string, rankField: string): (category: string) => string {
-  const ranked = rankedResidues(residues, rankField);
-  const order = [...new Set(ranked.map((row) => String(row[rankField])))].sort();
-  const byCategory = new Map(ranked.map((row) => [String(row[categoryField]), hex(VALUE_PALETTE[order.indexOf(String(row[rankField])) % VALUE_PALETTE.length] ?? PAINT_COLOR.kept)]));
+  return valuePaint(rankedResidues(residues, rankField), categoryField, rankField);
+}
+
+/**
+ * THE MOST BURIED OF THE NAMED RESIDUES, SAID — the pairing this stage is
+ * scientifically for, folded from two LANDED columns instead of drawn as a
+ * height.
+ *
+ * ── WHY IT IS A SENTENCE AND NOT THE CHART'S `y` ───────────────────────────
+ * It was the height for one release and it drew NOTHING. `relative_sasa` is the
+ * SURFACE stage's column and the surface stage lands LAST, so at stage 6's own
+ * commit — the commit a press on step 6 seeks to — the height did not exist and
+ * every mark was dropped (`src/prot/def.ts`, the `known` entry, has the law:
+ * a picture may borrow from a stage that lands EARLIER, never from a later
+ * one). And the pairing was not visible even at the head: `A:85`'s relative
+ * exposure is exactly 0, so the mark carrying the whole payoff had zero height.
+ *
+ * So the pairing goes where it is legible and where it degrades honestly: a
+ * COUNTED sentence, absent at any cursor where either column is not on the rows,
+ * naming the residue and quoting the source's own word for it.
+ *
+ * `null` where nothing is named, where no named residue carries an exposure, or
+ * where the rows carry no exposure at all — three states in which there is no
+ * *most buried* to name and a sentence would be an invention.
+ */
+export function buriedSaid(residues: readonly Row[], categoryField: string, siteField: string, exposureField: string = RELATIVE_SASA_COLUMN): string | null {
+  const named = namedResidues(residues, siteField).filter((row) => placed(row[exposureField]));
+  const most = named.reduce<Row | null>((best, row) => (best === null || Number(row[exposureField]) < Number(best[exposureField]) ? row : best), null);
+  if (most === null) return null;
+  const exposure = Number(most[exposureField]);
+  const called = String(most[siteField]).toLowerCase();
+  // `an active site`, `a disulfide bond` — the source's own word takes whichever
+  // article English gives it, and this desk does not re-word the word itself
+  const article = /^[aeiou]/.test(called) ? 'an' : 'a';
+  return (
+    `AND THE PAIRING THIS STAGE IS FOR, off the same rows: the most buried of the ${count(named.length)} named ${named.length === 1 ? 'residue' : 'residues'} is ` +
+    `${String(most[categoryField])}, which ${ANNOTATION_SOURCES.sites} calls ${article} ${called}${exposure === 0 ? ' — and the solvent cannot reach it at all' : `, with ${(exposure * 100).toFixed(1)}% of its type's published maximum reachable`}. ` +
+    'The annotation and the exposure land on the SAME KEY, which is the only reason that sentence can be said at all'
+  );
+}
+
+/**
+ * WHAT COLOUR A MARK IS WHEN ITS COLOUR CHANNEL CARRIES A VALUE — the general
+ * form of {@link rankPaint}, and the one both stage 5's and stage 6's charts
+ * are painted through.
+ *
+ * It is the SAME palette and the SAME index `./molstarRenderer.ts` · `paintOf`
+ * gives a bound value: the distinct values are sorted and each takes
+ * `VALUE_PALETTE[i]`. So a value has one hue across the whole desk — rank 1 is
+ * one colour in the bar and in the molecule, and `Active site` is one colour in
+ * both too — and the legend beside the viewer reads for every picture at once.
+ *
+ * It is handed to the library through the one door a categorical scale has
+ * (`VizBar`'s `colorOf`), never through a selector into its SVG. A category
+ * this fold has no row for comes back in the `kept` grey rather than in some
+ * value's own colour.
+ */
+export function valuePaint(rows: readonly Row[], categoryField: string, valueField: string): (category: string) => string {
+  const order = [...new Set(rows.map((row) => String(row[valueField])))].sort();
+  const byCategory = new Map(rows.map((row) => [String(row[categoryField]), hex(VALUE_PALETTE[order.indexOf(String(row[valueField])) % VALUE_PALETTE.length] ?? PAINT_COLOR.kept)]));
   return (category: string): string => byCategory.get(category) ?? hex(PAINT_COLOR.kept);
+}
+
+/** A word a source really said — the guard {@link namedResidues} filters on, beside `placed` for the numeric columns. */
+const named = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
+
+/**
+ * THE ROWS STAGE 6'S CHART DRAWS — the ones a published source has already
+ * NAMED, in the table's own order.
+ *
+ * **THE ABSENCE IS THE FILTER**, this desk's idiom once more: 181 of the
+ * committed entry's 185 residues carry no site word at all, so they have no
+ * mark, and the caption counts the marks against the whole table rather than
+ * printing a bare four.
+ *
+ * NOT SORTED, unlike {@link rankedResidues}, and the difference is the data's:
+ * a rank IS an order and the band's slots have to carry it, while a site word
+ * is a NAME and has no order to impose. So the marks arrive in the table's own
+ * order — chain, then residue number — which is the order every other picture
+ * on this desk reads in.
+ */
+export function namedResidues(residues: readonly Row[], siteField: string): readonly Row[] {
+  return residues.filter((row) => named(row[siteField]));
+}
+
+/**
+ * THE MARKS OF STAGE 6'S CHART: one per named residue, as tall as the fraction
+ * of that residue the solvent can reach.
+ *
+ * {@link interfaceBars} OVER {@link namedResidues}, reusing the fold rather
+ * than writing a second copy — the choice {@link rankedBars} already made one
+ * stage earlier: it takes the bound category and the bound value and drops a
+ * row whose value is not a magnitude, which is exactly what this picture needs.
+ *
+ * EMPTY WHERE NOTHING IS NAMED, which is the point: a chart of nothing
+ * pretending to be a chart of something is what the cell's own refusal state
+ * exists to prevent.
+ */
+export function namedBars(residues: readonly Row[], categoryField: string, valueField: string, siteField: string): readonly BarDatum[] {
+  return interfaceBars(namedResidues(residues, siteField), categoryField, valueField);
 }
 
 /**
@@ -708,6 +808,18 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   const rankCategory = desk.bound(RANKING_VIEW, 'category', RESIDUE_KEY);
   const rankValue = desk.bound(RANKING_VIEW, 'y', INTERFACE_CONTACTS_COLUMN);
   const rankColumn = desk.bound(RANKING_VIEW, 'color', HOTSPOT_RANK_COLUMN);
+  /*
+    STAGE 6'S THREE CHANNELS, read the same way: the session's answer at the
+    cursor, never a constant written here. The fallbacks are the declaration's
+    own (`src/prot/def.ts` · the `known` entry of `PROT_ENCODINGS`) — the
+    colour is the SOURCE'S OWN WORD and the height is a COUNT the interactions
+    stage landed one commit EARLIER, never the other way round, because *Active
+    site* is not an amount — and never a LATER stage's column, which is the law
+    `src/prot/def.ts` records where this binding is declared.
+  */
+  const knownCategory = desk.bound(KNOWN_VIEW, 'category', RESIDUE_KEY);
+  const knownValue = desk.bound(KNOWN_VIEW, 'y', CONTACTS_COLUMN);
+  const knownColumn = desk.bound(KNOWN_VIEW, 'color', UNIPROT_SITE_COLUMN);
   /**
    * IS STAGE 5'S CHART DECLARED ON THIS BUILD AT ALL — asked of the RECORD, and
    * that is the whole point of asking it this way.
@@ -761,6 +873,16 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
    */
   const rankingLanded = useMemo(() => residues.some((r) => placed(r[rankColumn])), [residues, rankColumn]);
   /**
+   * HAS STAGE 6 LANDED? — asked of the SITE WORD, off the unfiltered rows,
+   * exactly as the four above are asked of their own columns.
+   *
+   * It is the site and not the height, for the reason the rank flag gives: the
+   * height is stage 3's column and is on the rows long before this chart can
+   * draw, so a flag folded from it would report the wrong stage and print the
+   * wrong refusal.
+   */
+  const knownLanded = useMemo(() => residues.some((r) => named(r[knownColumn])), [residues, knownColumn]);
+  /**
    * The contact rows the act handed back, exactly as it handed them back.
    *
    * NOT read from the session, and that is the whole point of the receipt cell:
@@ -802,6 +924,11 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   );
   const rankingSelection = useMemo(
     () => selFor(RANKING_VIEW),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
+    [...sel],
+  );
+  const knownSelection = useMemo(
+    () => selFor(KNOWN_VIEW),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selFor reads the slices already listed
     [...sel],
   );
@@ -932,6 +1059,26 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
   const rankedHere = useMemo(() => rankedResidues(rankRows, rankColumn).length, [rankRows, rankColumn]);
   /** The hue per mark — the rank, in the palette the 3D view paints a bound value with ({@link rankPaint}). */
   const rankColorOf = useMemo(() => rankPaint(rankRows, rankCategory, rankColumn), [rankRows, rankCategory, rankColumn]);
+
+  /**
+   * STAGE 6'S MARKS, OVER THE ROWS IN FORCE — the same treatment stage 5's
+   * marks get, and for the same library reason (`VizBar` outlines the category
+   * its OWN clause picked and has no dim arm).
+   */
+  const knownRows = useMemo(
+    () => residues.filter(keepPredicate(knownSelection) as (row: Row) => boolean),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- knownSelection is memoised on the same slices
+    [residues, knownSelection],
+  );
+  const knownBars = useMemo(() => namedBars(knownRows, knownCategory, knownValue, knownColumn), [knownRows, knownCategory, knownValue, knownColumn]);
+  /** The marks this picture has AT REST — the total its narrowing sentence counts out of, folded off the same rows by the same function. */
+  const knownBarsAtRest = useMemo(() => namedBars(residues, knownCategory, knownValue, knownColumn).length, [residues, knownCategory, knownValue, knownColumn]);
+  /** How many residues carry a site word at all, in force — the number the caption counts against the whole table, so it cannot outrun the picture. */
+  const namedHere = useMemo(() => namedResidues(knownRows, knownColumn).length, [knownRows, knownColumn]);
+  /** The hue per mark — the source's own word, in the palette the 3D view paints a bound value with ({@link valuePaint}). */
+  const knownColorOf = useMemo(() => valuePaint(namedResidues(knownRows, knownColumn), knownCategory, knownColumn), [knownRows, knownCategory, knownColumn]);
+  /** What each source said, and the sentence a source that ANSWERED AND NAMED NOTHING earns — off the act's own answer, never recomputed. */
+  const annotationCounts = run?.annotation?.counts ?? null;
 
   /**
    * WHICH VIEWS HOLD A LIVE CLAUSE RIGHT NOW — the desk-wide fact, and the one
@@ -1510,6 +1657,110 @@ export function useProtCells(desk: DeskProjection, data: ProtDeskData, ink?: Wor
               ),
           },
         ]),
+    /*
+      ── STAGE 6'S OWN PICTURE, and it is declared on EVERY build ─────────────
+      One mark per residue a published source has already NAMED, each one
+      pressable and each press one residue. `src/prot/def.ts` carries the
+      argument for the three channels; the two things this cell adds are the
+      rows (the absence is the filter) and the counts — including the one count
+      that is the whole honesty test of this stage, which is a source that
+      answered and named NONE.
+    */
+    {
+      id: KNOWN_VIEW,
+      weight: 4,
+      // NEVER A BARE FOUR: a reader has to be able to see that 181 residues
+      // carry no name, because that is nearly all of them.
+      foot: !knownLanded ? null : `${count(knownBars.length)} of ${count(counts.residues)} residues named`,
+      narrowing: !knownLanded ? null : narrowingAt(knownSelection, structureRows, knownBarsAtRest, knownBars.length, 'marks'),
+      ...(!knownLanded ? {} : { marks: knownBars.length }),
+      caption: (
+        <>
+          {[
+            !knownLanded
+              ? // THE REFUSAL, VERBATIM — the library's own sentence, collected by a
+                // real gesture on this session before the stage ran
+                // (`src/prot/session.ts` · probeTheUnlandedColumns).
+                `nothing to draw yet — the library refused a press on this chart in its own words: “${refusals[KNOWN_VIEW] ?? `no column "${knownColumn}" in table "residues"`}”. The column arrives when the stage has asked what is already known about these sequences, and steps back out of the table the moment the time cursor moves behind that commit`
+              : `${count(knownBars.length)} of ${count(counts.residues)} residues carry a name somebody else published — one mark each, in the table's own order`,
+            // THE ABSENCE, WHICH IS NEARLY THE WHOLE ENTRY — counted off the
+            // rows this picture is drawn from, never a literal.
+            !knownLanded ? null : `the other ${count(counts.residues - namedHere)} residues carry NO named site and so have no mark: no source in this stage names them, which is not the same as their doing nothing`,
+            // THE DIRECTION OF THE ONE AXIS, said where a reader could
+            // otherwise read it backwards — and it is the OPPOSITE of the
+            // ranked chart's, which is exactly why both say it.
+            !knownLanded
+              ? null
+              : `THE HEIGHT IS NOT THE ANNOTATION: the colour is ${ANNOTATION_SOURCES.sites}'s own word for what the residue is, and the height is ${knownValue} — the number of non-covalent contacts that residue is in, which the interactions stage counted one commit earlier, so taller means more of them`,
+            // THE BURIAL PAIRING, AS A SENTENCE rather than as a height — see
+            // `src/prot/def.ts` for what it cost and why. It is folded from two
+            // LANDED columns and is therefore absent at a cursor where either
+            // is not on the rows, which is the honest way for it to degrade.
+            buriedSaid(knownRows, knownCategory, knownColumn),
+            // WHAT WAS ASKED FOR, because an absent kind of site means nobody
+            // asked — the `INTERACTION_COLUMNS` rule, one service along.
+            !knownLanded ? null : `the fields asked for were ${UNIPROT_SITE_FIELDS.join(', ')} — the SITE features, what is known about a RESIDUE — so a kind of site that is absent here is one nobody asked about, which is a different statement from there being none`,
+            // A NAMED RESIDUE WITH NO HEIGHT would be a mark this picture
+            // cannot draw, so it is counted rather than lost.
+            !knownLanded || namedHere === knownBars.length
+              ? null
+              : `${count(namedHere - knownBars.length)} of the named residues carry no ${knownValue} and so have no mark either — the height is a column of another stage, and a mark with no height is left off rather than drawn at zero`,
+            /*
+              AND THE ANSWER THAT NAMED NOTHING, which is a FACT and must read
+              as one. `namedNone` is the one owner of that sentence.
+
+              IT IS SAID WHETHER OR NOT THIS PICTURE DREW, and deliberately:
+              *the epitope service was asked and named none* is a fact about
+              the RUN, and it stays true at a cursor where the site column has
+              stepped back out of the table. The refusal above is about the
+              PICTURE. Two facts, two sentences, and the one a reader would
+              otherwise lose is the one this stage exists to make legible.
+            */
+            annotationCounts === null ? null : namedNone(annotationCounts.sources, ANNOTATION_SOURCES.epitopes),
+            annotationCounts === null ? null : landedNowhere(annotationCounts),
+            !knownLanded ? null : `where two facts met on one residue, ${NARROWEST}`,
+            !knownLanded
+              ? null
+              : 'a mark IS the control: press one and that residue is selected — the 3D view lights it, the backbone-angle scatter keeps its dot, both runs narrow and the sheet drops to its row. Each mark carries its own name, so Tab moves between them and Enter presses the one you are on',
+          ]
+            .filter((s): s is string => s !== null)
+            .join(' · ')}
+          {desk.words(KNOWN_VIEW)}
+        </>
+      ),
+      render: ({ width, height }: { readonly width: number; readonly height: number }) =>
+        !knownLanded ? (
+          <div role="status" style={{ padding: 12, opacity: 0.7 }}>
+            {refusals[KNOWN_VIEW] ?? `no column "${knownColumn}" in table "residues"`}
+          </div>
+        ) : (
+          <VizBar
+            viewId={KNOWN_VIEW}
+            data={knownBars}
+            colorOf={knownColorOf}
+            field={knownCategory}
+            /*
+              DERIVED FROM THE BINDING, never typed. This label read "how much of
+              each named residue the solvent can reach" while the height was
+              `contacts` — a caption making a different claim from the chart
+              beside it, because it was a literal that did not move when the
+              binding did. It would also have been wrong the moment a reader
+              re-encoded the channel, which is a thing this desk invites.
+            */
+            label={`each named residue's ${knownValue}, per ${knownCategory}, coloured by what the source calls it`}
+            ariaLabel={desk.altShort(KNOWN_VIEW)}
+            selection={knownSelection}
+            columns={columns}
+            fits={desk.fitsOf(KNOWN_VIEW)}
+            encoding={shown[KNOWN_VIEW] ?? {}}
+            axes={height >= AXIS_ROOM}
+            width={width}
+            height={height}
+            onEmit={emit(KNOWN_VIEW, 'select')}
+            onReencode={reencode}
+          />
+        ),
+    },
     {
       id: PAIRS_VIEW,
       weight: 3,

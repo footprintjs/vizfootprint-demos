@@ -45,7 +45,8 @@ import {
 } from '../server/prot-doors.js';
 import { HOTSPOT_TAG, NO_KEY_SENTENCE, hotspotLedger, scriptedJudge, type HotspotLedger } from '../src/prot/hotspots.js';
 import { ACT_KEY_COLUMN, CONTACTS_ACT, SURFACE_ACT } from '../src/prot/analyses.js';
-import { PROT_FILES } from '../src/data/files.js';
+import { PROT_COMMITTED_READS } from '../src/prot/http.js';
+import { PROT_ANNOTATION_FILES, PROT_CONSERVATION_FILES, PROT_FILES } from '../src/data/files.js';
 import type { ProtRun } from '../src/prot/orchestrator.js';
 
 /** A key this test invents, so nothing real is ever in play — and the thing every body below is searched for. */
@@ -63,6 +64,7 @@ const run: ProtRun = {
   contacts: null,
   surface: null,
   conservation: null,
+  annotation: null,
 };
 
 /**
@@ -536,11 +538,19 @@ describe('a served page reads the committed bytes by the declared name, and by n
     expect(text).toBe(readFileSync(PROT_FILES.structure, 'utf8'));
   });
 
-  it('serves every file the conservation stage cites, and its list is the one the static build copies', async () => {
+  it('SERVES EVERY FILE THE DESK READS — asserted against the reads, never a hand count', async () => {
     const desk = createProtDesk(scriptedHotspotDriver());
     for (const file of PROT_SERVED_FILES) expect((await ask(desk, 'GET', `/api/prot/${file}`)).status).toBe(200);
     expect(PROT_SERVED_FILES).toContain(PROT_FILES.structure);
-    expect(PROT_SERVED_FILES.length).toBe(6);
+    // THE ASSERTION THAT WAS MISSING, and its absence cost a stage. This test
+    // used to say "its list is the one the static build copies" in its NAME and
+    // assert a hand count of 6 instead. When stage 6 landed four committed
+    // files, the static build copied them and this door did not — so the
+    // published page drew the stage and the SERVED page 404ed, landed nothing,
+    // and printed the empty-focus sentence. A claim in a test's title is not a
+    // test. The two lists are now compared to each other.
+    expect(PROT_SERVED_FILES.length).toBe(PROT_COMMITTED_READS);
+    for (const file of [...PROT_CONSERVATION_FILES, ...PROT_ANNOTATION_FILES]) expect(PROT_SERVED_FILES).toContain(file);
   });
 
   it('a path outside the list is not a file this door has — it is a door it does not have', async () => {

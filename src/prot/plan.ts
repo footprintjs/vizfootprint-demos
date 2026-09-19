@@ -13,20 +13,24 @@
  * the screen less honest than the documentation for a release:
  *
  *   - declaring a stage IN THE DEF means the orchestrator dispatches acts for
- *     it. For steps 5 and 6 that would be a LIE — nothing runs — so nothing is
- *     added to {@link PROT_STAGES}, and `tests/prot-plan.test.ts` is the test
- *     that stops a later edit from turning the plan into a promise.
+ *     it. For step 5 that would be a LIE — nothing runs — so nothing is added
+ *     to {@link PROT_STAGES}, and `tests/prot-plan.test.ts` is the test that
+ *     stops a later edit from turning the plan into a promise.
  *   - declaring a stage IN THE PLAN means the pipeline has six steps and that
- *     three of them are performed here. That is simply true, it is what the
+ *     five of them are performed here. That is simply true, it is what the
  *     project's own `docs/stages.md` publishes, and the stepper is the plan's
  *     view — so the stepper shows six.
  *
- * A grey circle would have hidden the interesting half of that. TWO of these
- * six will not run on this build and they are blocked by two different people:
- * THIS BUILD (a static page that cannot hold a key) and US (work outstanding,
- * with nothing external in the way). A reader deserves to know which, and
- * before this file the page had no way to say *we have not built this yet* out
- * loud.
+ * A grey circle would have hidden the interesting half of that. ONE of these
+ * six will not run on this build — step 5, blocked by THIS BUILD, a static page
+ * that cannot hold a key — and a reader deserves to know which kind of blocked
+ * that is, which is what this file exists to say.
+ *
+ * THERE WERE TWO UNTIL STEP 6 LANDED. That one was blocked by US: work
+ * outstanding, with nothing external in the way, and before this file the page
+ * had no way to say *we have not built this yet* out loud. It said it for
+ * several releases, and then the work was done — which is the only way that
+ * particular sentence is ever supposed to stop being true.
  *
  * THERE WERE THREE, and the third is worth a sentence because of how it went
  * away. Step 2 was blocked by THE WORLD — *no public sequence-search service
@@ -146,18 +150,28 @@ export const PROT_PLAN: readonly PlanStep[] = [
       'A build with a server behind it performs this stage. And when it does, the answer is a PREDICTION rather than a measurement, so the screen may not let it look like one.',
     line: 'declared, and this build cannot perform it — the block is the build\'s, and the evidence a model would read has already landed',
   },
-  {
-    step: 6,
-    stage: 'annotation',
-    name: 'Functional Annotation',
-    question: 'What is already known about this sequence, its domains and its epitopes',
-    blockedBy: 'us',
-    why:
-      'this one is our work outstanding, and nothing external is in the way: UniProt, InterPro and the IEDB query API all answer a browser directly, so this stage needs no server — only building. ' +
-      'It says that rather than wearing a reason somebody else owns, which is the whole point of naming three kinds of blocked instead of one. ' +
-      'What it would land, beside the residues this desk already draws: the sequence\'s own annotations, the domains and families it belongs to, and the epitopes already recorded for it.',
-    line: 'declared, and not built yet — the block is OURS, and nothing external is in the way',
-  },
+  /*
+    STEP 6 WAS BLOCKED BY US, AND IS NOT ANY MORE.
+
+    It carried `blockedBy: 'us'` and said so in its own words — *this one is our
+    work outstanding, and nothing external is in the way: UniProt, InterPro and
+    the IEDB query API all answer a browser directly, so this stage needs no
+    server — only building.* Every clause of that was true, including the last
+    one, which is what made it the only honest use of this vocabulary's third
+    word: nobody else was in the way, so the sentence named US.
+
+    It was then built (`./analyses.ts` · `ANNOTATION_ACT`), and so this step
+    carries what every other landed step carries: the id, and nothing else. The
+    sentence, the reason and the line come from the list that owns them, which
+    is the law at the top of this file.
+
+    THE VOCABULARY KEEPS ALL THREE WORDS, and `us` in particular. Two of the
+    three have now been retired by work rather than by argument — `the world`
+    for step 2 and `us` for this one — and `BLOCKED_TAG` still spells both,
+    because the next stage that cannot run here deserves the same choice of
+    honest words rather than the one word left standing.
+  */
+  { step: 6, stage: 'annotation', name: 'Functional Annotation', question: null, blockedBy: null, why: null, line: null },
 ];
 
 /** The plan step for one stage id, or `undefined` for an id the plan does not name. */
@@ -178,20 +192,20 @@ export interface BlockedStep {
 }
 
 /**
- * THE THREE STEPS THAT WILL NOT RUN HERE — each one a CARD in the grid, because
+ * THE STEPS THAT WILL NOT RUN HERE — each one a CARD in the grid, because
  * the author asked for the reason to be read at the size and in the place of
  * the thing it is about: *"for not-available, show the widget and tell inside it
  * a text to tell why it's not there."*
  *
- * THE OTHER THREE STEPS ARE PICTURES, including step 1: the parse's own columns
+ * EVERY OTHER STEP IS A PICTURE, including step 1: the parse's own columns
  * are its landed columns, so the 3D view and the backbone-angle scatter ARE its
  * evidence (`web/src/protStages.ts` · `chartsOfStage`, which derives that
  * rather than being told it). A step with a picture does not also get a card of
  * words — that would be two homes for one answer.
  *
- * The reason is RESOLVED rather than copied: step 2's paragraph belongs to
- * `PROT_UNAVAILABLE_STAGES` (the list the def declares it to) and the plan's own
- * two carry their own. One owner each, and no step has two.
+ * The reason is RESOLVED rather than copied: a step the def declares to
+ * `PROT_UNAVAILABLE_STAGES` takes that list's paragraph, and a step the plan
+ * alone declares carries its own. One owner each, and no step has two.
  */
 export const PROT_BLOCKED: readonly BlockedStep[] = PROT_PLAN.flatMap((step) => {
   if (step.blockedBy === null) return [];

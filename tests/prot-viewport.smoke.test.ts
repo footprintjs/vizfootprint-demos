@@ -208,18 +208,21 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the protein desk f
       });
 
       it('runs EIGHT LIVE PANES — one focus, seven support — and every one that binds data draws its marks', () => {
-        // SEVEN support panes, and the split between them moved: FIVE pictures
-        // now (the conservation run arrived with its stage) and a card for each
-        // of the TWO declared steps that will not run here. It was four
-        // pictures and three cards, and nothing about the count changed —
-        // the conservation step crossed from one half to the other.
+        /*
+          SEVEN support panes, and the split between them has moved twice: SIX
+          pictures now (the conservation run arrived with its stage, and stage
+          6's own chart with its) and a card for the ONE declared step that will
+          not run here. It was four pictures and three cards; the TOTAL has
+          never changed, because each time a step crossed from the half that
+          says to the half that draws, its card went with it.
+        */
         expect(m.tiles).toHaveLength(7);
         const drawing = m.tiles.filter((t) => t.drawn > 0);
         const said = m.tiles.filter((t) => t.drawn === 0);
         say(`  panes: focus ${String(m.focus.width)}×${String(m.focus.drawn)}; ${drawing.map((t) => `${t.id ?? '?'} ${String(t.width)}×${String(t.drawn)} (${String(t.marks)} marks)`).join(', ')}; and ${String(said.length)} cards of words at ${said.map((t) => String(t.height)).join('/')}px`);
         /*
           WHICH PANES SAY IT RATHER THAN DRAWING IT, and each for its own reason:
-            · the three steps that will not run here have nothing to filter;
+            · the one step that will not run here has nothing to filter;
             · the 3D VIEW, because its content is a WebGL canvas rather than
               marks — measured at 282×114 it was an empty black box, it cannot
               show a crossfilter by density (it recolours, invisibly at that
@@ -228,14 +231,18 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the protein desk f
           Everything else DRAWS, because a pane that shows no marks cannot show
           a crossfilter and that is what this layout is bought for.
         */
-        expect(said.map((t) => t.id).sort()).toEqual([STRUCTURE_VIEW, 'stage:annotation', 'stage:hotspots'].sort());
-        expect(drawing).toHaveLength(4);
+        expect(said.map((t) => t.id).sort()).toEqual([STRUCTURE_VIEW, 'stage:hotspots'].sort());
+        expect(drawing).toHaveLength(5);
         expect(m.tiles.find((t) => t.id === RAMA_VIEW)?.marks).toBeGreaterThan(100);
         expect(m.tiles.find((t) => t.id === 'interface')?.marks).toBeGreaterThan(100);
         // AND THE NEW RUN DRAWS TOO, which is the whole point of landing a
         // column rather than a caption: 162 of the 185 residues have a score
         // and the other 23 have no column at all, so the line simply stops
         expect(m.tiles.find((t) => t.id === 'conservation')?.marks).toBe(162);
+        // AND STAGE 6'S CHART DRAWS ITS FOUR, which is the whole entry's named
+        // residues: two active sites and the two ENDS of one disulfide bond.
+        // The absence is the filter, so 181 residues have no mark at all.
+        expect(m.tiles.find((t) => t.id === 'known')?.marks).toBe(4);
         // no pane is too small to be a picture at the tighter budget
         for (const tile of drawing) expect(tile.drawn, `the ${tile.id ?? '?'} pane is ${String(tile.drawn)}px tall`).toBeGreaterThan(95);
       });

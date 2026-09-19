@@ -7,6 +7,7 @@
  *                            declareAnalysis(residueContacts)      → a commit
  *   stage "surface"       →  declareAnalysis(residueSurface)       → a commit
  *   stage "conservation"  →  declareAnalysis(residueConservation)  → a commit
+ *   stage "annotation"    →  declareAnalysis(residueAnnotation)    → a commit
  * ```
  *
  * ── WHY A CHART AND NOT A LOOP ──────────────────────────────────────────────
@@ -48,7 +49,7 @@
 import { flowChart } from 'footprintjs';
 import type { InteractionSession } from 'vizfootprint/agent';
 import type { Cause } from 'vizfootprint/cause';
-import { CONSERVATION_ACT, CONTACTS_ACT, PAIRS_ACT, PROT_STAGES, SURFACE_ACT, type ConservationOutput, type ContactsOutput, type PairsOutput, type SurfaceOutput } from './analyses.js';
+import { ANNOTATION_ACT, CONSERVATION_ACT, CONTACTS_ACT, PAIRS_ACT, PROT_STAGES, SURFACE_ACT, type AnnotationOutput, type ConservationOutput, type ContactsOutput, type PairsOutput, type SurfaceOutput } from './analyses.js';
 
 /** What one act did — the row the narrative renders and the desk's captions read. */
 export interface ActOutcome {
@@ -86,6 +87,17 @@ export interface ProtRun {
    * these sentences to the desk beside the act's own outcome.
    */
   readonly conservation: ConservationOutput | null;
+  /**
+   * What the annotation act landed: which source said what about which chain,
+   * how many residues got each column, and every refusal.
+   *
+   * LIKE THE CONSERVATION ANSWER it can be present and still carry refusals,
+   * and one grain finer: a single service that would not answer takes only its
+   * own column down while the other two's evidence stands. And a source that
+   * ANSWERED AND NAMED NOTHING is on `counts.sources` as exactly that — the one
+   * fact this stage would lose by reporting it as an empty column.
+   */
+  readonly annotation: AnnotationOutput | null;
 }
 
 /** The cause every act of a run carries: the system asked and the system computed, with the act's own declared intent. */
@@ -242,5 +254,6 @@ export async function runProtStages(session: InteractionSession, watch?: ProtRun
     contacts: (outputs.get(CONTACTS_ACT) as ContactsOutput | undefined) ?? null,
     surface: (outputs.get(SURFACE_ACT) as SurfaceOutput | undefined) ?? null,
     conservation: (outputs.get(CONSERVATION_ACT) as ConservationOutput | undefined) ?? null,
+    annotation: (outputs.get(ANNOTATION_ACT) as AnnotationOutput | undefined) ?? null,
   };
 }

@@ -1,0 +1,15 @@
+{
+  "entryType": "UniProtKB reviewed (Swiss-Prot)",
+  "primaryAccession": "P11540",
+  "features": [],
+  "sequence": {
+    "value": "MKKAVINGEQIRSISDLHQTLKKELALPEYYGENLDALWDCLTGWVEYPLVLEWRQFEQSKQLTENGAESVLQVFREAKAEGCDITIILS",
+    "length": 90,
+    "molWeight": 10343,
+    "crc64": "3A8E7A2348DEEC98",
+    "md5": "80B7AB517FAD4B1159073BFF23BDA7CE"
+  },
+  "extraAttributes": {
+    "uniParcId": "UPI000002F255"
+  }
+}

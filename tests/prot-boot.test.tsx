@@ -26,10 +26,10 @@ import { describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ReactElement } from 'react';
-import { CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, PROT_STAGES, SURFACE_ACT } from '../src/prot/analyses.js';
+import { ANNOTATION_ACT, CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, PROT_STAGES, SURFACE_ACT } from '../src/prot/analyses.js';
 import { BLOCKED_TAG, PROT_PLAN, planStepOf } from '../src/prot/plan.js';
 import { HOTSPOTS_ACT, HOTSPOTS_STAGE } from '../src/prot/hotspots.js';
-import { PROT_COMMITTED_READS, PROT_CONSERVATION_FILES, PROT_FILES, type FileRead } from '../src/prot/http.js';
+import { PROT_ANNOTATION_FILES, PROT_COMMITTED_READS, PROT_CONSERVATION_FILES, PROT_FILES, type FileRead } from '../src/prot/http.js';
 import type { ActOutcome } from '../src/prot/orchestrator.js';
 import { NOTHING_REPORTED, bootNow, bootSteps, bytesSaid, readsSaid, type BootReport } from '../web/src/workbench/boot.js';
 import { BootLine, BootLog } from '../web/src/workbench/BootReport.js';
@@ -39,7 +39,15 @@ import { stepViews } from '../web/src/workbench/steps.js';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** The declared reads, in the order a boot of the committed entry makes them. */
-const READS: readonly string[] = [PROT_FILES.structure, ...PROT_CONSERVATION_FILES];
+/**
+ * EVERY FILE A SERVED BOOT OF THE COMMITTED ENTRY READS — the structure, the
+ * conservation stage's five and the annotation stage's four.
+ *
+ * The annotation stage reads seven and four of them are its own: the entity
+ * record and the two Pfam match records belong to the conservation stage and
+ * are counted once, where they are declared (`src/data/files.ts`).
+ */
+const READS: readonly string[] = [PROT_FILES.structure, ...PROT_CONSERVATION_FILES, ...PROT_ANNOTATION_FILES];
 
 /** One file that came back — `total` absent by default, because that is the ordinary case (see the header). */
 const read = (file: string, bytes: number, total: number | null = null): FileRead => ({ file, at: `http://localhost/api/prot/${file}`, bytes, total });
@@ -72,16 +80,19 @@ async function mount(element: ReactElement): Promise<{ readonly words: () => str
 // ── the steps, in order ──────────────────────────────────────────────────────
 
 describe('every step of the boot is reported, in the order it happens', () => {
-  it('names the reads, the ETL, the build, the probes, the four stages and the model call — nine rows, in that order', () => {
+  it('names the reads, the ETL, the build, the probes, the five stages and the model call — nine rows, in that order', () => {
     const steps = bootSteps(NOTHING_REPORTED);
-    expect(steps.map((step) => step.key)).toEqual(['reads', 'search', 'build', 'probe', 'conservation', 'surface', 'interactions', HOTSPOTS_STAGE]);
+    // IN THE PLAN'S PUBLISHED ORDER, which is not the dispatch order: the
+    // annotation stage is dispatched second and published sixth, so it is the
+    // last stage row here and the second one to fill.
+    expect(steps.map((step) => step.key)).toEqual(['reads', 'search', 'build', 'probe', 'conservation', 'surface', 'interactions', HOTSPOTS_STAGE, 'annotation']);
     /*
       AND THE STAGE ROWS ARE NAMED BY THE PLAN, never by this fold: the plan is
       the one declaration of what each step is called (`src/prot/plan.ts`), and
       a boot report with a name of its own would be a second spelling of a
       declared label — the thing this repository refuses.
     */
-    for (const stage of ['search', 'conservation', 'surface', 'interactions', HOTSPOTS_STAGE]) {
+    for (const stage of ['search', 'conservation', 'surface', 'interactions', HOTSPOTS_STAGE, 'annotation']) {
       expect(steps.find((step) => step.key === stage)!.name).toBe(planStepOf(stage)!.name);
     }
     // the four stages the page's own sentence promises are plan steps 1 to 4
@@ -114,12 +125,15 @@ describe('every step of the boot is reported, in the order it happens', () => {
       the next starts, so *the first stage that has not answered, in DISPATCH
       order* is the honest answer and every other unanswered one is pending.
       The def dispatches `interactions` before `surface` while the plan
-      publishes them the other way round (`src/prot/plan.ts` says why), so the
-      row that moves is not the next row on the screen — and that is the point
-      of reading the two orders apart.
+      publishes them the other way round, and it dispatches the ANNOTATION
+      stage SECOND while the plan publishes it sixth (`src/prot/plan.ts` and
+      `src/prot/analyses.ts` · `PROT_STAGES` say why), so the row that moves is
+      not the next row on the screen — and that is the point of reading the two
+      orders apart.
     */
-    expect(PROT_STAGES.map((stage) => stage.stage)).toEqual(['conservation', 'interactions', 'surface']);
+    expect(PROT_STAGES.map((stage) => stage.stage)).toEqual(['conservation', 'interactions', 'annotation', 'surface']);
     expect(state('interactions')).toBe('doing');
+    expect(state('annotation')).toBe('pending');
     expect(state('surface')).toBe('pending');
     expect(state(HOTSPOTS_STAGE)).toBe('pending');
     expect(steps.every((step) => step.refusal === null)).toBe(true);
@@ -226,7 +240,7 @@ describe('a total is reported only when it is known, and UNKNOWN is a first-clas
   it('counts the FILES out of a total that is known before the first read — the list is declared', () => {
     expect(PROT_COMMITTED_READS).toBe(READS.length);
     const asking = readsSaid({ done: [read(PROT_FILES.structure, 169_371)], asking: PROT_CONSERVATION_FILES[0]!, total: PROT_COMMITTED_READS, refusal: null });
-    expect(asking).toContain('file 2 of 6');
+    expect(asking).toContain('file 2 of 10');
     expect(asking).toContain(`reading ${PROT_CONSERVATION_FILES[0]!}`);
   });
 
@@ -309,10 +323,19 @@ describe('the served boot says stage 5 is PENDING; the published build still say
     expect(stepViews(stepperStages([], null), null, false)[4]!.tag).toBe('not on this build');
   });
 
-  it('and a host statement about stage 5 changes NOTHING about step 6, which really is ours and not built', () => {
+  it('and a host statement about stage 5 changes NOTHING about step 6, which this build really does perform', () => {
+    /*
+      IT USED TO ASSERT THE OPPOSITE, and the change is the packet rather than
+      a loosened test: step 6 was blocked by US, so a host saying something
+      about step 5 had to leave step 6's blocked card alone. Step 6 is now a
+      stage the def dispatches an act for, on EVERY build, so what has to be
+      left alone is its LANDED state — and with no outcome offered it is a
+      declared stage that has not been dispatched, never a blocked one.
+    */
     const six = stepperStages([], null, SERVED).find((stage) => stage.stage === 'annotation')!;
-    expect(six.blockedBy).toBe('us');
-    expect(six.state).toBe('blocked');
+    expect(six.blockedBy).toBe(null);
+    expect(six.state).toBe('not-run');
+    expect(six.subtitle).toContain('declared, and not dispatched on this session');
   });
 });
 
@@ -334,7 +357,7 @@ describe('ONE OWNER for what is happening: the spinner and the centred line', ()
 
   it('the line is present tense, one act, and carries no number that is not the point', () => {
     expect(bootNow(at({})).line).toBe('reading the committed files');
-    expect(bootNow(at({ reads: { done: [read(READS[0]!, 169_371)], asking: READS[1]!, total: PROT_COMMITTED_READS, refusal: null } })).line).toBe('reading the committed files · 2 of 6');
+    expect(bootNow(at({ reads: { done: [read(READS[0]!, 169_371)], asking: READS[1]!, total: PROT_COMMITTED_READS, refusal: null } })).line).toBe('reading the committed files · 2 of 10');
     expect(bootNow(at({ reads: { done: READS.map((file) => read(file, 1000)), asking: null, total: PROT_COMMITTED_READS, refusal: null }, parsed: { residues: 185, chains: 2 } })).line).toBe('building the dashboard over 185 rows');
     expect(bootNow(at({ reads: { done: [read(READS[0]!, 169_371)], asking: null, total: PROT_COMMITTED_READS, refusal: null }, parsed: { residues: 185, chains: 2 } })).line).toBe('parsing 185 residues in 2 chains');
     expect(bootNow(at({ parsed: { residues: 185, chains: 2 }, built: { views: 7, acts: 4, rows: 185 } })).line).toBe('asking each chart whose column has not landed');
@@ -374,11 +397,14 @@ describe('ONE OWNER for what is happening: the spinner and the centred line', ()
   it('names each dispatched stage in its own declared words, and the ask in the model’s', () => {
     const ready = { parsed: { residues: 185, chains: 2 }, built: { views: 7, acts: 4, rows: 185 }, probed: { asked: 3, refused: 3 } };
     expect(bootNow(at({ ...ready, outcomes: [landed({ stage: 'conservation', act: CONSERVATION_ACT, materialized: [CONSERVATION_COLUMN] })] })).line).toBe('finding every contact across the interface');
+    expect(bootNow(at({ ...ready, outcomes: [landed({ stage: 'conservation', act: CONSERVATION_ACT }), landed({ stage: 'interactions', act: CONTACTS_ACT })] })).line).toBe(
+      'looking up what is already known about these sequences',
+    );
     expect(
       bootNow(
         at({
           ...ready,
-          outcomes: [landed({ stage: 'conservation', act: CONSERVATION_ACT }), landed({ stage: 'interactions', act: CONTACTS_ACT })],
+          outcomes: [landed({ stage: 'conservation', act: CONSERVATION_ACT }), landed({ stage: 'interactions', act: CONTACTS_ACT }), landed({ stage: 'annotation', act: ANNOTATION_ACT })],
         }),
       ).line,
     ).toBe('rolling a solvent probe over 185 residues');
@@ -401,6 +427,7 @@ describe('ONE OWNER for what is happening: the spinner and the centred line', ()
     // and the moment the probes are back, the run is walking its first stage
     expect(bootNow(at({ ...ready, outcomes: [] })).stage).toBe('conservation');
     expect(bootNow(at({ ...ready, outcomes: [landed({ stage: 'conservation', act: CONSERVATION_ACT })] })).stage).toBe('interactions');
+    expect(bootNow(at({ ...ready, outcomes: [landed({ stage: 'conservation', act: CONSERVATION_ACT }), landed({ stage: 'interactions', act: CONTACTS_ACT })] })).stage).toBe('annotation');
     expect(bootNow(at({ ...ready, asking: { act: 'answering', tokens: 12 } })).stage).toBe(HOTSPOTS_STAGE);
     // AND NOTHING SPINS ONCE IT IS DONE
     expect(bootNow(at({ ...ready, hotspots: landed({ stage: HOTSPOTS_STAGE, act: HOTSPOTS_ACT, commit: 's5' }) })).stage).toBe(null);
@@ -450,7 +477,7 @@ describe('the DETAIL moved to the record rather than vanishing', () => {
       .map((step) => `${step.name} ${step.line} ${step.refusal ?? ''}`)
       .join(' · ');
     // THE BYTES, and the measured gzip sentence that cost a packet to learn
-    expect(said).toContain('335,214 bytes read, no total');
+    expect(said).toContain(`${(READS.length * 55_869).toLocaleString('en-US')} bytes read, no total`);
     expect(said).toContain('content-length is the size of what came over the wire');
     // THE PROBES' OWN COUNTS, and why a refusal is the answer that step wants
     expect(said).toContain('3 gestures made, 3 refused by the library');

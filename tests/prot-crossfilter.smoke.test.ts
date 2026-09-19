@@ -63,7 +63,7 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { buildSiteIfMissing, startProtSite, type SiteHandle } from './protSiteServer.js';
 import { EXAMPLE_ENTRY } from '../src/prot/archive.js';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, KNOWN_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 
 const CHROME = process.env['VZF_CHROME'];
 
@@ -123,7 +123,19 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
     page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     page.on('pageerror', (e) => pageErrors.push(String(e)));
     await page.goto(`${site.protUrl}?entry=${EXAMPLE_ENTRY}`);
-    await page.waitForSelector('[data-chart][data-focused="true"] circle.vzf-line-dot', { timeout: 120_000 });
+    /*
+      THE DESK IS READY WHEN THE SURFACE RUN HAS ITS MARKS — named by the PANE
+      rather than by whichever one is focused.
+
+      It used to wait on `[data-focused="true"] circle.vzf-line-dot`, which was
+      a wait on the focused pane being a LINE. The focus is derived from where
+      the cursor stands (`web/src/protDesk.tsx`: the stage at the cursor owns
+      the focus), so the hero is the LAST stage's picture — and when stage 6
+      landed, the hero became its bar and this wait timed out on a desk that was
+      perfectly healthy. The run is on screen either way, so waiting on it is
+      the same readiness with none of the coupling.
+    */
+    await page.waitForSelector(`[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 120_000 });
   }, 300_000);
 
   afterAll(async () => {
@@ -337,11 +349,20 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
 
     const atBoot = await gapsSoFar();
     await shut();
-    // THREE AT BOOT: the desk makes one refused gesture at each of the three
-    // charts declared over a column no act has landed yet
-    // (`src/prot/session.ts` · `probeTheUnlandedColumns`)
+    /*
+      FOUR AT BOOT: the desk makes one refused gesture at each chart declared
+      over a column no act has landed yet (`src/prot/session.ts` ·
+      `probeTheUnlandedColumns`).
+
+      IT SAID THREE UNTIL STAGE 6 LANDED, and the fourth is that stage's own
+      chart. This is a stage-6 fact and not a loosened assertion: the published
+      build really does declare a fourth unlanded picture now, because it really
+      does perform the stage that lands its column. Nothing about stage 5
+      changed — its chart is still declared only where its act is, and the
+      published build still declares neither.
+    */
     say(`  the session has refused ${String(atBoot)} requests at boot`);
-    expect(atBoot).toBe(3);
+    expect(atBoot).toBe(4);
 
     let refused = atBoot;
     for (const view of [CONSERVATION_VIEW, SURFACE_VIEW]) {
@@ -396,6 +417,56 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('a pick in one pane
       await page.waitForTimeout(900);
     }
   }, 180_000);
+
+  /*
+    ── STAGE 6'S OWN PICTURE, PRESSED ─────────────────────────────────────────
+    The last stage of the plan lands words somebody else published onto the same
+    key the surface area and the contacts land on, and this is the assertion
+    that the key really is the same one: press a residue UniProt named and every
+    other pane narrows to it.
+
+    It is in this file rather than in a unit test because that is the claim a
+    unit test cannot buy — the column, the mark, the clause and the crossfilter
+    are four tiers, and only a browser walks all four.
+  */
+  it('A PRESS ON AN ANNOTATED RESIDUE NARROWS EVERY OTHER PANE — the annotation lands on the same key the measurements do', async () => {
+    const clear = page.locator('button[aria-label^="clear the"]');
+    if ((await clear.count()) > 0) await clear.first().click();
+    await page.waitForTimeout(900);
+
+    const before = await marks(page);
+    // FOUR MARKS, and that is the whole entry's named residues: two active
+    // sites and the two ENDS of one disulfide bond. The other 181 carry no name
+    // and so have no mark, which is this desk's own idiom (the absence is the
+    // filter) and what the caption counts against the table.
+    say(`  stage 6 drew ${String(before[KNOWN_VIEW] ?? 0)} marks — the residues somebody has already named`);
+    expect(before[KNOWN_VIEW]).toBe(4);
+
+    const targets = page.locator(`[data-chart="${KNOWN_VIEW}"] rect.vzf-mark-hit`);
+    expect(await targets.count()).toBe(4);
+    const named = (await page.locator(`[data-chart="${KNOWN_VIEW}"] rect.vzf-barrect`).first().getAttribute('aria-label')) ?? '';
+    await targets.first().click({ force: true });
+    await page.waitForFunction((selector) => document.querySelectorAll(selector).length < 100, `[data-chart="${SURFACE_VIEW}"] circle.vzf-line-dot`, { timeout: 15_000 });
+
+    const after = await marks(page);
+    say(`  pressing ${named}: ${Object.entries(after).map(([id, n]) => `${id} ${String(n)}`).join(' · ')}`);
+    // ONE RESIDUE, everywhere: the runs drop to it, the bar drops to it, and
+    // the scatter dims all but it
+    expect(after[SURFACE_VIEW]).toBe(1);
+    expect(after[CONSERVATION_VIEW]).toBeLessThan(before[CONSERVATION_VIEW]!);
+    expect(after[INTERFACE_VIEW]).toBeLessThan(before[INTERFACE_VIEW]!);
+    // …and the pane the clause came from keeps its own marks, which is the
+    // library's own law seen from the other side
+    expect(after[KNOWN_VIEW]).toBe(4);
+    const said = await sentences(page);
+    expect(said[KNOWN_VIEW]).toBe(null);
+    expect(said[SURFACE_VIEW]).not.toBe(null);
+    expect(claimed(said[SURFACE_VIEW] ?? null)).toBe(after[SURFACE_VIEW]);
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(800);
+
+    await page.locator('button[aria-label^="clear the"]').first().click();
+    await page.waitForTimeout(900);
+  }, 120_000);
 
   it('threw nothing while doing it', () => {
     expect(pageErrors).toEqual([]);

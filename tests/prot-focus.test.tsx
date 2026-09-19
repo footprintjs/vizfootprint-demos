@@ -31,7 +31,7 @@ import type { ReactElement } from 'react';
 import { framePad } from 'vizfootprint-ui';
 import { PROT_ENCODINGS, RAMA_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import { PROT_PLAN } from '../src/prot/plan.js';
-import { CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
+import { ANNOTATION_ACT, CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PFAM_DOMAIN_COLUMN, SASA_COLUMN, SURFACE_ACT, UNIPROT_SITE_COLUMN } from '../src/prot/analyses.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
 import { stepperStages, type StepperStage } from '../web/src/protStages.js';
 import { StageStepper } from '../web/src/workbench/Stepper.js';
@@ -43,11 +43,11 @@ import { ChartCard, ChartTile } from '../web/src/workbench/ChartCard.js';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /**
- * The FOUR acts of a finished run, as the stepper's fold takes them.
+ * The FIVE acts of a finished run, as the stepper's fold takes them.
  *
- * All four LAND, which is what makes every one of the six columns a control:
- * three stages landed, the step that landed at the root is a control of its own
- * and the two blocked steps are controls that open their card. A stage that had
+ * All five LAND, which is what makes every one of the six columns a control:
+ * four stages landed, the step that landed at the root is a control of its own
+ * and the one blocked step is a control that opens its card. A stage that had
  * not been dispatched at all would be a `<div>` — a control that answered
  * nothing is worse than no control — and the assertion below would be about a
  * half-finished run rather than about the mark.
@@ -57,6 +57,7 @@ const OUTCOMES: readonly ActOutcome[] = [
   { stage: 'interactions', act: PAIRS_ACT, commit: 'c-pairs', refusal: null, materialized: [] },
   { stage: 'interactions', act: CONTACTS_ACT, commit: 'c-contacts', refusal: null, materialized: [INTERFACE_CONTACTS_COLUMN] },
   { stage: 'surface', act: SURFACE_ACT, commit: 'c-surface', refusal: null, materialized: [SASA_COLUMN, 'relative_sasa'] },
+  { stage: 'annotation', act: ANNOTATION_ACT, commit: 'c-annotation', refusal: null, materialized: [UNIPROT_SITE_COLUMN, PFAM_DOMAIN_COLUMN] },
 ];
 
 const RUN: ProtRun = { outcomes: OUTCOMES, narrative: [], pairs: null, surface: null } as unknown as ProtRun;
@@ -108,9 +109,9 @@ const currentOf = (host: HTMLElement): { readonly items: readonly number[]; read
 describe('the bar and aria-current follow the FOCUSED stage, for every one of the six', () => {
   /*
     ALL SIX KINDS, by the state each column really is in this run: the step that
-    landed at the ROOT (1), three LANDED stages (2, 3, 4), the stage THIS BUILD
-    blocks (5) and the stage WE have not built (6). Three of them land no commit
-    at all, which is the whole defect.
+    landed at the ROOT (1), four LANDED stages (2, 3, 4, 6) and the stage THIS
+    BUILD blocks (5). Two of them land no commit at all, which is the whole
+    defect.
   */
   for (const step of PROT_PLAN) {
     it(`marks column ${String(step.step)} (${step.name}) when that stage is the focused one, and marks no other`, async () => {

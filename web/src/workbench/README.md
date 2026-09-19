@@ -517,7 +517,7 @@ The law it is all built on is the library's own arrival law (`vizfootprint/docs/
 | a step that has not happened is not a step that failed | four states, four marks, four words: `pending · doing · landed · refused` (`boot.ts · BootStepState`) | a boolean `done`; a spinner that looks the same as an error |
 | a refusal is shown, verbatim, and never re-worded | `BootStepView.refusal` carries the sentence whatever refused it wrote (`src/prot/orchestrator.ts · landAct`) | a summary; a count of refusals with the sentences behind a fold |
 | a total is reported only when it is known | `src/prot/http.ts · FileRead.total` keeps `content-length` only where it AGREES with the decoded bytes counted; `boot.ts · bytesSaid` says *no total* otherwise | a percentage of the compressed size against the decoded count — it runs past 100 and then stops |
-| a count of files may be a total because the list is DECLARED | `PROT_COMMITTED_READS` is `src/data/files.ts` counted, so *file 4 of 6* is known before the first read | using that six for an entry read from the archive, where the accessions name the families and nobody knows yet |
+| a count of files may be a total because the list is DECLARED | `PROT_COMMITTED_READS` is `src/data/files.ts` counted, so *file 4 of 10* is known before the first read | using that six for an entry read from the archive, where the accessions name the families and nobody knows yet |
 
 `tests/prot-boot.test.tsx` walks all of it, and `tests/prot-served.smoke.test.ts` reads it off the real page in a real browser.
 
@@ -544,7 +544,7 @@ Which pictures a stage owns is an INTERSECTION of the columns its acts landed wi
 
 **Part 3's binding fixes it, and that is worth knowing: one binding, two symptoms.** Binding `hotspot_rank` to the structure view's colour puts a landed stage-5 column into `shown`, which gives stage 5 a non-empty intersection and makes the stepper's press work.
 
-**And the empty case is now a STATED outcome** (`panel.ts · emptyFocusSaid`, said in the stepper's own `refusedSeek` slot), because it will recur for any future stage whose columns no chart has taken up — stage 6 will be exactly that on the day it lands. It names the real reason rather than apologising: *it landed `hotspot_rank`, `hotspot_cites`, `hotspot_reason` onto the rows, and no picture on this desk is bound to any of them.* A reader learns a fact — the columns exist and nothing reads them, and the Sheet shows them.
+**And the empty case is now a STATED outcome** (`panel.ts · emptyFocusSaid`, said in the stepper's own `refusedSeek` slot), because it will recur for any future stage whose columns no chart has taken up. (It was named here as stage 6's future; stage 6 landed with a picture of its own instead, and the sentence is still here for whichever stage is next.) It names the real reason rather than apologising: *it landed `hotspot_rank`, `hotspot_cites`, `hotspot_reason` onto the rows, and no picture on this desk is bound to any of them.* A reader learns a fact — the columns exist and nothing reads them, and the Sheet shows them.
 
 ### …AND THEN STAGE 5 GOT A PICTURE OF ITS OWN, because THE EXPLANATION WAS NEVER THE FIX
 
@@ -698,6 +698,26 @@ So there are two controls on the card, each its own act on its own record, and n
 - **colour the 3D structure by the model's rank** — one reencode at `structure`, which lands an ENCODING and marks the picks in place.
 
 `tests/prot-hotspot-marks.test.tsx` pins that an unranked residue emits the same point as a ranked one and really does narrow the desk, and `tests/prot-served.smoke.test.ts` counts the marks in a real browser.
+
+### …AND THEN STAGE 6 LANDED, and NO READER MEETS THE EMPTY-FOCUS SENTENCE ANY MORE
+
+The sentence above was kept twice over *because stage 6 will be exactly that case the day it lands*. It landed, and it is not that case: it declares a picture of its own, the press promotes it, and the sentence is now waiting for a stage nobody has written yet. **Both halves are asserted** (`tests/prot-annotation.test.ts`): every landed stage owns a picture so the sentence is `null` for all of them, and the sentence still answers for a stage that landed columns nothing binds.
+
+This is also the second picture on this desk drawn from TWO stages' columns, which is what turns *a picture belongs to the LATER stage* from a tie-break into a law.
+
+| the decision | what it is | why it is not the other thing |
+|---|---|---|
+| the COLOUR | `uniprot_site` — the source's own word (`Active site`, `Disulfide bond`) | it is a WORD, so it is a discrete dimension and belongs on a colour. There is no height it could honestly take: *Active site* is not an amount, so the height has to be BORROWED |
+| the HEIGHT | `contacts`, which the interactions stage counted **one commit earlier** | **never a LATER stage's column.** This was `relative_sasa` for one release — the surface stage's, which lands LAST — so at the cursor a press on step 6 seeks to, the height did not exist and the promoted chart was EMPTY. Measured on the served page: *4 of 185 residues named* at the head, *0 of 185* at every earlier cursor |
+| the OWNER | stage 6 | it binds stage 4's height and stage 6's colour, and *a picture drawn from two stages belongs to the LATER one* (`../protStages.ts · chartsOfStage`) — the stage it could not be drawn without |
+| the DISPATCH POSITION | fourth, while the plan publishes it sixth | the only slot where both laws hold: after the interactions stage so the borrowed height exists at its own commit, and before the surface stage so the desk still opens on the surface run |
+| the BURIAL PAIRING | a SENTENCE folded from two landed columns (`protCells.tsx · buriedSaid`), not the height | it is the scientific payoff and it cost a blank chart to draw. It was also never visible: `A:85`'s relative exposure is exactly 0, so the mark carrying the payoff had zero height. As a sentence it is legible, and it is ABSENT at a cursor where either column is missing — which is the honest way for it to degrade |
+
+**AND THE LAW THAT FELL OUT OF IT, which is the other half of the ownership rule:** *a picture may borrow a column from a stage that lands EARLIER in the log, never from one that lands later.* The two only agree when the OWNER is the last of a picture's ingredients to land. Stage 5's chart kept it by accident (its act is dispatched after the whole run); this one had to be made to.
+
+**And a test's title is not a test.** Every suite on this desk passed while that chart was blank: one asserted the press promotes the right pane, one asserted the bar and the focus move together, the cells' own suites asserted the captions — and not one asked whether the promoted picture had anything in it. `tests/prot-progression.test.ts` now asserts the law itself, against real rows at a real cursor: **every column a picture BINDS must be on the rows at its owner's commit.** It has to be asserted there rather than through a cell, because `tests/deskStub.tsx · bound` hands back the fallback constant — a cell folded against the stub uses the constant whatever the definition declares, which is precisely how a wrong binding reached a browser through a green suite.
+
+**And the counts the whole stage rests on are the desk's own idiom, not new capability.** The absence is the filter (four marks of 185, and the caption counts them against the table); a reference position this entry has no row for lands NOTHING and is counted (`src/prot/etl.ts`'s skip counts, one coordinate system along); and a SOURCE THAT ANSWERED AND NAMED NOTHING is a FACT with its own sentence (`src/prot/annotationFold.ts · namedNone`) which shares no words with any refusal — the one thing this stage would lose by reporting an empty answer as an empty column.
 
 ## What this packet found in the library, reported rather than worked around
 

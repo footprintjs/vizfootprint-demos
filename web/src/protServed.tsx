@@ -58,6 +58,7 @@ import { ARRANGEMENT_PROP, ARRANGEMENT_SCOPE } from './workbench/arrangement.js'
 import 'vizfootprint-ui/styles.css';
 import { loadStructureOverHttp, readCommittedOverHttp, PROT_COMMITTED_READS, type HttpWatch } from '../../src/prot/http.js';
 import { conservationEvidenceFor } from '../../src/prot/conservationEvidence.js';
+import { annotationEvidenceFor } from '../../src/prot/annotationEvidence.js';
 import { entryCredit, protTables, type EntryCredit } from '../../src/prot/etl.js';
 import { INTERFACE_VIEW, PROT_WORDS, RESIDUES_TABLE, RESIDUE_KEY, STRUCTURE_VIEW } from '../../src/prot/def.js';
 import { landHotspots, openProtSurfaceAsync, protSurfaceProblems, residuesAt, type ProtBootWatch, type ProtSurface } from '../../src/prot/session.js';
@@ -188,8 +189,17 @@ async function boot(entry: string, watch: BootWatch): Promise<Opened> {
   const blocked = blockingSentence(notes);
   if (blocked !== null) return { ok: false, sentence: blocked };
   const evidence = await conservationEvidenceFor(entry, { committed: readCommittedOverHttp(base, http), archive: browserArchive });
+  /*
+    WHAT IS ALREADY KNOWN, gathered before the dashboard is built — the same
+    step the published page takes, and for the same reason the alignment above
+    it is gathered here: the data is not this file's, so a def that fetched it
+    behind its caller's back would be a def making a request nobody declared.
+    The committed example reads four committed files and calls no service at
+    all.
+  */
+  const annotation = await annotationEvidenceFor(entry, { committed: readCommittedOverHttp(base, http), archive: browserArchive });
   const slot = door.mode === 'none' ? null : hotspotSlot();
-  const surface = await openProtSurfaceAsync(read.artifact, watch, evidence, slot);
+  const surface = await openProtSurfaceAsync(read.artifact, watch, evidence, slot, annotation);
   const common = {
     entry,
     surface,

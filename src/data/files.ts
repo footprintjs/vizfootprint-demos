@@ -107,6 +107,61 @@ export const PROT_CONSERVATION_FILES: readonly string[] = [
 ];
 
 /**
+ * WHERE WHAT IS ALREADY KNOWN LIVES — the functional annotation stage's
+ * committed evidence, and it is TWO names rather than four.
+ *
+ * Stage 6 reads four things and this repository downloads two of them
+ * (`data/prot/annotation/fetch.mjs` argues it): the archive's entity records
+ * and InterPro's Pfam match records are the CONSERVATION stage's files, already
+ * committed above, and stage 6 reads those rather than a second copy. A second
+ * copy would be a second answer to one question the day either source revises,
+ * with nobody to arbitrate — which is the drift `src/prot/mapping.ts` was
+ * written to prevent one coordinate system along.
+ *
+ *   `<ACCESSION>-uniprot.json`    the sequence's own SITE features — what is
+ *                                 known about a RESIDUE — asked for BY FIELD,
+ *                                 so the record is 776 bytes rather than
+ *                                 19,646 (`src/prot/annotation.ts` ·
+ *                                 `UNIPROT_SITE_FIELDS`).
+ *   `<ACCESSION>-epitopes.json`   every epitope the IEDB records for it. `[]`
+ *                                 for both of the example's accessions, and
+ *                                 that is committed BECAUSE it is an answer:
+ *                                 *asked, and none are known* is a fact this
+ *                                 repository holds, where a missing file would
+ *                                 have been a silence.
+ *
+ * THE NAMES CARRY NO VERSION, like the conservation stage's and for the same
+ * reason — a version typed into a name is a version that can drift from the
+ * bytes it names. {@link annotationFileOf} mints them,
+ * {@link PROT_ANNOTATION_FILES} is the static list the build copies, and
+ * `tests/prot-annotation.test.ts` asserts the minted names are the committed
+ * ones.
+ */
+export const PROT_ANNOTATION_DIR = 'data/prot/annotation/';
+
+/** The two names, minted — the convention above, as functions, so no reader spells one. */
+export const annotationFileOf = {
+  uniprot: (accession: string): string => `${PROT_ANNOTATION_DIR}${accession.toUpperCase()}-uniprot.json`,
+  epitopes: (accession: string): string => `${PROT_ANNOTATION_DIR}${accession.toUpperCase()}-epitopes.json`,
+} as const;
+
+/**
+ * What the committed example's annotation stage reads BEYOND the conservation
+ * stage's five — every one of them minted by {@link annotationFileOf}.
+ *
+ * The entity record and the two Pfam match records it also reads are in
+ * {@link PROT_CONSERVATION_FILES} and are deliberately NOT repeated here: one
+ * file, one entry in one list, or the static build would copy a name twice and
+ * a reader counting the reads would count it twice too.
+ */
+export const PROT_ANNOTATION_FILES: readonly string[] = [
+  annotationFileOf.uniprot('P05798'),
+  annotationFileOf.uniprot('P11540'),
+  annotationFileOf.epitopes('P05798'),
+  annotationFileOf.epitopes('P11540'),
+];
+
+/**
  * What a static build must carry, beyond the tables themselves.
  *
  * The provenance records ride along because a dashboard that says where its
@@ -115,7 +170,7 @@ export const PROT_CONSERVATION_FILES: readonly string[] = [
  * to travel with the file it covers — publishing the boundaries without it
  * would break the one condition that made publishing them lawful.
  */
-export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json', 'data/exo/PROVENANCE.json', 'data/exo/FETCH.json', 'data/prot/PROVENANCE.json', 'data/prot/conservation/PROVENANCE.json'] as const;
+export const SITE_PROVENANCE_FILES = ['data/nndss/PROVENANCE.json', 'data/nndss/graph/PROVENANCE.json', 'data/population/PROVENANCE.json', 'data/geo/PROVENANCE.json', 'data/geo/LICENSE-us-atlas', 'data/grid/PROVENANCE.json', 'data/exo/PROVENANCE.json', 'data/exo/FETCH.json', 'data/prot/PROVENANCE.json', 'data/prot/conservation/PROVENANCE.json', 'data/prot/annotation/PROVENANCE.json'] as const;
 
 /** Everything the built site needs under `data/` — the tables and the papers that must travel with them. */
-export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...Object.values(EXO_FILES), ...Object.values(PROT_FILES), ...PROT_CONSERVATION_FILES, ...SITE_PROVENANCE_FILES];
+export const SITE_DATA_FILES: readonly string[] = [...Object.values(NNDSS_FILES), ...Object.values(GRID_FILES), ...Object.values(EXO_FILES), ...Object.values(PROT_FILES), ...PROT_CONSERVATION_FILES, ...PROT_ANNOTATION_FILES, ...SITE_PROVENANCE_FILES];

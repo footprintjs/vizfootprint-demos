@@ -56,13 +56,19 @@
  * vouch for.
  */
 import { structureArtifact, type StructureArtifact } from './session.js';
-import { PROT_CONSERVATION_FILES, PROT_FILES } from '../data/files.js';
+import { PROT_ANNOTATION_FILES, PROT_CONSERVATION_FILES, PROT_FILES } from '../data/files.js';
 
-export { PROT_CONSERVATION_FILES, PROT_FILES };
+export { PROT_ANNOTATION_FILES, PROT_CONSERVATION_FILES, PROT_FILES };
 
 /**
- * HOW MANY FILES A SERVED BOOT OF THE COMMITTED ENTRY READS — the structure and
- * the conservation stage's five, which is the whole list.
+ * HOW MANY FILES A SERVED BOOT OF THE COMMITTED ENTRY READS — the structure,
+ * the conservation stage's five and the annotation stage's four, which is the
+ * whole list.
+ *
+ * The annotation stage reads SEVEN files and only four of them are its own: the
+ * entity record and the two Pfam match records are the conservation stage's and
+ * are counted once, where they are declared (`src/data/files.ts` ·
+ * `PROT_ANNOTATION_FILES` says why they are not repeated).
  *
  * It is a TOTAL A PAGE MAY REPORT BEFORE ITS FIRST READ, because the list is
  * declared (`src/data/files.ts`) rather than discovered: nothing about the
@@ -71,7 +77,7 @@ export { PROT_CONSERVATION_FILES, PROT_FILES };
  * name the families — so a caller reporting progress for one of those has to
  * say *unknown* rather than borrow this number.
  */
-export const PROT_COMMITTED_READS = 1 + PROT_CONSERVATION_FILES.length;
+export const PROT_COMMITTED_READS = 1 + PROT_CONSERVATION_FILES.length + PROT_ANNOTATION_FILES.length;
 
 /**
  * ONE FILE THIS PAGE READ — the whole of what a bare fetch can honestly say

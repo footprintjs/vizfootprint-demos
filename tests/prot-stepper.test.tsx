@@ -34,7 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ReactElement } from 'react';
-import { CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PROT_ACT_ORDER, PROT_STAGES, PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT } from '../src/prot/analyses.js';
+import { ANNOTATION_ACT, CONSERVATION_ACT, CONSERVATION_BASIS_COLUMN, CONSERVATION_COLUMN, CONTACTS_ACT, INTERFACE_CONTACTS_COLUMN, PAIRS_ACT, PFAM_DOMAIN_COLUMN, PROT_ACT_ORDER, PROT_STAGES, PROT_UNAVAILABLE_STAGES, SASA_COLUMN, SURFACE_ACT, UNIPROT_NOTE_COLUMN, UNIPROT_SITE_COLUMN } from '../src/prot/analyses.js';
 import { BLOCKED_TAG, PROT_BLOCKED, PROT_PLAN } from '../src/prot/plan.js';
 import { INTERFACE_VIEW, PAIRS_VIEW, RAMA_VIEW, STRUCTURE_VIEW, SURFACE_VIEW } from '../src/prot/def.js';
 import type { ActOutcome, ProtRun } from '../src/prot/orchestrator.js';
@@ -107,10 +107,13 @@ const CONSERVED_ACT = landedAct({ stage: 'conservation', act: CONSERVATION_ACT, 
 const PAIRS_ROW = landedAct();
 const CONTACTS_ROW = landedAct({ act: CONTACTS_ACT, commit: 'c2', materialized: ['contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation'] });
 const SURFACE_REFUSED = landedAct({ stage: 'surface', act: SURFACE_ACT, commit: null, refusal: 'act "residueSurface" threw: the solvent probe found no polymer atom to roll over' });
-const OUTCOMES: readonly ActOutcome[] = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW, SURFACE_REFUSED];
+const SURFACE_LANDED = landedAct({ stage: 'surface', act: SURFACE_ACT, commit: 'c3', materialized: [SASA_COLUMN, 'relative_sasa'] });
+/** STAGE 6'S ACT — three columns, because the epitope service answered and named none, so nothing wrote that fourth column. */
+const ANNOTATION_ROW = landedAct({ stage: 'annotation', act: ANNOTATION_ACT, commit: 'c5', materialized: [UNIPROT_SITE_COLUMN, UNIPROT_NOTE_COLUMN, PFAM_DOMAIN_COLUMN] });
+const OUTCOMES: readonly ActOutcome[] = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW, SURFACE_REFUSED, ANNOTATION_ROW];
 
-/** …and the same run with its last act landing instead, which is what the committed entry really does. */
-const ALL_LANDED: readonly ActOutcome[] = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW, landedAct({ stage: 'surface', act: SURFACE_ACT, commit: 'c3', materialized: [SASA_COLUMN, 'relative_sasa'] })];
+/** …and the same run with its surface act landing instead, which is what the committed entry really does. */
+const ALL_LANDED: readonly ActOutcome[] = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW, SURFACE_LANDED, ANNOTATION_ROW];
 
 /**
  * A run shaped like one the orchestrator answers with — the fields the rows
@@ -118,6 +121,7 @@ const ALL_LANDED: readonly ActOutcome[] = [CONSERVED_ACT, PAIRS_ROW, CONTACTS_RO
  */
 const runWith = (over: Partial<ProtRun> = {}): ProtRun => ({
   outcomes: OUTCOMES,
+  annotation: null,
   narrative: ['Stage "Every non-covalent contact in the entry" started.', 'Stage "How much of each residue the solvent can reach" finished.'],
   pairs: { counts: { rows: 224, crossing: 21, byKind: [{ kind: 'hydrogen-bond', contacts: 120 }, { kind: 'hydrophobic', contacts: 104 }] } } as unknown as ProtRun['pairs'],
   contacts: null,
@@ -219,10 +223,17 @@ describe('ALL SIX STEPS OF THE PLAN, and each one says what it is', () => {
   });
 
   it('RUNNING: the only state that moves, the only one with a progress hairline, and nothing clickable yet', async () => {
-    // the FIRST stage has finished (its one act is back) and the second is the
-    // one in flight with one of its two acts back — which is what puts the
-    // hairline at half
-    const panel = await stepper([CONSERVED_ACT, PAIRS_ROW], null, [], { seekable: false });
+    /*
+      THE FIRST TWO STAGES HAVE FINISHED (one act each, both back) and the
+      THIRD is the one in flight with one of its two acts back — which is what
+      puts the hairline at half.
+
+      The annotation stage is dispatched SECOND (`src/prot/analyses.ts` ·
+      `PROT_STAGES` says why), so its act has to be in this run for the
+      interactions stage to be the one still working. Named rather than counted,
+      so the next stage to arrive anywhere in the order cannot re-point this.
+    */
+    const panel = await stepper([CONSERVED_ACT, ANNOTATION_ROW, PAIRS_ROW], null, [], { seekable: false });
     const interactions = panel.at('interactions');
     expect(interactions.state).toBe('running');
     const column = panel.column('interactions');
@@ -254,18 +265,18 @@ describe('THE THREE KINDS OF BLOCKED — one mark family, three sentences', () =
   it('says WHICH KIND under each one, in its own word — and no word for a kind nothing is', async () => {
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
     const said = panel.words();
-    // this build, us — the two kinds something really is on this desk now
+    // THIS BUILD — the one kind something really is on this desk now
     expect(said).toContain(BLOCKED_TAG['this build']);
-    expect(said).toContain(BLOCKED_TAG.us);
     expect(said).toContain('not on this build');
-    expect(said).toContain('not built yet');
     /*
-      AND NOT `not available here`, which is the whole point: the conservation
-      stage wore that word for eight releases and LANDS now. A stepper that kept
-      printing it would be the screen being less honest than the def again,
-      which is the defect this suite was written for.
+      AND NEITHER OF THE OTHER TWO WORDS, which is the whole point: the
+      conservation stage wore `not available here` for eight releases and the
+      annotation stage wore `not built yet`, and both LAND now. A stepper that
+      kept printing either would be the screen being less honest than the def
+      again, which is the defect this suite was written for.
     */
     expect(said).not.toContain(BLOCKED_TAG['the world']);
+    expect(said).not.toContain(BLOCKED_TAG.us);
     await panel.unmount();
   });
 
@@ -329,7 +340,9 @@ describe('THE STEP THAT LANDED BEFORE THE RECORD STARTED is a fourth kind of pre
     const shown = { [STRUCTURE_VIEW]: { color: 'chain' }, [RAMA_VIEW]: { x: 'phi', y: 'psi' }, [INTERFACE_VIEW]: { category: 'residue_key', y: INTERFACE_CONTACTS_COLUMN }, [SURFACE_VIEW]: { x: 'resnum', y: SASA_COLUMN, color: 'chain' } };
     const actColumns = actColumnsOf(stages);
     // every column the acts landed is on that side of the intersection
-    expect([...actColumns].sort()).toEqual([CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN, SASA_COLUMN, 'contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation', 'relative_sasa'].sort());
+    expect([...actColumns].sort()).toEqual(
+      [CONSERVATION_COLUMN, CONSERVATION_BASIS_COLUMN, SASA_COLUMN, 'contacts', INTERFACE_CONTACTS_COLUMN, 'interface_separation', 'relative_sasa', UNIPROT_SITE_COLUMN, UNIPROT_NOTE_COLUMN, PFAM_DOMAIN_COLUMN].sort(),
+    );
     // …so the parse owns the two pictures whose every bound column it read off
     // the file, and neither of the two an act landed a column for
     expect([...chartsOfStage(search, shown, actColumns, stages)].sort()).toEqual([RAMA_VIEW, STRUCTURE_VIEW].sort());
@@ -372,21 +385,21 @@ describe('NOTHING BETWEEN THE STEPPER AND THE CHARTS', () => {
   it('keeps the plan’s accounting IN THE MARKS, which is what a reader counts', async () => {
     /*
       The note's counts went to the facts strip for one round and were dropped
-      with it: THE SIX MARKS ARE THE ACCOUNTING. FOUR solid circles now — the
-      parse's own step and three landed stages — one hatched with NOT ON THIS
-      BUILD under it and one with NOT BUILT YET, countable, and in a better
-      register than prose.
+      with it: THE SIX MARKS ARE THE ACCOUNTING. FIVE solid circles now — the
+      parse's own step and four landed stages — and ONE hatched with NOT ON
+      THIS BUILD under it, countable, and in a better register than prose.
 
-      IT WAS THREE AND THREE. The conservation stage moved from the hatched half
-      to the solid half when it stopped being blocked, and this count is the
-      cheapest place a later edit that quietly un-lands it would be caught.
+      IT WAS THREE AND THREE, THEN FOUR AND TWO. The conservation stage moved
+      from the hatched half to the solid half when it stopped being blocked and
+      the annotation stage moved when it was built, and this count is the
+      cheapest place a later edit that quietly un-lands either would be caught.
     */
     const panel = await stepper(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    expect(panel.stages.filter((s) => s.state === 'landed')).toHaveLength(4);
-    expect(panel.stages.filter((s) => s.blockedBy !== null)).toHaveLength(2);
+    expect(panel.stages.filter((s) => s.state === 'landed')).toHaveLength(5);
+    expect(panel.stages.filter((s) => s.blockedBy !== null)).toHaveLength(1);
     const said = panel.words();
     expect(said).toContain('not on this build');
-    expect(said).toContain('not built yet');
+    expect(said).not.toContain('not built yet');
     // and no count is re-stated as prose anywhere near the marks
     expect(said).not.toContain('steps declared');
     expect(said).not.toContain('will not run on this build');
@@ -408,9 +421,23 @@ describe('the connectors are a stated rule, not a guess', () => {
     // step 3 (surface, ran) → step 4 (interactions, ran): solid
     expect(views[at('surface')]!.linkAfter).toBe('run');
     expect(views[at('interactions')]!.linkBefore).toBe('run');
-    // step 4 is the last that ran, so every boundary past it is FAR
-    expect(views[at('interactions')]!.linkAfter).toBe('far');
-    expect(views[at('hotspots')]!.linkBefore).toBe('far');
+    /*
+      STEP 6 IS THE LAST THAT RAN NOW, so step 5 is a gap INSIDE the run rather
+      than the tail of it, and both of its boundaries are NEAR. The rule did not
+      change and is not restated here: `near` is *a boundary at or before the
+      last step that ran* and `far` is *past it*, and the FAR arm is asserted at
+      the one place it is still true — nowhere, because the run reaches the last
+      column. So the far arm is asserted on a run that stops earlier, below.
+    */
+    expect(views[at('interactions')]!.linkAfter).toBe('near');
+    expect(views[at('hotspots')]!.linkBefore).toBe('near');
+    expect(views[at('hotspots')]!.linkAfter).toBe('near');
+    expect(views.every((v) => v.linkBefore !== 'far' && v.linkAfter !== 'far')).toBe(true);
+    // AND THE FAR ARM, on a run that really does stop before the end: with only
+    // the first two stages back, every boundary past step 4 is FAR
+    const early = stepViews(stepperStages([CONSERVED_ACT, PAIRS_ROW, CONTACTS_ROW], null), null, true);
+    expect(early[at('hotspots')]!.linkBefore).toBe('far');
+    expect(early[at('annotation')]!.linkBefore).toBe('far');
     // step 1 ran (at the root) and step 2 RUNS NOW TOO — it stopped being the
     // stage the world blocked — so that boundary is solid, and the NEAR arm is
     // asserted where the run really stops, at the first step past it
@@ -555,12 +582,14 @@ describe('the two folds are DERIVED, never a table anybody typed', () => {
 
   it('reads the stage the cursor is standing in off the active path — the last one that had landed by then', () => {
     const stages = stepperStages(ALL_LANDED, runWith({ outcomes: ALL_LANDED }));
-    const path = ['c1', 'c2', 'c3', 'c4'];
+    const path = ['c1', 'c2', 'c3', 'c4', 'c5'];
     expect(stageAtCursor(stages, path, 'c2')?.stage).toBe('interactions');
     expect(stageAtCursor(stages, path, 'c3')?.stage).toBe('surface');
     // a commit NO stage landed — a reader's own selection — still stands in the
     // last stage that had landed by then, which is what the pictures show
     expect(stageAtCursor(stages, path, 'c4')?.stage).toBe('surface');
+    // …and the annotation stage's own commit stands in the annotation stage
+    expect(stageAtCursor(stages, path, 'c5')?.stage).toBe('annotation');
     // behind every stage's commit, and off the path entirely: both `null`,
     // because neither has an honest answer
     expect(stageAtCursor(stages, path, 'c0')).toBeNull();

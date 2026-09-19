@@ -4,7 +4,7 @@
  *
  *   tables    = protTables(text)        layer 1 — the file's atom records, shaped
  *   def       = protDef(tables, text, evidence)
- *                                       layers 2–4 — one table, seven views, four acts
+ *                                       layers 2–4 — one table, eight views, five acts
  *   session   = buildDashboard(def)     validated (the firewall throws on a lie)
  *                 .createSession()
  *   …then ONE GESTURE at each unlanded chart, kept; then the ORCHESTRATOR, one
@@ -15,8 +15,8 @@
  * and the log a reader walked started empty. It now runs a PIPELINE, and the
  * order of {@link openProtSurfaceAsync} is the story:
  *
- *   1. build the session. THREE of the seven views are declared over columns
- *      that do not exist yet, so three of the pictures cannot draw.
+ *   1. build the session. FOUR of the eight views are declared over columns
+ *      that do not exist yet, so four of the pictures cannot draw.
  *   2. MAKE A GESTURE AT EACH OF THEM ({@link probeTheUnlandedColumns}) and keep
  *      the sentence the library refuses it with. A visitor always arrives after
  *      the acts, so a page that did not make the gesture could only QUOTE that
@@ -30,14 +30,16 @@
  *      it was cited against. Each stage's chart can draw the moment its stage
  *      ends, and not before.
  *
- * ── AND ONE PIECE OF EVIDENCE THIS SURFACE CANNOT READ FOR ITSELF ──────────
- * The conservation stage's data is somebody else's published alignment, so it
- * is gathered BEFORE the dashboard is built and handed in
- * (`./conservationEvidence.ts` · `conservationEvidenceFor`) — the committed
- * fixtures for the example, the three services for any other entry. A surface
- * opened without it declares the act anyway and lands its refusal, which is
- * the honest shape: a stage that is declared and said nothing would read as a
- * stage nobody ran.
+ * ── AND TWO PIECES OF EVIDENCE THIS SURFACE CANNOT READ FOR ITSELF ─────────
+ * The conservation stage's data is somebody else's published alignment and the
+ * annotation stage's is what somebody else has already recorded about these
+ * sequences, so both are gathered BEFORE the dashboard is built and handed in
+ * (`./conservationEvidence.ts` · `conservationEvidenceFor` and
+ * `./annotationEvidence.ts` · `annotationEvidenceFor`) — the committed fixtures
+ * for the example, the live services for any other entry. A surface opened
+ * without either declares the act anyway and lands its refusal, which is the
+ * honest shape: a stage that is declared and said nothing would read as a stage
+ * nobody ran.
  *
  * The exoplanet surface does exactly this with its histogram
  * (`../exo/session.ts` · `probeTheMintedTable`); this is that pattern with two
@@ -84,8 +86,9 @@ import type { InteractionSession } from 'vizfootprint/agent';
 import { buildDashboardAsync } from 'vizfootprint/def';
 import type { Dashboard } from 'vizfootprint/def';
 import type { Row } from 'vizfootprint/data';
-import { CONSERVATION_VIEW, INTERFACE_VIEW, RANKING_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
-import { CONSERVATION_COLUMN, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN } from './analyses.js';
+import { CONSERVATION_VIEW, INTERFACE_VIEW, KNOWN_VIEW, RANKING_VIEW, RESIDUES_TABLE, SURFACE_VIEW, protDef } from './def.js';
+import { CONSERVATION_COLUMN, INTERFACE_CONTACTS_COLUMN, SASA_COLUMN, UNIPROT_SITE_COLUMN } from './analyses.js';
+import type { AnnotationEvidence } from './annotationEvidence.js';
 import type { ConservationEvidence } from './conservationEvidence.js';
 import { landAct, runProtStages, type ActOutcome, type ProtRun, type ProtRunWatch } from './orchestrator.js';
 import { HOTSPOTS_ACT, HOTSPOTS_INTENT, HOTSPOTS_STAGE, HOTSPOT_RANK_COLUMN, type HotspotAnswered, type HotspotSlot } from './hotspots.js';
@@ -207,7 +210,7 @@ export function structureArtifact(at: string, text: string): StructureArtifact {
 
 /**
  * THE GESTURES THE BOOT MAKES BEFORE ITS STAGES — one at each chart whose
- * column no act has landed yet: three on every build, and a FOURTH at stage 5's
+ * column no act has landed yet: FOUR on every build, and a FIFTH at stage 5's
  * own chart on a build that can perform stage 5 (`rank`).
  *
  * WHY A SURFACE DOES THIS ON PURPOSE. Both charts are DECLARED over columns an
@@ -267,7 +270,27 @@ export async function probeTheUnlandedColumns(session: InteractionSession, rank:
     cause: { requestedBy: 'system', computedBy: 'system', intent: 'pick the residues their family never varies, before the stage that places them in it has run' },
   });
   /*
-    AND THE FOURTH, at stage 5's own chart — made only where that chart EXISTS.
+    AND THE FOURTH, at stage 6's own chart — made on EVERY build, because every
+    build performs stage 6.
+
+    This is the one difference between this gesture and the fifth below it. The
+    ranking chart exists only where a process can ask a model, so its probe is
+    conditional; the annotation stage's sources answer a browser directly, so
+    its chart is in the published definition and its column is as absent at boot
+    as the other three. The field is `uniprot_site` rather than the bar's HEIGHT
+    for the reason the ranking probe gives: the height is stage 3's column, and
+    the refusal a reader of this cell is owed names the column its OWN stage
+    lands.
+  */
+  const known = await session.dispatch({
+    verb: 'select',
+    viewId: KNOWN_VIEW,
+    field: UNIPROT_SITE_COLUMN,
+    value: 'Active site',
+    cause: { requestedBy: 'system', computedBy: 'system', intent: 'pick the residues somebody has already named an active site, before the stage that looks them up has run' },
+  });
+  /*
+    AND THE FIFTH, at stage 5's own chart — made only where that chart EXISTS.
 
     `rank` is the one condition the whole stage is declared under
     (`./def.ts` · `protDef`): on a build that cannot ask a model there is no
@@ -294,6 +317,7 @@ export async function probeTheUnlandedColumns(session: InteractionSession, rank:
     [INTERFACE_VIEW]: bar.ok ? null : bar.rejection.detail,
     [SURFACE_VIEW]: run.ok ? null : run.rejection.detail,
     [CONSERVATION_VIEW]: conserved.ok ? null : conserved.rejection.detail,
+    [KNOWN_VIEW]: known.ok ? null : known.rejection.detail,
     ...(ranked === null ? {} : { [RANKING_VIEW]: ranked.ok ? null : ranked.rejection.detail }),
   };
 }
@@ -322,21 +346,21 @@ export async function residuesAt(session: InteractionSession, tables: ProtTables
  * nothing else. The only table is an INLINE source, which the synchronous
  * builder is allowed to read (the library's law is about non-inline sources).
  *
- * The four acts are DECLARED and not dispatched, because dispatching is async
+ * The five acts are DECLARED and not dispatched, because dispatching is async
  * — the same split the exoplanet surface has, and for the same reason: a
  * builder that quietly returned before its own stages ran would be a surface
  * whose two new pictures have no columns and no sign of why. Call
  * {@link probeTheUnlandedColumns} and then `runProtStages`, or use the async
  * door, which does both in that order.
  */
-export function openProtSurface(artifact: StructureArtifact, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): ProtSurface {
+export function openProtSurface(artifact: StructureArtifact, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null, annotation: AnnotationEvidence | null = null): ProtSurface {
   const tables = protTables(artifact.text);
-  const dashboard = buildDashboard(protDef(tables, artifact.text, evidence, hotspots?.analysis ?? null));
+  const dashboard = buildDashboard(protDef(tables, artifact.text, evidence, hotspots?.analysis ?? null, annotation));
   return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET, ...(hotspots === null ? {} : { hotspots }) };
 }
 
 /**
- * THE THREE UNLANDED CHARTS' SENTENCES ON A SURFACE THAT MADE NO GESTURE —
+ * THE FOUR UNLANDED CHARTS' SENTENCES ON A SURFACE THAT MADE NO GESTURE —
  * `null` each, and `null` is not a refusal here.
  *
  * It means *nobody asked yet*: the synchronous door does not dispatch, so
@@ -345,7 +369,7 @@ export function openProtSurface(artifact: StructureArtifact, evidence: Conservat
  * ({@link probeTheUnlandedColumns}), and a surface that made them and was
  * ACCEPTED is a real failure the caller reports (`protSurfaceProblems`).
  */
-const NO_GESTURES_YET: UnlandedRefusals = { [INTERFACE_VIEW]: null, [SURFACE_VIEW]: null, [CONSERVATION_VIEW]: null };
+const NO_GESTURES_YET: UnlandedRefusals = { [INTERFACE_VIEW]: null, [SURFACE_VIEW]: null, [CONSERVATION_VIEW]: null, [KNOWN_VIEW]: null };
 
 /**
  * The rows of a session no stage has run on — the ETL's own, and NOT a stand-in
@@ -369,16 +393,16 @@ const unrunResidues = (tables: ProtTables): ResiduesAtCursor => ({ rows: tables.
  * caller does with it, and `tests/prot-progression.test.ts` holds this cursor
  * still.
  */
-export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): Promise<ProtSurface> {
+export async function openProtSurfaceUnrun(artifact: StructureArtifact, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null, annotation: AnnotationEvidence | null = null): Promise<ProtSurface> {
   const tables = protTables(artifact.text);
-  const dashboard = await buildDashboardAsync(protDef(tables, artifact.text, evidence, hotspots?.analysis ?? null));
+  const dashboard = await buildDashboardAsync(protDef(tables, artifact.text, evidence, hotspots?.analysis ?? null, annotation));
   return { session: dashboard.createSession({ as: 'user' }), tables, dashboard, structure: artifact, residues: unrunResidues(tables), run: null, refusals: NO_GESTURES_YET, ...(hotspots === null ? {} : { hotspots }) };
 }
 
 /**
  * SOMEBODY WATCHING THE WHOLE BOOT, and not only its acts.
  *
- * `ProtRunWatch` offers the acts as they come back, which is three of the boot's
+ * `ProtRunWatch` offers the acts as they come back, which is four of the boot's
  * steps out of five. The other two are the ones a reader waits longest for and
  * hears nothing about: the DASHBOARD BUILD (the def through the firewall, which
  * throws on a lie) and the THREE PROBE GESTURES this surface makes on purpose
@@ -415,8 +439,8 @@ export interface ProtBootWatch extends ProtRunWatch {
  * stages) and the sentences from step two are kept, because a visitor arrives
  * at the end of it.
  */
-export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtBootWatch, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null): Promise<ProtSurface> {
-  const unrun = await openProtSurfaceUnrun(artifact, evidence, hotspots);
+export async function openProtSurfaceAsync(artifact: StructureArtifact, watch?: ProtBootWatch, evidence: ConservationEvidence | null = null, hotspots: HotspotSlot | null = null, annotation: AnnotationEvidence | null = null): Promise<ProtSurface> {
+  const unrun = await openProtSurfaceUnrun(artifact, evidence, hotspots, annotation);
   // THE BUILD, REPORTED — counted off the def the builder was handed rather than
   // off anything this function believes about it
   //

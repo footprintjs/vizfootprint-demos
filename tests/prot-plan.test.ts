@@ -6,12 +6,14 @@
  * a THIRD declaration (`src/prot/plan.ts`), and the whole risk of a third
  * declaration is that somebody later "completes" it by adding the missing
  * stages to the def — where declaring one means the orchestrator dispatches
- * acts for it, and for steps 5 and 6 that would be a lie.
+ * acts for it, and for step 5 that would be a lie.
  *
  * So the first test in this file is the one that matters: **`PROT_STAGES` grows
- * only when a stage really dispatches acts.** It has grown ONCE, by the
- * conservation stage, which now runs — and the test says so in numbers rather
- * than leaving the count free. The rest hold the join between the three
+ * only when a stage really dispatches acts.** It has grown TWICE — by the
+ * conservation stage, when the question behind its measured refusal turned out
+ * to be the wrong one, and by the annotation stage, which grew the only way a
+ * step blocked by US ever does: somebody built it. The test says so in numbers
+ * rather than leaving the count free. The rest hold the join between the three
  * declarations tight, so that a stage cannot be renamed, forgotten or spelled
  * twice without a failure here rather than a silent gap on screen.
  */
@@ -22,12 +24,19 @@ import { PROT_ACT_ORDER, PROT_STAGES, PROT_UNAVAILABLE_STAGES } from '../src/pro
 import { BLOCKED_TAG, PROT_BLOCKED, PROT_PLAN, planStepOf, type Blocker } from '../src/prot/plan.js';
 
 describe('THE PLAN IS NOT A PROMISE — the def dispatches exactly what it did before', () => {
-  it('declares THREE dispatching stages and FOUR acts, and not one more', () => {
-    // the test that stops a future edit from turning the plan into a promise: a
-    // stage in `PROT_STAGES` is a stage the orchestrator dispatches acts for,
-    // and the plan's steps 1, 5 and 6 dispatch nothing at all
-    expect(PROT_STAGES.map((s) => s.stage)).toEqual(['conservation', 'interactions', 'surface']);
-    expect(PROT_ACT_ORDER).toEqual(['residueConservation', 'interactionPairs', 'residueContacts', 'residueSurface']);
+  it('declares FOUR dispatching stages and FIVE acts, and not one more', () => {
+    /*
+      the test that stops a future edit from turning the plan into a promise: a
+      stage in `PROT_STAGES` is a stage the orchestrator dispatches acts for,
+      and the plan's steps 1 and 5 dispatch nothing at all.
+
+      IT HAS GROWN TWICE NOW. The conservation stage was the first, when the
+      question behind its refusal turned out to be the wrong one; the annotation
+      stage is the second, and it grew the only way a step blocked by US ever
+      does — somebody built it.
+    */
+    expect(PROT_STAGES.map((s) => s.stage)).toEqual(['conservation', 'interactions', 'annotation', 'surface']);
+    expect(PROT_ACT_ORDER).toEqual(['residueConservation', 'interactionPairs', 'residueContacts', 'residueAnnotation', 'residueSurface']);
   });
 
   it('declares NOTHING unavailable any more — and keeps the door, which is the point', () => {
@@ -47,10 +56,10 @@ describe('THE PLAN IS NOT A PROMISE — the def dispatches exactly what it did b
     expect(BLOCKED_TAG['the world']).toBe('not available here');
   });
 
-  it('names the three steps the def has never heard of, and gives none of them an act', () => {
+  it('names the two steps the def has never heard of, and gives neither of them an act', () => {
     const declared = [...PROT_STAGES, ...PROT_UNAVAILABLE_STAGES].map((s) => s.stage);
     const planOnly = PROT_PLAN.filter((step) => !declared.includes(step.stage));
-    expect(planOnly.map((s) => s.stage)).toEqual(['search', 'hotspots', 'annotation']);
+    expect(planOnly.map((s) => s.stage)).toEqual(['search', 'hotspots']);
     // nothing in the def mentions them — not a stage, not an act, not a receipt
     const analyses = readFileSync(join(process.cwd(), 'src', 'prot', 'analyses.ts'), 'utf8');
     for (const step of planOnly) expect(analyses.includes(`'${step.stage}'`), `analyses.ts names the plan-only step "${step.stage}"`).toBe(false);
@@ -64,35 +73,45 @@ describe('the six steps, and the three kinds of blocked', () => {
     expect(PROT_PLAN.map((s) => s.name)).toEqual(['Structure Search', 'Sequence Analysis', 'Structure Analysis', 'Interaction Mapping', 'Hot Spot Prediction', 'Functional Annotation']);
   });
 
-  it('puts the three dispatching stages at the steps the documentation puts them at', () => {
+  it('puts the four dispatching stages at the steps the documentation puts them at', () => {
     // the surface stage is step 3 and the contacts stage is step 4, which is NOT
     // the order the orchestrator dispatches them in — the plan publishes one
     // order and the def dispatches another, and both are true at once
     expect(planStepOf('conservation')?.step).toBe(2);
     expect(planStepOf('surface')?.step).toBe(3);
     expect(planStepOf('interactions')?.step).toBe(4);
+    expect(planStepOf('annotation')?.step).toBe(6);
     // and step 2 carries NO blocker and NO reason of its own any more: it is
     // declared in the def, so the def's list owns its sentence
     expect(planStepOf('conservation')?.blockedBy).toBeNull();
     expect(planStepOf('conservation')?.why).toBeNull();
     expect(planStepOf('conservation')?.question).toBeNull();
+    // and step 6 carries none either, now that the def declares it — the
+    // reversal the file header records
+    expect(planStepOf('annotation')?.blockedBy).toBeNull();
+    expect(planStepOf('annotation')?.why).toBeNull();
+    expect(planStepOf('annotation')?.question).toBeNull();
   });
 
-  it('blocks exactly two of them now, each a different kind, and each kind still has its own word', () => {
-    expect(PROT_BLOCKED.map((s) => [s.stage, s.blockedBy])).toEqual([
-      ['hotspots', 'this build'],
-      ['annotation', 'us'],
-    ]);
-    expect(PROT_BLOCKED.map((s) => s.tag)).toEqual(['not on this build', 'not built yet']);
-    // the VOCABULARY is still three words, and `the world` is still one of them:
-    // nothing standing in a door today is not a reason to take the door off
+  it('blocks exactly ONE of them now, and the vocabulary still has all three words', () => {
+    expect(PROT_BLOCKED.map((s) => [s.stage, s.blockedBy])).toEqual([['hotspots', 'this build']]);
+    expect(PROT_BLOCKED.map((s) => s.tag)).toEqual(['not on this build']);
+    /*
+      THE VOCABULARY IS STILL THREE WORDS, and two of them now stand in no
+      door: `the world` went when step 2 landed and `us` went when step 6 did.
+      Nothing standing in a door today is not a reason to take the door off —
+      the next stage that cannot run here deserves the same choice of honest
+      words rather than the one word left standing.
+    */
     expect(new Set(Object.values(BLOCKED_TAG)).size).toBe(3);
+    expect(BLOCKED_TAG.us).toBe('not built yet');
     expect(PROT_BLOCKED.some((s) => s.blockedBy === 'the world')).toBe(false);
+    expect(PROT_BLOCKED.some((s) => s.blockedBy === 'us')).toBe(false);
   });
 
   it('gives every blocked step a reason, and resolves each one to the single list that owns it', () => {
-    // steps 5 and 6 have no other list, so they carry their own
-    for (const stage of ['hotspots', 'annotation']) {
+    // step 5 has no other list, so it carries its own
+    for (const stage of ['hotspots']) {
       const step = planStepOf(stage)!;
       expect(step.why).not.toBeNull();
       expect(PROT_BLOCKED.find((s) => s.stage === stage)!.why).toBe(step.why);
@@ -101,6 +120,7 @@ describe('the six steps, and the three kinds of blocked', () => {
     // declares carries no reason here at all, which is what stopped step 2
     // having two spellings when it was blocked and still applies now it is not
     expect(PROT_BLOCKED.find((s) => s.stage === 'conservation')).toBeUndefined();
+    expect(PROT_BLOCKED.find((s) => s.stage === 'annotation')).toBeUndefined();
   });
 
   it('says which kind of blocked each one is IN ITS REASON, not only in its word', () => {
@@ -108,10 +128,6 @@ describe('the six steps, and the three kinds of blocked', () => {
     // this build: a static page cannot hold a key
     expect(why('hotspots')).toContain('a static page cannot hold the key');
     expect(why('hotspots')).toContain('A build with a server behind it performs this stage.');
-    // US: nothing external is in the way, and it says so
-    expect(why('annotation')).toContain('our work outstanding');
-    expect(why('annotation')).toContain('nothing external is in the way');
-    expect(why('annotation')).toContain('only building');
   });
 
   it('declares a sentence for a step nothing else declares, and never a second spelling of one that is declared', () => {
@@ -161,8 +177,12 @@ describe('THE REASON THE PLAN IS ITS OWN DECLARATION is written down in its own 
     }
   });
 
-  it('names the people who can be in the way, and says that one of them is us', () => {
-    for (const clause of ['THIS BUILD', 'and US', 'we have not built this yet']) expect(source).toContain(clause);
+  it('names the people who can be in the way, and keeps the record of the one that was us', () => {
+    for (const clause of ['THIS BUILD', 'blocked by US', 'we have not built this yet']) expect(source).toContain(clause);
+    // AND HOW THAT STOPPED BEING TRUE, written where the claim was: the only
+    // way a step blocked by us is ever unblocked is by doing the work
+    expect(source).toContain('THERE WERE TWO UNTIL STEP 6 LANDED');
+    expect(source).toContain('which is the only way that particular sentence is ever supposed to stop being true');
   });
 
   it('records the step that stopped being blocked, and why a measured refusal was still wrong', () => {

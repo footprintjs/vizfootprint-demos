@@ -83,6 +83,7 @@ const landedRun = (): ProtRun => ({
   contacts: null,
   surface: null,
   conservation: null,
+  annotation: null,
 });
 
 /**

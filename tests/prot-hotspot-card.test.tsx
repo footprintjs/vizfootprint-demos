@@ -201,8 +201,15 @@ describe('a model’s ranking is shown as a recommendation, with its citations',
     expect(five.subtitle).toContain('landed 3 columns on the residues table — hotspot_rank, hotspot_cites, hotspot_reason');
     // the mark is no longer the blocked family's
     expect(stepViews(stages, five, true)[4]!.tag).not.toBe('not on this build');
-    // AND THE PLAN IS STILL THE PLAN: the other blocked step is exactly as it was
-    expect(stages.find((s) => s.stage === 'annotation')!.blockedBy).toBe('us');
+    /*
+      AND THE PLAN IS STILL THE PLAN. This used to name step 6, which was the
+      OTHER blocked step; step 6 was then built and is blocked by nobody, so
+      what is asserted now is the property rather than a second blocked step
+      that no longer exists: performing step 5 changes the mark of step 5 and of
+      no other column.
+    */
+    expect(stages.filter((s) => s.blockedBy !== null)).toEqual([]);
+    expect(stages.find((s) => s.stage === 'annotation')!.blockedBy).toBe(null);
   });
 });
 
