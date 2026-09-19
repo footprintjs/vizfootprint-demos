@@ -82,10 +82,25 @@ export const PROT_API_ROOT = '/api/prot';
  * reads (`../src/nndss/analyst.ts` · `envModel`), read the same way: a blank
  * is ABSENT rather than empty, because `ANTHROPIC_MODEL= npm run serve` would
  * otherwise ask the API for the model "".
+ *
+ * THE DEFAULT IS THE SMALL MODEL, on the author's ruling, because this stage is
+ * asked on every boot of a desk that is driven all day. The knob is what a
+ * comparison rides: `ANTHROPIC_MODEL=claude-sonnet-5 npm run serve` asks the
+ * larger one without a code change, and the answer says which model gave it
+ * either way — the card, the wire and the record all carry the name, so a
+ * ranking can never be read without knowing what produced it.
+ *
+ * AND THE SIZE IS A FACT ABOUT THE ANSWER, not a detail of the deployment. This
+ * project's own bench found the smaller model declaring a standing about half as
+ * often as the larger one on a comparable task; the hallucination door, the
+ * citation check and the judge are unchanged and catch what they catch either
+ * way, but a shorter list or a thinner reason is the model and not a fault.
  */
+export const PROT_DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
+
 export function protModel(): string {
   const raw = process.env['ANTHROPIC_MODEL'];
-  return raw === undefined || raw.trim() === '' ? 'claude-sonnet-5' : raw.trim();
+  return raw === undefined || raw.trim() === '' ? PROT_DEFAULT_MODEL : raw.trim();
 }
 
 const MAX_TOKENS = 2048;

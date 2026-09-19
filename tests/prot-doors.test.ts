@@ -36,6 +36,7 @@ import {
   driverFromEnvironment,
   ledgerOf,
   NDJSON_TYPE,
+  PROT_DEFAULT_MODEL,
   protModel,
   protStateOf,
   scriptedHotspotDriver,
@@ -190,6 +191,28 @@ describe('what is driving stage 5 is decided by what this environment offered', 
     expect(driver.model).toBe(protModel());
     expect(driver.judge.weaker).toBe(true);
     expect(driver.judge.said).toContain('SAME family of model that answered');
+  });
+
+  it('DEFAULTS TO THE SMALL MODEL, and the knob is what a comparison rides', () => {
+    // The author's ruling: this stage is asked on every boot of a desk that is
+    // driven all day, so the default is the small model and the larger one is a
+    // knob away. Pinned so it cannot drift back silently — the cost of this
+    // stage is a property of the desk, not an accident of whoever edited last.
+    const held = process.env['ANTHROPIC_MODEL'];
+    try {
+      delete process.env['ANTHROPIC_MODEL'];
+      expect(protModel()).toBe(PROT_DEFAULT_MODEL);
+      expect(PROT_DEFAULT_MODEL).toContain('haiku');
+      // …and a blank is ABSENT rather than the model "", which is the whole
+      // reason this is a function and not a constant read at the call site
+      process.env['ANTHROPIC_MODEL'] = '   ';
+      expect(protModel()).toBe(PROT_DEFAULT_MODEL);
+      process.env['ANTHROPIC_MODEL'] = 'claude-sonnet-5';
+      expect(protModel()).toBe('claude-sonnet-5');
+    } finally {
+      if (held === undefined) delete process.env['ANTHROPIC_MODEL'];
+      else process.env['ANTHROPIC_MODEL'] = held;
+    }
   });
 
   it('the scripted driver has to be asked for BY NAME', () => {
