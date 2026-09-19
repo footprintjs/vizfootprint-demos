@@ -33,7 +33,7 @@ import { createElement, type ReactElement } from 'react';
 import type { DeskProjection } from 'vizfootprint-studio/desk';
 import { PROT_ENCODINGS, PROT_ENCODINGS_ALL, PROT_VIEWS, RANKING_ENCODING, RANKING_VIEW, RESIDUES_TABLE, RESIDUE_KEY, protDef } from '../src/prot/def.js';
 import { INTERFACE_CONTACTS_COLUMN, INTERFACE_SEPARATION_COLUMN, PROT_STAGES, RELATIVE_SASA_COLUMN, SASA_COLUMN, UNIPROT_SITE_COLUMN } from '../src/prot/analyses.js';
-import { HOTSPOT_RANK_COLUMN, HOTSPOT_TAG, HOTSPOT_WANT, askHotspots, hotspotLedger, hotspotSlot, scriptedHotspotModel, scriptedJudge } from '../src/prot/hotspots.js';
+import { HOTSPOT_RANK_COLUMN, HOTSPOT_TAG, HOTSPOT_WANT, askHotspots, hotspotLedger, hotspotSlot, scriptedHotspotModel, scriptedJudge, HOTSPOT_COLUMNS } from '../src/prot/hotspots.js';
 import { PROT_PLAN, planStepOf } from '../src/prot/plan.js';
 import { protTables } from '../src/prot/etl.js';
 import { evidenceFromCommitted } from '../src/prot/conservationEvidence.js';
@@ -194,11 +194,17 @@ describe('the height is interface_contacts and the rank is the colour — never 
     });
   });
 
-  it('the RANK IS NOT ON A MAGNITUDE CHANNEL, and the declaration is why', () => {
-    const rankDef = protDef(TABLES, TEXT, EVIDENCE, hotspotSlot().analysis).data[RESIDUES_TABLE]?.columns?.[HOTSPOT_RANK_COLUMN];
-    // the def's own ruling, made twice: a rank is a PLACE, so it is a discrete
-    // dimension — the same argument that keeps `resnum` off a bar's height
-    expect(rankDef).toMatchObject({ role: 'dimension', scale: 'discrete' });
+  it('THE ACT DECLARES THE RANK, and this def declares nothing about it', () => {
+    // It used to be declared HERE — the definition speaking for a column it
+    // does not own, because an act could not speak at all. The library grew a
+    // door for it (`vizfootprint` · `OutputColumn`), so the fact moved to the
+    // act that always knew it and this table declares only what it holds.
+    const declared = protDef(TABLES, TEXT, EVIDENCE, hotspotSlot().analysis).data[RESIDUES_TABLE]?.columns;
+    expect(declared?.[HOTSPOT_RANK_COLUMN]).toBeUndefined();
+    // …and the ruling itself is unchanged, one file over: a rank is a PLACE,
+    // so it is a discrete dimension — the same argument that keeps `resnum`
+    // off a bar's height.
+    expect(HOTSPOT_COLUMNS[HOTSPOT_RANK_COLUMN]).toMatchObject({ type: 'int', role: 'dimension', scale: 'discrete' });
     expect(RANKING_ENCODING.initial?.['y']).not.toBe(HOTSPOT_RANK_COLUMN);
     expect(RANKING_ENCODING.initial?.['color']).toBe(HOTSPOT_RANK_COLUMN);
   });

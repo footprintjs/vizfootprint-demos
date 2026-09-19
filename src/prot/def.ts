@@ -177,7 +177,8 @@ export const PROT_VIEWS = [STRUCTURE_VIEW, RAMA_VIEW, CONSERVATION_VIEW, INTERFA
  * make the PUBLISHED definition differ. So the view, its actor, its encoding
  * surface, its capability, its grain and its words are all gated on the same
  * slot the act is ({@link protDef}'s `hotspots`), exactly as
- * {@link RANK_DECLARED} is. `tests/prot-def.test.ts` pins both directions.
+ * the ACT's own declaration of the rank is (`./hotspots.ts`).
+ * `tests/prot-def.test.ts` pins both directions.
  *
  * NOT SPELLED `hotspots`, which is the STAGE's id: the desk's focus slot holds
  * either a picture or a blocked step's card and finds each by id
@@ -386,12 +387,14 @@ export function protCaption(tables: ProtTables): string {
  * WHY it is null, and every consumer that wants the reason re-derives it from
  * "first or last residue of its chain".
  *
- * ── AND ONE COLUMN DECLARED THAT NO ROW HERE CARRIES ────────────────────────
- * `hotspot_rank` is declared when — and only when — stage 5's act is
- * ({@link RANK_DECLARED}, gated on the same slot as the act). Every other
- * act-landed column on this table is left to the engine's own reading, and
- * that reading is right for all of them: a distance, a score and an area are
- * magnitudes, and `scaleOfType('number')` says `continuous`, which is true.
+ * ── AND NO COLUMN HERE IS DECLARED FOR AN ACT ANY MORE ─────────────────────
+ * `hotspot_rank` used to be declared here, gated on the same slot as stage 5's
+ * act — the DEFINITION speaking for a column it does not own, because an act
+ * could not speak at all. It can now (`vizfootprint` · `OutputColumn`), so the
+ * declaration moved to `./hotspots.ts` where the fact was always known, and
+ * this table declares only what it actually holds. Every other act-landed
+ * column is left to the engine's own reading, and that reading is right for
+ * all of them: a distance, a score and an area are magnitudes.
  *
  * A RANK IS NOT A MAGNITUDE, and the declaration is what says so — the
  * `resnum` argument one line further down, for the same reason: rank 6 is not
@@ -410,7 +413,6 @@ function protSources(residues: readonly ResidueRow[], rank: boolean): Record<str
       source: { format: 'rows', via: 'inline', at: residues },
       key: RESIDUE_KEY,
       columns: {
-        ...(rank ? RANK_DECLARED : {}),
         // the MINTED key: chain and residue number, joined by one character this
         // repository spells in exactly one place (`./etl.ts` · residueKey)
         residue_key: { role: 'identifier', label: 'residue — the chain and the number the file gives it, as "<chain>:<resnum>"' },
@@ -451,17 +453,6 @@ function protSources(residues: readonly ResidueRow[], rank: boolean): Record<str
  * act writes `null` for every one of them rather than a zero or a last place
  * (`./hotspots.ts` · `hotspotsAnalysis`).
  */
-const RANK_DECLARED = {
-  [HOTSPOT_RANK_COLUMN]: {
-    role: 'dimension' as const,
-    // a number, and deliberately NOT a measure — the `resnum` argument, one
-    // ranking along: rank 6 is not six times rank 1, and averaging places
-    // means nothing. `scale: 'discrete'` is what makes it a bucket, which is
-    // also what lets the 3D view's colour channel take it.
-    scale: 'discrete' as const,
-    label: 'the place a model gave this residue among the hot spots it ranked — a recommendation, not a measurement, and ABSENT for every residue it did not name',
-  },
-} as const;
 
 // ── the encoding surfaces ────────────────────────────────────────────────────
 
@@ -680,7 +671,8 @@ export const PROT_ENCODINGS: readonly ViewEncodingDecl[] = [
  * ── THE HEIGHT IS NOT THE RANK ─────────────────────────────────────────────
  * Rank 1 is the strongest pick and would be the SHORTEST bar. That is not
  * taste: this def already rules that `hotspot_rank` is
- * `role: 'dimension', scale: 'discrete'` ({@link RANK_DECLARED}) because *rank
+ * `role: 'dimension', scale: 'discrete'` — declared by the ACT that lands it
+ * (`./hotspots.ts`), not by this file — because *rank
  * 6 is not six times rank 1*, which is the identical argument that keeps
  * `resnum` off a magnitude channel. A dimension is an ORDER and a LABEL; it is
  * not a bar's length. So the rank rides `color` — where a discrete column is

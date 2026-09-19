@@ -101,6 +101,35 @@ export const HOTSPOT_RANK_COLUMN = 'hotspot_rank';
 export const HOTSPOT_CITES_COLUMN = 'hotspot_cites';
 export const HOTSPOT_REASON_COLUMN = 'hotspot_reason';
 
+/**
+ * WHAT THIS ACT LANDS, AS THIS ACT DECLARES IT — and the rank is why the
+ * library grew a door for an act to speak at all.
+ *
+ * A rank is an integer and is NOT a magnitude: rank 6 is not six times rank 1,
+ * it is a PLACE — the `resnum` argument one ranking along. Left to the engine's
+ * own reading it is `continuous`, and the 3D view's colour channel, which takes
+ * a column of distinct values, refuses it BY NAME.
+ *
+ * THIS USED TO LIVE IN `./def.ts` (`RANK_DECLARED`), gated on the same slot as
+ * this act: the DEFINITION speaking for a column it does not own, because an
+ * act could not speak at all. It can now
+ * (`vizfootprint` · `OutputColumn`, which carries a role, a scale, a label and
+ * a unit beside the type), so that declaration is deleted and the fact lives
+ * where it was always known. The other two columns say only their type,
+ * because a citation list and a sentence are what the engine already reads
+ * them as — an act that says nothing has CLAIMED nothing.
+ */
+export const HOTSPOT_COLUMNS = {
+  [HOTSPOT_RANK_COLUMN]: {
+    type: 'int',
+    role: 'dimension',
+    scale: 'discrete',
+    label: 'the place a model gave this residue among the hot spots it ranked — a recommendation, not a measurement, and ABSENT for every residue it did not name',
+  },
+  [HOTSPOT_CITES_COLUMN]: { type: 'string' },
+  [HOTSPOT_REASON_COLUMN]: { type: 'string' },
+} as const;
+
 /** The word that must ride every number this stage produces — it is a recommendation, never a measurement. */
 export const HOTSPOT_TAG = 'a recommendation, not a measurement';
 
@@ -1229,7 +1258,7 @@ function hotspotsAnalysis(answer: () => HotspotAnswered | null): AnalysisDef<rea
         output: {
           as: 'columns',
           table: ACT_TABLE,
-          columns: { [HOTSPOT_RANK_COLUMN]: { type: 'int' }, [HOTSPOT_CITES_COLUMN]: { type: 'string' }, [HOTSPOT_REASON_COLUMN]: { type: 'string' } },
+          columns: HOTSPOT_COLUMNS,
           counts: (state['counts'] as HotspotsOutput['counts'] | undefined) ?? { ranked: 0, refused: 0, served: 0 },
           refused: Array.isArray(state['refusals']) ? (state['refusals'] as readonly string[]) : [],
         },
