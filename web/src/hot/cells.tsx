@@ -45,6 +45,46 @@ import type { Patch } from '../../../src/hot/extent.js';
 export { STRUCTURAL_VIEW, PRIOR_VIEW, TOGETHER_VIEW, PATCHES_VIEW };
 
 /**
+ * THE HEIGHT AT WHICH A PANE STILL HAS ROOM FOR AXIS CHROME, in px — the twin
+ * of `web/src/protCells.tsx` · `AXIS_ROOM`, and its argument is quoted rather
+ * than re-derived: *below this height the MARKS stay and the labels go — the
+ * marks are what show a selection, the labels are not, and AN ILLEGIBLE LABEL
+ * IS NOT A LABEL.*
+ *
+ * It is DECLARED here rather than imported from that file for the reason this
+ * module's header already gives about its folds: importing `protCells.tsx`
+ * would pull `molstarRenderer.js`, and through it Mol*, into this page's static
+ * closure — the property `tests/hot-site.test.ts` exists to keep.
+ *
+ * EXPORTED, because the divider floors are folded out of it
+ * (`web/src/workbench/charts.ts` · `dividerFloors`, wired in `./desk.tsx`): the
+ * honesty floor and the floor of the gesture are the same floor.
+ */
+export const AXIS_ROOM = 170;
+
+/**
+ * THE SCALE BOTH SCORES ARE DECLARED ON — a fixed weight budget, never
+ * renormalised over the terms that landed (`src/hot/score.ts`).
+ *
+ * ── WHY IT IS DECLARED RATHER THAN LEFT TO THE CHART ───────────────────────
+ * A chart with no declared domain draws against its own data's extent PADDED BY
+ * A CONSTANT IN THE COLUMN'S OWN UNITS — 5 on x and 0.5 on y
+ * (`vizfootprint/ui` · `VizScatter`, `extentFor(..., padFor(xKind, 5))`). On a
+ * column of residue numbers that is breathing room; on a 0…1 SCORE it is a
+ * catastrophe, and it was MEASURED as one on the built page: the x domain came
+ * out [-4.96, 5.75], so 185 residues spanning 0.044…0.746 were crushed into
+ * 63px of a 968px plot and the scatter appeared to show no residue above 0.49
+ * while the bar chart beside it drew peaks of 0.75. **Two pictures on one desk
+ * disagreeing about one column** — and neither was wrong about the data.
+ *
+ * The declared domain is not a workaround for that: it is the TRUE statement
+ * about these two columns. A dot's position is now the fraction of the declared
+ * budget its evidence paid for, which is the only reading of a hot-spot score
+ * this desk allows.
+ */
+export const SCORE_DOMAIN = { x: [0, 1] as const, y: [0, 1] as const };
+
+/**
  * ONE HUE PER PATCH, and the grey for a residue in none.
  *
  * It is a DECLARED list rather than a function of the patch's name, because a
@@ -266,6 +306,11 @@ export function useHotCells(desk: DeskProjection, data: HotDeskData): readonly D
             encoding={shown[STRUCTURAL_VIEW] ?? {}}
             width={width}
             height={height}
+            // THE MARKS STAY AND THE LABELS GO below {@link AXIS_ROOM}. Measured
+            // on the built page at 1440x900: in a 160px strip tile this chart's
+            // rotated y label ran outside the tile and its crowding note printed
+            // across the data.
+            axes={height >= AXIS_ROOM}
             onEmit={emit(STRUCTURAL_VIEW, 'select')}
             onReencode={reencode}
           />
@@ -304,6 +349,7 @@ export function useHotCells(desk: DeskProjection, data: HotDeskData): readonly D
             encoding={shown[PRIOR_VIEW] ?? {}}
             width={width}
             height={height}
+            axes={height >= AXIS_ROOM}
             onEmit={emit(PRIOR_VIEW, 'select')}
             onReencode={reencode}
           />
@@ -342,6 +388,34 @@ export function useHotCells(desk: DeskProjection, data: HotDeskData): readonly D
             encoding={shown[TOGETHER_VIEW] ?? {}}
             width={width}
             height={height}
+            // THE DECLARED BUDGET, NOT THE DATA'S PADDED EXTENT — see
+            // {@link SCORE_DOMAIN} for the measurement that made this a defect
+            // rather than a preference.
+            domain={SCORE_DOMAIN}
+            /*
+              ── THE X AXIS IS NOT DRAWN, AND THAT IS THE HONESTY FLOOR ───────
+              `vizfootprint/ui` · `VizScatter` labels an x tick `Math.round(v)`
+              — integers — while its own siblings `VizLine` and `VizBar` both
+              label theirs `Math.round(v * 10) / 10`. On a 0…1 column the five
+              ticks at 0, .25, .5, .75, 1 therefore read `0 0 1 1 1`: three of
+              the five name a value that is not under them.
+
+              There is NO host door for it. `xLabel` is the axis TITLE, the tick
+              text takes no formatter, and the only lever a caller has is which
+              axes are drawn. So the desk takes the law {@link AXIS_ROOM}
+              already states — *an illegible label is not a label* — and applies
+              it to a label made illegible by its VALUES rather than by its
+              size: `'y'` draws this chart's own y axis (whose ticks the library
+              prints unrounded, and which therefore reads 0, 0.25, 0.5, 0.75, 1)
+              and leaves the x axis undrawn rather than wrong.
+
+              THE COST, NAMED: the x axis title is also this pane's x encoding
+              picker, so x cannot be re-encoded from the picture while this
+              stands. It is named again on the page itself
+              (`web/site/hot/entry.tsx` · `PageFoot`), with the one-line change
+              the library needs to take it back.
+            */
+            axes={height >= AXIS_ROOM ? 'y' : false}
             onEmit={emit(TOGETHER_VIEW, 'filter')}
             onReencode={reencode}
           />
@@ -378,6 +452,7 @@ export function useHotCells(desk: DeskProjection, data: HotDeskData): readonly D
             encoding={shown[PATCHES_VIEW] ?? {}}
             width={width}
             height={height}
+            axes={height >= AXIS_ROOM}
             onEmit={emit(PATCHES_VIEW, 'select')}
             onReencode={reencode}
           />

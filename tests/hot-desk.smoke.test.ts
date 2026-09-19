@@ -15,7 +15,12 @@
  *   3. THE REFUSAL IS ON THE PAGE. The gesture this page made before any act
  *      landed was refused by name, and the sentence is printed verbatim,
  *      because a visitor arrives after the acts and can never reach it
- *      themselves;
+ *      themselves. IT IS ONE PRESS AWAY NOW rather than above the desk: the
+ *      page wears the protein workbench's shell (`web/src/hot/desk.tsx`), whose
+ *      record lives in a drawer at the bottom edge because *"I don't want a
+ *      scrolling dashboard"*. The assertion is unchanged — the same sentence,
+ *      verbatim — and the press is what proves it is REACHABLE rather than
+ *      merely present in a string;
  *   4. EVERY COMPONENT NARROWS THE DESK ON A PRESS — the law the protein desk's
  *      picks kept, and the reason the two scores are worth landing as columns
  *      at all.
@@ -29,6 +34,7 @@ import { chromium, type Browser, type Page } from 'playwright-core';
 import { existsSync } from 'node:fs';
 import { buildSiteIfMissing, startProtSite, type SiteHandle } from './protSiteServer.js';
 import { PATCHES_VIEW, PRIOR_VIEW, STRUCTURAL_VIEW, TOGETHER_VIEW } from '../src/hot/def.js';
+import { NO_PATCH_COLOR, PATCH_PALETTE } from '../web/src/hot/cells.js';
 import { STRUCTURAL_COLUMN } from '../src/hot/analyses.js';
 
 const CHROME = process.env['VZF_CHROME'];
@@ -88,15 +94,124 @@ describe.skipIf(CHROME !== undefined && !existsSync(CHROME))('the fifth desk, in
     expect(drawn[PATCHES_VIEW]).toBe(15);
   });
 
-  it('prints the library’s own refusal for the gesture it made before any act landed', async () => {
+  it('prints the library’s own refusal for the gesture it made before any act landed — one press into the record', async () => {
+    // THE RECORD DRAWER, at the bottom edge of the instrument: its shut bar
+    // NAMES what is inside without scrolling anything, and one press opens it
+    // (`web/src/workbench/Chrome.tsx` · `RecordDrawer`). The page's own foot —
+    // what this build cannot do, and this refusal — rides it, exactly as the
+    // protein desk's foot does.
+    const bar = page.locator('button[aria-label^="open the record"]');
+    expect(await bar.count()).toBe(1);
+    await bar.click();
     const said = await page.evaluate(() => document.body.textContent ?? '');
     expect(said).toContain(`no column "${STRUCTURAL_COLUMN}" in table "residues"`);
+    // and shut again, so the presses below are not reaching through it
+    await bar.click();
   });
 
-  it('says of its largest patch that no sequence window could have found it', async () => {
+  it('says of its largest patch that no sequence window could have found it — in that picture’s own full note', async () => {
+    /*
+      ONE PRESS, AND WHERE IT LANDS IS THE SHELL'S OWN LAW.
+
+      A long caption is read on the CARD, and the card is whatever the cursor's
+      stage produced (`web/src/hot/desk.tsx` — the focus is derived, never
+      hard-wired). At rest this desk's cursor stands at its last commit, which
+      is the stage that made the patches, so this picture is ALREADY the focus
+      and its note is one press. A rail tile has no note at all — it is a
+      picture and a name — so a picture that is NOT the focus is promoted first,
+      which is the same walk one press longer. Asserted rather than assumed: the
+      promote control is pressed only when it is there.
+    */
+    const promote = page.locator(`[data-chart="${PATCHES_VIEW}"] button[aria-label^="bring "]`);
+    if ((await promote.count()) > 0) {
+      await promote.first().click();
+      await page.waitForSelector(`[data-chart="${PATCHES_VIEW}"] [data-focus-mark="true"]`, { timeout: 30_000 });
+    }
+    expect(await page.locator(`[data-chart="${PATCHES_VIEW}"] [data-focus-mark="true"]`).count(), 'the patch bars are not in the focus, so they have no note to open').toBe(1);
+    await page.locator(`[data-chart="${PATCHES_VIEW}"] button[aria-label^="the full note for"]`).first().click();
     const said = await page.evaluate(() => document.body.textContent ?? '');
     expect(said).toContain('spans chains A and B');
     expect(said).toContain('swallow 23 residues that are NOT in it');
+  });
+
+  /**
+   * THE TWO PICTURES OF ONE COLUMN MUST AGREE — the regression guard for a real
+   * defect, caught in a browser before anything was pushed.
+   *
+   * The scatter and the bar chart both draw `hotspot_structural`. The scatter
+   * was drawing every one of its 168 dots inside 63px of a 968px plot — an
+   * apparent ceiling of 0.49 — while the bars beside it drew peaks of 0.75 and
+   * the extent rule selected the 15 residues above 0.5. Neither picture was
+   * wrong about the DATA (measured: all 15 high-structural residues carry a
+   * prior score and are in the scatter, max 0.7457). The chart was drawing
+   * against its own data extent PADDED BY 5 IN THE COLUMN'S OWN UNITS, so the
+   * domain was [-4.96, 5.75] and a 0…1 score occupied 6.6% of its axis
+   * (`vizfootprint/ui` · `VizScatter`, `padFor(xKind, 5)`).
+   *
+   * The fix is a DECLARED domain — the fixed weight budget both scores are
+   * scored on (`web/src/hot/cells.tsx` · `SCORE_DOMAIN`) — and these are the
+   * three things a browser can check about it.
+   */
+  it('DRAWS BOTH SCORES ON THEIR DECLARED 0…1 BUDGET — the scatter and the bars agree about one column', async () => {
+    const seen = await page.evaluate((id) => {
+      const pane = document.querySelector(`[data-chart="${id}"]`);
+      if (pane === null) return null;
+      const svg = [...pane.querySelectorAll('svg')].sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width)[0];
+      if (svg === undefined) return null;
+      const box = svg.getBoundingClientRect();
+      const dots = [...pane.querySelectorAll('circle.vzf-dot')].map((d) => {
+        const r = d.getBoundingClientRect();
+        return { cx: r.left + r.width / 2, fill: (d.getAttribute('fill') ?? window.getComputedStyle(d).fill).toLowerCase() };
+      });
+      const cx = dots.map((d) => d.cx);
+      return {
+        dots: dots.length,
+        spreadOfSvg: (Math.max(...cx) - Math.min(...cx)) / box.width,
+        ticks: [...pane.querySelectorAll('text.vzf-tick')].map((t) => t.textContent),
+        // the 15 rightmost dots — the residues with the highest structural score
+        rightmostFills: [...dots].sort((a, b) => b.cx - a.cx).slice(0, 15).map((d) => d.fill),
+        // …and the 15 leftmost, so the test can prove it can TELL the two apart
+        leftmostFills: [...dots].sort((a, b) => a.cx - b.cx).slice(0, 15).map((d) => d.fill),
+      };
+    }, TOGETHER_VIEW);
+    expect(seen).not.toBeNull();
+    console.log(`the scatter: ${String(seen!.dots)} dots spanning ${(seen!.spreadOfSvg * 100).toFixed(1)}% of its box; ticks ${seen!.ticks.join(' ')}`);
+
+    // 1 · THE MARKS USE THE AXIS. 63px of 1,150 was 5.5%; anything under 40%
+    // means a domain far wider than the budget has come back.
+    expect(seen!.spreadOfSvg).toBeGreaterThan(0.4);
+
+    // 2 · THE DECLARED BUDGET IS ON SCREEN. Before the fix these read
+    // `0 0 0 0 0`, because an undeclared domain sent the tick VALUES through a
+    // ceil/floor that collapsed them.
+    expect(seen!.ticks).toEqual(['0', '0.25', '0.5', '0.75', '1']);
+
+    // 3 · AND NO X TICK IS DRAWN, which is a refusal rather than an omission:
+    // this library labels a scatter's x ticks `Math.round(v)`, so on a 0…1
+    // column they would read `0 0 1 1 1` — three of five naming a value that is
+    // not under them (`web/src/hot/cells.tsx` argues it in full). Five labels,
+    // and they are the y axis's.
+    expect(seen!.ticks).toHaveLength(5);
+
+    // 4 · THE TWO PICTURES AGREE. The bar chart draws exactly the residues
+    // scoring above the extent floor; on a 0…1 axis those are the rightmost
+    // dots, and every one of them carries a PATCH's hue rather than the grey
+    // this desk paints a residue in no patch. No pixel arithmetic needed — if
+    // the axis were crushed again the rightmost dots would be arbitrary.
+    /** A fill as the DOM gave it back, in one spelling — an attribute is the hex we handed over, a computed style is `rgb(r, g, b)`. */
+    const rgb = (fill: string): string => {
+      const hex = /^#([0-9a-f]{6})$/.exec(fill.trim());
+      if (hex === null) return fill.replace(/\s+/g, '');
+      const n = Number.parseInt(hex[1]!, 16);
+      return `rgb(${String((n >> 16) & 255)},${String((n >> 8) & 255)},${String(n & 255)})`;
+    };
+    const patchHues = new Set(PATCH_PALETTE.map(rgb));
+    const grey = rgb(NO_PATCH_COLOR);
+    // every one of the rightmost dots is a PATCH's hue …
+    expect(seen!.rightmostFills.map(rgb).filter((fill) => !patchHues.has(fill))).toEqual([]);
+    // … and the test can tell the two apart, which is what stops the line above
+    // passing because nothing matched anything
+    expect(seen!.leftmostFills.map(rgb)).toContain(grey);
   });
 
   it('NARROWS THE DESK on a press in the patch bars — the law every pick on this family of desks keeps', async () => {

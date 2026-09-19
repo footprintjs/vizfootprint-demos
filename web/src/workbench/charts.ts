@@ -90,8 +90,17 @@ export function splitByFocus<T extends { readonly id: string; readonly clauseId?
  *
  * `null` is left for a picture that binds nothing and is nobody's receipt.
  */
-export function stageOfChart(stages: readonly StepperStage[], viewId: string, shown: Readonly<Record<string, Readonly<Record<string, string>>>>, actColumns: ReadonlySet<string>): StepperStage | null {
-  return stages.find((stage) => chartsOfStage(stage, shown, actColumns, stages).includes(viewId)) ?? null;
+export function stageOfChart(
+  stages: readonly StepperStage[],
+  viewId: string,
+  shown: Readonly<Record<string, Readonly<Record<string, string>>>>,
+  actColumns: ReadonlySet<string>,
+  // WHICH ACT'S ANSWER IS WHOSE RECEIPT — the fifth desk declares none, so it
+  // hands in an empty map and the fold's receipts arm contributes nothing
+  // (`web/src/protStages.ts` · `chartsOfStage` carries the argument).
+  receipts?: Readonly<Record<string, string>>,
+): StepperStage | null {
+  return stages.find((stage) => chartsOfStage(stage, shown, actColumns, stages, receipts).includes(viewId)) ?? null;
 }
 
 /*
@@ -176,13 +185,36 @@ export type TileShape = 'wide' | 'square' | 'tall';
 
 const SHAPE_OF_KIND: Readonly<Record<string, TileShape>> = { line: 'wide', bar: 'wide', scatter: 'square', point: 'square', structure: 'square' };
 
-/** The shape one view's picture wants. A view the def gives no encoding surface draws rows, which want height. */
-export function shapeOfView(viewId: string): TileShape {
+/**
+ * ONE VIEW'S DECLARED CHART KIND, as much of an encoding declaration as this
+ * fold reads.
+ *
+ * Spelled structurally rather than imported, for the reason every type in this
+ * layer is: the rules layer may not reach the library (`./README.md`, layer 3;
+ * `tests/prot-layers.test.ts` rule 2). A def's own `ViewEncodingDecl[]` is
+ * assignable to it.
+ */
+export interface DeclaredChartKind {
+  readonly viewId: string;
+  readonly chartKind: string;
+}
+
+/**
+ * The shape one view's picture wants. A view the def gives no encoding surface
+ * draws rows, which want height.
+ *
+ * `declared` is WHICH DEF TO ASK, and it is a second desk's whole entry into
+ * this fold: the shape is a declared fact about a view, and the fifth desk
+ * declares its four (`src/hot/def.ts` · `HOT_ENCODINGS`) exactly as this one
+ * declares its six. It defaults to the protein desk's, so every existing caller
+ * is byte-identical.
+ */
+export function shapeOfView(viewId: string, declared: readonly DeclaredChartKind[] = PROT_ENCODINGS_ALL): TileShape {
   // EVERY surface the def CAN declare, not only the ones it always does: stage
   // 5's chart is declared with its act (`src/prot/def.ts` · `RANKING_VIEW`), and
   // a layout that could not find its kind would put a bar where a square goes.
-  const declared = PROT_ENCODINGS_ALL.find((encoding) => encoding.viewId === viewId);
-  return declared === undefined ? 'tall' : (SHAPE_OF_KIND[declared.chartKind] ?? 'square');
+  const found = declared.find((encoding) => encoding.viewId === viewId);
+  return found === undefined ? 'tall' : (SHAPE_OF_KIND[found.chartKind] ?? 'square');
 }
 
 /**
@@ -314,6 +346,17 @@ export const promoteCardLabel = (name: string, blocked = true): string =>
  * It is also the STEP one arrow press moves the boundary — a press moves it by
  * the divider's own width, which is one number rather than two.
  */
+/**
+ * THE PADDING AROUND THE INSTRUMENT REGION, in px — the one owner of the three
+ * numbers the focus, the strip and the rail are inset by.
+ *
+ * It lived in `web/src/protDesk.tsx` while there was one composition. There are
+ * two now (`web/src/hot/desk.tsx` is the second), and a geometry number spelled
+ * twice is a geometry number that drifts: the divider's own axis is measured
+ * from it, so two copies would put one desk's drag one padding out.
+ */
+export const REGION_PAD = { x: 24, top: 8, bottom: 40 } as const;
+
 export const DIVIDER_TRACK = 10;
 
 /**

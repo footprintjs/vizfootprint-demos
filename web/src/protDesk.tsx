@@ -115,6 +115,7 @@ import {
   promoteCardLabel,
   promoteChartLabel,
   reachClause,
+  REGION_PAD,
   rowTracks,
   serialiseSplit,
   shapeOfView,
@@ -450,7 +451,8 @@ export function RunStepper({ outcomes, host }: { readonly outcomes: readonly Act
  * that box starts). Two spellings of 24 would put the boundary a pointer asked
  * for 24px away from where the pointer was.
  */
-const REGION_PAD = { x: 24, top: 8, bottom: 40 } as const;
+// THE REGION'S PADDING now has ONE owner, shared with the second composition
+// (`./workbench/charts.ts` · `REGION_PAD`).
 
 /**
  * WHAT THIS BROWSER REMEMBERS ABOUT THE BOUNDARIES — read safely, and

@@ -65,7 +65,23 @@ export interface ResiduesNow extends ResiduesAtCursor {
  * `openProtSurfaceAsync` already read the table at the head and stamped the
  * commit it read it at, and that stamp is what this hook compares against.
  */
-export function useResiduesAtCursor(view: SessionView, session: InteractionSession, tables: ProtTables, seed: ResiduesAtCursor): ResiduesNow {
+export function useResiduesAtCursor(
+  view: SessionView,
+  session: InteractionSession,
+  tables: ProtTables,
+  seed: ResiduesAtCursor,
+  /**
+   * WHICH READ TO ASK — the desk's own door onto its own residues table.
+   *
+   * It defaults to the protein desk's (`src/prot/session.ts` · `residuesAt`),
+   * so every existing caller is byte-identical. The measured desk beside it
+   * declares the same table through a def of its own and hands in its own read
+   * (`src/hot/session.ts` · `residuesAt`), because a page that asked another
+   * desk's door for its rows would be reading a door it does not own — and this
+   * hook's whole subject is which door answered.
+   */
+  read: (session: InteractionSession, tables: ProtTables) => Promise<ResiduesAtCursor> = residuesAt,
+): ResiduesNow {
   const state = useSessionView(view);
   /**
    * The rows, and THE CURSOR THEY WERE ASKED FOR — which is not always the
@@ -98,7 +114,7 @@ export function useResiduesAtCursor(view: SessionView, session: InteractionSessi
     if (!snapshot || held.askedFor === at) return;
     let live = true;
     setReading(true);
-    void residuesAt(session, tables)
+    void read(session, tables)
       .then((answer) => {
         // A LATE ANSWER IS DROPPED, never drawn: the cleanup below runs the
         // moment the cursor moves again, so the rows of a cursor a reader has
@@ -119,7 +135,7 @@ export function useResiduesAtCursor(view: SessionView, session: InteractionSessi
     return () => {
       live = false;
     };
-  }, [at, held, session, tables, snapshot]);
+  }, [at, held, session, tables, snapshot, read]);
 
   return { ...held.answer, reading };
 }

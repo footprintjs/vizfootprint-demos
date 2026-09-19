@@ -183,9 +183,19 @@ export interface WorkbenchHeaderProps {
    * the only one.
    */
   readonly at: ReactNode;
-  /** What the way back to the search is called. */
-  readonly searchAgain: string;
-  onSearchAgain(): void;
+  /**
+   * What the way back to the search is called — and BOTH halves are optional,
+   * because a desk that opens on one entry has nowhere to go back to.
+   *
+   * The protein desk opens on a question and its header's last slot is the way
+   * back to it. The measured desk beside it opens on the committed entry and
+   * has no search at all, so a control there would be a button with no
+   * destination — worse than an absent one. Absent ⇒ no button is drawn, and
+   * the band is otherwise byte-identical (`tests/prot-*` pin the desk that
+   * passes both).
+   */
+  readonly searchAgain?: string;
+  onSearchAgain?(): void;
 }
 
 /** Band 1: the title, a hairline, the entry, and — right-aligned — the method and the way out. */
@@ -217,7 +227,8 @@ export function WorkbenchHeader({ title, entry, entryTitle, method, at, searchAg
         {method === null ? null : <span style={{ fontSize: 12.5, color: 'var(--pw-mid-2)', whiteSpace: 'nowrap' }}>{method}</span>}
         <span aria-hidden style={{ flex: '0 0 1px', height: 22, background: 'var(--pw-rule-divider)' }} />
         <span style={{ minWidth: 0 }}>{at}</span>
-        <GlassButton onPress={onSearchAgain}>{searchAgain}</GlassButton>
+        {/* NO DESTINATION, NO CONTROL — see {@link WorkbenchHeaderProps.searchAgain}. */}
+        {searchAgain === undefined || onSearchAgain === undefined ? null : <GlassButton onPress={onSearchAgain}>{searchAgain}</GlassButton>}
       </span>
     </header>
   );

@@ -452,7 +452,23 @@ export function stepperStages(outcomes: readonly ActOutcome[], run: ProtRun | nu
  * Every picture that had one owner keeps it, byte for byte: with no overlap
  * there is no later stage to lose to.
  */
-export function chartsOfStage(stage: StepperStage, shown: Readonly<Record<string, Readonly<Record<string, string>>>>, actColumns: ReadonlySet<string>, stages: readonly StepperStage[]): readonly string[] {
+export function chartsOfStage(
+  stage: StepperStage,
+  shown: Readonly<Record<string, Readonly<Record<string, string>>>>,
+  actColumns: ReadonlySet<string>,
+  stages: readonly StepperStage[],
+  /**
+   * WHICH ACT'S OWN ANSWER IS DRAWN BY WHICH VIEW — act id → view id, the one
+   * arm of this fold nothing on the wire can compute.
+   *
+   * It defaults to the protein desk's declaration, so every existing caller is
+   * byte-identical. A SECOND DESK hands in its own: the measured desk declares
+   * no receipt view at all, so it passes an empty map and this arm contributes
+   * nothing — which is the true answer for a desk whose every act lands columns
+   * on the residues table.
+   */
+  receipts: Readonly<Record<string, string>> = PROT_RECEIPTS,
+): readonly string[] {
   const landed = new Set(stage.materialized);
   /**
    * EVERY COLUMN A STAGE AFTER THIS ONE LANDED — the half that makes ownership
@@ -499,11 +515,11 @@ export function chartsOfStage(stage: StepperStage, shown: Readonly<Record<string
       return fields.some((field) => landed.has(field)) && !fields.some((field) => after.has(field));
     })
     .map(([address]) => address);
-  const receipts = stage.acts.flatMap((a) => {
-    const view = PROT_RECEIPTS[a.act];
+  const drawn = stage.acts.flatMap((a) => {
+    const view = receipts[a.act];
     return view === undefined || a.commit === null ? [] : [view];
   });
-  return [...new Set([...byColumn, ...receipts])];
+  return [...new Set([...byColumn, ...drawn])];
 }
 
 /** Every column every act of this run landed — the right side of the parse's own intersection. */

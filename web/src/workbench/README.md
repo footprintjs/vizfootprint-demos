@@ -1,4 +1,4 @@
-# `web/src/workbench/` — the protein desk's four layers
+# `web/src/workbench/` — the protein desk's four layers, and now the measured desk's too
 
 > Design this space as theme separate, components separate, business logic, data logic separate. Don't tangle these — make it reusable.
 
@@ -16,6 +16,44 @@ That is the author's ruling and it is the shape of this folder, not a preference
 ## Why the boundary is the deliverable
 
 A component that takes only props is a component that can later move into `vizfootprint-ui` and serve every desk. A component that reaches into the session can never move — the reach is the thing that pins it to this page. This desk exists to find what the library must abstract for a third-party chart, so **where the line falls here IS the finding.**
+
+## THE SECOND DESK WEARS THESE CLOTHES — the claim above, collected
+
+> I expected you to use exactly this same UI/UX for this, because both are same purpose. Why did you do the UI/UX of that version?
+
+The measured desk (`web/site/hot/`, the same PDB entry scored by arithmetic instead of by a model) was first built with the library's packaged `vizfootprint-studio/desk` · `Desk`, and that was a **defect**: two desks meant to be read side by side, one link apart, in two different layouts means a reader cannot tell whether a difference on screen is the SCORING or the SCREEN. It is now composed out of THIS folder — `web/src/hot/desk.tsx` wires 4 → 3 → 2 exactly as `../protDesk.tsx` does, and `tests/hot-layers.test.ts` asserts by IMPORT that every component of its shell is one the protein desk draws itself with.
+
+**This is the first time the liftability claim above was collected, and it held.** Every layer-2 component moved with no change at all: `ChartCard`, `ChartTile`, `PaneHome`, `ArrangeGrip`, `WorkbenchHeader`, `RecordDrawer`, `Disclosure`, `Count`, `GlassButton`, `Chevron`, `RegionDivider`, `StageStepper`. Not one of them imports `src/prot/`, so not one of them had to learn about a second desk.
+
+### What DID have to widen, and all three are layer 3 or 4
+
+A second consumer is where a default that was a constant becomes an argument. Each of these keeps its old behaviour when the argument is absent, so the protein desk is byte-identical:
+
+| widened | from | to | why |
+|---|---|---|---|
+| `charts.ts` · `shapeOfView` | reads `PROT_ENCODINGS_ALL` | `shapeOfView(viewId, declared = PROT_ENCODINGS_ALL)` | a chart's shape is a DECLARED fact about a view, and the second desk declares its own four (`src/hot/def.ts` · `HOT_ENCODINGS`) |
+| `../protStages.ts` · `chartsOfStage` (and `charts.ts` · `stageOfChart`, which calls it) | reads `PROT_RECEIPTS` | a fifth optional `receipts` argument | the receipts arm is the one part of the fold nothing on the wire can compute; the measured desk declares no receipt view and hands in `{}` |
+| `../protRows.ts` · `useResiduesAtCursor` | calls `src/prot/session.ts` · `residuesAt` | a fifth optional `read` argument | the hook's whole subject is WHICH DOOR answered, so a desk hands in its own |
+
+And one layer-2 prop became optional rather than required: `Chrome.tsx` · `WorkbenchHeaderProps.searchAgain` / `onSearchAgain`. The protein desk opens on a question and its header's last slot is the way back to it; the measured desk opens on the committed entry and has nowhere to go back to, so absent ⇒ **no button is drawn**, because a control with no destination is worse than an absent one.
+
+`charts.ts` · `REGION_PAD` also moved here from `../protDesk.tsx`: there are two compositions now, the divider's own axis is measured from that padding, and two spellings of `24` would put one desk's drag one padding out.
+
+### What the second desk does NOT use, and each absence is a fact
+
+`ViewerBox` (it draws no molecule), `Recommendation` and `BlockedGroup` (it asks no model and declares nothing it does not dispatch — six stages, six acts, all six landed), `Search.tsx`, `BootReport.tsx`, `bands.ts` beyond `methodLine`, and `panel.ts` (whose every fold is about the protein desk's own acts). A blocked card on a desk with nothing blocked would be a card about nothing.
+
+### The one thing the two desks still SAY differently — a finding, not a fix
+
+A `ProtCell` (`../protCells.tsx`) carries `foot`, `marks`, `narrowing` and `clauseId` beside its picture; a `DeskChart` (`vizfootprint-studio/desk`, which the measured desk's cells are written against) carries `id`, `weight`, `caption` and `render` and nothing else. So a workbench card or tile drawn from a `DeskChart` has **no figure line under it** and no "narrowed by a clause from elsewhere" clause — the slots are there and there is nothing to put in them. Closing it means widening `DeskChart` in the library or giving those cells a foot; both are outside a screen-only packet.
+
+### Two library findings this desk's second consumer surfaced, one of them a defect a browser caught
+
+**1 · `VizScatter` draws against its data's extent padded by a CONSTANT IN THE COLUMN'S OWN UNITS** — `extentFor(drawable, d => d.x, padFor(xKind, 5))`, and `0.5` on y. On residue numbers that is breathing room. On a 0…1 score it is a catastrophe, and it shipped as one for a few hours: the measured desk's two scores span 0.044…0.746, the padded domain came out **[-4.96, 5.75]**, and all 168 dots landed inside **63px of a 968px plot** — an apparent ceiling of 0.49 — while the bar chart beside them, drawn from the same column, showed peaks of **0.75**. Two pictures of one column disagreeing, with neither wrong about the data.
+
+The host door exists and the desk now uses it: `domain` (`web/src/hot/cells.tsx` · `SCORE_DOMAIN` — the fixed weight budget both scores are scored on). **The finding is that the default is the trap**: a chart whose padding is in the column's units cannot be safe across columns, and nothing warns. Measured after: the dots span **53.7%** of the pane's box in the rail and **65.4%** in the focus, and the highest-scoring residues are the coloured (patched) ones on the right — the two pictures agree. Pinned by `tests/hot-desk.smoke.test.ts`.
+
+**2 · `VizScatter` labels its x ticks `Math.round(v)` and its y ticks `v`, while its own siblings both use `Math.round(v * 10) / 10`.** So a 0…1 column's x axis reads `0 0 1 1 1` — three of five naming a value that is not under them — and a y axis can print a raw float. There is **no host door**: `xLabel` is the axis title and the tick text takes no formatter. What the library needs is one line, the form `VizLine.tsx` and `VizBar.tsx` already agree on. Until then the measured desk draws that chart `axes="y"`, applying the law this folder already states — *an illegible label is not a label* (`protCells.tsx` · `AXIS_ROOM`) — to a label made illegible by its VALUES rather than by its size. The cost (an axis title is also that channel's encoding picker, so x cannot be re-encoded from that picture) is named on the page itself.
 
 ## The four laws, with an example each
 

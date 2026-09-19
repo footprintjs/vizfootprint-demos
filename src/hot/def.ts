@@ -201,6 +201,26 @@ export const HOT_ENCODINGS: readonly ViewEncodingDecl[] = [
 /** The dashboard's title — the same shape the four desks beside it use. */
 export const HOT_TITLE = 'Hot spots, measured — the same PDB entry, scored by arithmetic instead of by a model reading a picture';
 
+/**
+ * WHAT THIS DESK IS CALLED, and its claim about itself — the pair
+ * `src/prot/def.ts` · `PROT_WORDS` declares, for the same reason and in the
+ * same two registers.
+ *
+ * A NAME is not data about the run: it does not count anything, it does not
+ * change with the entry, and it is what the workbench header's first slot is
+ * reserved for (`web/src/workbench/Chrome.tsx` · `WorkbenchHeader`). The
+ * CLAIM is a sentence that argues something, and a reader meets it under the
+ * record's fold rather than in the slot a name goes in.
+ *
+ * The name says the relation out loud — this is the protein workbench with a
+ * different stage 5 — because the whole reason there are two pages is that
+ * they are read side by side.
+ */
+export const HOT_WORDS = {
+  name: 'Protein Hot Spot Workbench — measured',
+  title: HOT_TITLE,
+} as const;
+
 /** How the two budgets are spelled wherever this desk prints them, so the weights on screen and the weights in the fold are one fact. */
 export const WEIGHTS_SAID = `structural: ${String(W_CROSSING)} interface contacts + ${String(W_TIGHTNESS)} tightest crossing separation + ${String(W_BURIAL)} burial + ${String(W_HYDROPATHY)} hydropathy · prior: ${String(W_EPITOPE)} epitope + ${String(W_DOMAIN)} depth inside a Pfam domain`;
 
