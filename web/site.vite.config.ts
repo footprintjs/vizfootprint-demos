@@ -1,18 +1,25 @@
 /**
- * THE STATIC SITE'S BUILD — the three demos as pages that stand alone.
+ * THE STATIC SITE'S BUILD — the demos as pages that stand alone.
  *
  * On GitHub Pages there is no process, so nothing may point at `/api`. Each
  * desk declares its tables `via: 'http'` at the committed CSVs and fetches
  * them like any other asset; this config's only jobs are to say where the site
  * will be mounted and to put those files where the pages will look.
  *
- * Five pages, one deployable: the index that offers the four demos, and a desk
- * each. They are one build rather than five because the index links to its
+ * Six pages, one deployable: the index that offers the demos, and a desk
+ * each. They are one build rather than six because the index links to its
  * siblings by relative path, which is what makes the whole site movable.
+ *
+ * THE FIFTH DESK (`hot`) opens the SAME PDB entry as the fourth and is a
+ * different dashboard over it — hot spots scored by arithmetic rather than
+ * ranked by a model (`src/hot/def.ts`). It has an entry of its own rather than
+ * reusing `prot`'s, because a shared entry would be one bundle deciding at run
+ * time which desk it is. It mounts no 3D viewer, so it names the viewer's chunk
+ * nowhere — asserted in `tests/hot-site.test.ts`.
  *
  * THE FOURTH DESK CARRIES A THIRD-PARTY VIEWER (Mol*), and it is reached by a
  * DYNAMIC IMPORT inside the renderer's mount (`web/src/molstarRenderer.ts`), so
- * rollup gives it a chunk of its own and the other three desks load none of it.
+ * rollup gives it a chunk of its own and the other four desks load none of it.
  * That is a property worth keeping: it is asserted in `tests/prot-site.test.ts`
  * against the built bundle.
  *
@@ -189,6 +196,20 @@ export default defineConfig({
   build: {
     outDir: OUT,
     emptyOutDir: true,
-    rollupOptions: { input: { index: path.join(SITE, 'index.html'), nndss: path.join(SITE, 'nndss', 'index.html'), grid: path.join(SITE, 'grid', 'index.html'), exo: path.join(SITE, 'exo', 'index.html'), prot: path.join(SITE, 'prot', 'index.html') } },
+    rollupOptions: {
+      input: {
+        index: path.join(SITE, 'index.html'),
+        nndss: path.join(SITE, 'nndss', 'index.html'),
+        grid: path.join(SITE, 'grid', 'index.html'),
+        exo: path.join(SITE, 'exo', 'index.html'),
+        prot: path.join(SITE, 'prot', 'index.html'),
+        // THE FIFTH DESK — its own entry, exactly as `prot` is its own, and
+        // never a second page reusing `prot`'s. It opens the same PDB entry and
+        // is a DIFFERENT dashboard over it (`src/hot/def.ts`), so sharing an
+        // input would have meant one bundle deciding at run time which desk it
+        // is, which is the one thing a static site cannot pay for.
+        hot: path.join(SITE, 'hot', 'index.html'),
+      },
+    },
   },
 });
