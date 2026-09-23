@@ -18,10 +18,10 @@
  *      would have quietly invented a number, and the only arithmetic in this
  *      file is the guard in front of it.
  *
- * ── THE PARAMETERS ARE READ, NOT SET ───────────────────────────────────────
- * As with the interaction providers (`./interactions.ts`), this module passes
- * no props: it reads `ShrakeRupleyComputationParams`' own defaults and carries
- * them out with the columns, so the caption states the probe size and the
+ * ── THE PARAMETERS START AT THE ENGINE'S DEFAULTS ─────────────────────────
+ * Existing callers use `ShrakeRupleyComputationParams`' own defaults. An
+ * optional sampling argument lets domain strategies override them explicitly.
+ * The effective parameters travel with the columns, so the caption states the probe size and the
  * sphere count the numbers were actually produced at. `nonPolymer: false` is
  * the one worth a reader's attention and it is in the counts: the deposited
  * waters are NOT occluders, so this is the accessible surface of the two chains
@@ -39,9 +39,39 @@
 import type { Structure, Unit } from 'molstar/lib/mol-model/structure';
 import type { HeadlessEntry } from './molstar.js';
 
+/** Explicit overrides of Mol*'s defaults; omitting this preserves the existing desk's calculation. */
+export interface SurfaceSampling {
+  readonly probeSize?: number;
+  readonly numberOfSpherePoints?: number;
+  readonly nonPolymer?: boolean;
+  readonly traceOnly?: boolean;
+}
+
+/** Validate overrides before invoking the engine, shared by direct callers and strategy configuration. */
+export function validateSurfaceSampling(sampling: SurfaceSampling): void {
+  if (sampling === null || typeof sampling !== 'object' || Array.isArray(sampling)) {
+    throw new TypeError('Surface sampling must be an object');
+  }
+  const keys = ['probeSize', 'numberOfSpherePoints', 'nonPolymer', 'traceOnly'];
+  for (const key of Object.keys(sampling)) {
+    if (!keys.includes(key)) throw new TypeError(`Unknown surface sampling parameter: ${key}`);
+  }
+  if (sampling.probeSize !== undefined && (!Number.isFinite(sampling.probeSize) || sampling.probeSize <= 0)) {
+    throw new RangeError('Surface probeSize must be finite and positive');
+  }
+  if (sampling.numberOfSpherePoints !== undefined && (!Number.isSafeInteger(sampling.numberOfSpherePoints) || sampling.numberOfSpherePoints < 1)) {
+    throw new RangeError('Surface numberOfSpherePoints must be a positive safe integer');
+  }
+  for (const key of ['nonPolymer', 'traceOnly'] as const) {
+    if (sampling[key] !== undefined && typeof sampling[key] !== 'boolean') {
+      throw new TypeError(`Surface ${key} must be a boolean`);
+    }
+  }
+}
+
 /** What the computation ran at, and what it produced — read off the engine, never typed here. */
 export interface SurfaceCounts {
-  /** Probe radius, in Ångströms — the engine's own default (a water molecule's size). */
+  /** Effective probe radius, in Ångströms. Defaults to the engine's water-sized probe. */
   readonly probeSize: number;
   /** How many points the probe is sampled at per atom. */
   readonly spherePoints: number;
@@ -116,7 +146,8 @@ export function relativeSurface(reference: Readonly<Record<string, number>>, nor
  * the table's row order, so a row the walk below never reached keeps its `null`
  * rather than shifting every value after it.
  */
-export async function protSurface(entry: HeadlessEntry, residueKeys: readonly string[]): Promise<ResidueSurface> {
+export async function protSurface(entry: HeadlessEntry, residueKeys: readonly string[], sampling: SurfaceSampling = {}): Promise<ResidueSurface> {
+  validateSurfaceSampling(sampling);
   const { structure, address } = entry;
   const [{ AccessibleSurfaceArea, ShrakeRupleyComputationParams }, { MaxAsa }, { StructureElement }, { ParamDefinition }] = await Promise.all([
     import('molstar/lib/mol-model-props/computed/accessible-surface-area/shrake-rupley.js'),
@@ -125,7 +156,11 @@ export async function protSurface(entry: HeadlessEntry, residueKeys: readonly st
     import('molstar/lib/mol-util/param-definition.js'),
   ]);
   const props = ParamDefinition.getDefaultValues(ShrakeRupleyComputationParams);
-  const area = await AccessibleSurfaceArea.compute(structure, {}).run();
+  if (sampling.probeSize !== undefined) props.probeSize = sampling.probeSize;
+  if (sampling.numberOfSpherePoints !== undefined) props.numberOfSpherePoints = sampling.numberOfSpherePoints;
+  if (sampling.nonPolymer !== undefined) props.nonPolymer = sampling.nonPolymer;
+  if (sampling.traceOnly !== undefined) props.traceOnly = sampling.traceOnly;
+  const area = await AccessibleSurfaceArea.compute(structure, props).run();
 
   /** The engine's own total, over every residue it computed — `area.area` is already one entry per residue. */
   let engineTotal = 0;

@@ -196,6 +196,8 @@ describe('the conformance kit over the Mol* renderer', () => {
       // declares `point` alone and lands one, so it passes as it stands.
       'declared-delivered: ok',
       'navigate: ok',
+      // The current conformance kit also checks the explicit refusal of framing.
+      'bring-into-view: ok',
       'unmount: ok',
     ]);
     expect(report.ok).toBe(true);
@@ -210,7 +212,7 @@ describe('the conformance kit over the Mol* renderer', () => {
     // the NAVIGATE arm is the one that runs BECAUSE the flag is false: the camera
     // is Mol*'s own, so a host-driven navigate must be refused out loud
     expect(detail('navigate')).toBe('a host-driven navigate on this non-capable view landed the typed navigate-unsupported gap and recorded nothing');
-    expect(report.gaps.map((g) => g.code)).toEqual(['navigate-unsupported']);
+    expect(report.gaps.map((g) => g.code)).toEqual(['navigate-unsupported', 'bring-into-view-unsupported']);
   });
 
   it('the gesture emitted ONE point on the residue key, and the commit landed under the view’s own address', () => {
