@@ -4,7 +4,9 @@ import type {
   DomainEvidenceRelation,
   EvidenceBundle,
   NormalizationReference,
+  ObservationRecordingPort,
   PreparedStructureInput,
+  SurfaceObservationInput,
   StrategyDescriptor,
   SurfaceStrategy,
   SurfaceStrategyResult,
@@ -94,7 +96,9 @@ const referenceIdentity = (reference: NormalizationReference): string =>
 /**
  * Export validated method-boundary evidence through a structural interface.
  * It requires no EvidenceFootprint runtime, agent or model. A host may pass the
- * result directly to its injected dependency inspector.
+ * result directly to its injected dependency inspector. With an observation
+ * recording port, measurement declarations become standard library-created
+ * observations; without one the original export format is preserved.
  *
  * Relations record observed reuse and normalization inputs. They establish
  * neither exhaustive dependencies nor statistical independence.
@@ -106,6 +110,7 @@ export function exportSurfaceEvidence(
   captureId: string,
   timestamp: string,
   runtimeRunId?: string,
+  observationRecording?: ObservationRecordingPort,
 ): EvidenceBundle {
   const structureId = `surface-structure:sha256:${input.sha256}`;
   const methodId = `surface-method:${part(captureId)}`;
@@ -211,5 +216,76 @@ export function exportSurfaceEvidence(
       }
     }
   }
-  return { events, relations };
+  if (!observationRecording) return { events, relations };
+
+  // Preserve the domain's declarations while the library owns generic record
+  // construction/validation. Group once so export stays linear in residue count.
+  const byMeasurement = new Map<string, DomainEvidenceRelation[]>();
+  for (const relation of relations) {
+    const group = byMeasurement.get(relation.from) ?? [];
+    group.push(relation);
+    byMeasurement.set(relation.from, group);
+  }
+  const recordedRelations = relations.filter((relation) => relation.from === methodId);
+  const recordedEvents = events.map((event): DomainEvidenceEvent => {
+    if (event.kind !== 'measurement') return event;
+    const declared = byMeasurement.get(event.id) ?? [];
+    const request: SurfaceObservationInput = {
+      id: event.id, captureId, timestamp: new Date(timestamp).toISOString(), source: { ...computationSource },
+      observation: {
+        subjectId: `surface-residue:sha256:${input.sha256}:${part(event.residueKey as string)}`,
+        quantity: event.measurement as string,
+        value: event.value as number | null,
+        unit: event.unit as string,
+        absenceReason: event.absenceReason as string | null,
+        method: {
+          id: strategy.methodology, version: implementation.version,
+          parameters: {
+            implementation: implementation.name, strategyId: strategy.id,
+            probeSize: counts.probeSize, numberOfSpherePoints: counts.spherePoints,
+            nonPolymer: counts.nonPolymer, traceOnly: counts.traceOnly,
+          },
+        },
+        // Input bytes are known; a preparation protocol/version was not recorded.
+        preparation: null,
+        ...(runtimeRunId === undefined ? {} : { runtime: { runId: runtimeRunId, stageId: 'surface-method' } }),
+      },
+      dependencies: declared.map(({ id, to, type, basis, reason }) => ({ id, evidenceId: to, type, basis, reason })),
+    };
+    // Keep the expected declaration detached: an injected function must not
+    // rewrite its input and then present the changed facts as our result.
+    const expected = structuredClone(request);
+    const returned = observationRecording.createObservation(request);
+    if (returned && typeof (returned as unknown as { then?: unknown }).then === 'function') {
+      Promise.resolve(returned).catch(() => {});
+      throw new TypeError('ObservationRecordingPort must be synchronous');
+    }
+    // Validate the detached snapshot we will export, rather than reading a
+    // mutable object (or accessor) again after checking it.
+    const recorded = structuredClone(returned);
+    if (!recorded || !preservesDeclaration(recorded.event, {
+      id: expected.id, captureId: expected.captureId, timestamp: expected.timestamp,
+      kind: 'observation', source: expected.source,
+      observation: { ...expected.observation, schemaVersion: 1 },
+    }) || !Array.isArray(recorded.relations) || recorded.relations.length !== declared.length) {
+      throw new Error('ObservationRecordingPort changed a surface observation declaration');
+    }
+    for (const relation of declared) {
+      const matches = recorded.relations.filter((candidate) => candidate.id === relation.id);
+      if (matches.length !== 1 || !preservesDeclaration(matches[0], relation)) {
+        throw new Error('ObservationRecordingPort changed a surface dependency declaration');
+      }
+      recordedRelations.push({ ...matches[0]!, type: relation.type, basis: relation.basis });
+    }
+    return { ...recorded.event, residueKey: event.residueKey, compId: event.compId };
+  });
+  return { events: recordedEvents, relations: recordedRelations };
+}
+
+/** Compare declared facts only; generic observation schema validation belongs to the injected library. */
+function preservesDeclaration(actual: unknown, expected: unknown): boolean {
+  if (expected === null || typeof expected !== 'object') return actual === expected;
+  if (actual === null || typeof actual !== 'object' || Array.isArray(actual)) return false;
+  return Object.entries(expected).every(([key, value]) =>
+    Object.hasOwn(actual, key) && preservesDeclaration((actual as Record<string, unknown>)[key], value));
 }

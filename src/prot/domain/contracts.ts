@@ -74,6 +74,45 @@ export interface DependencyInspectionPort<T = unknown> {
   analyzeDependencies(bundle: EvidenceBundle, evidenceIds: readonly string[]): T | Promise<T>;
 }
 
+/** Host-owned declarations passed to evidencefootprint/observations. */
+export interface SurfaceObservationInput {
+  id: string;
+  captureId: string;
+  timestamp: string;
+  source: DomainEvidenceEvent['source'];
+  observation: {
+    subjectId: string;
+    quantity: string;
+    value: number | null;
+    unit: string;
+    absenceReason: string | null;
+    method: { id: string; version: string | null; parameters: { [key: string]: JsonValue | undefined } };
+    preparation: null;
+    runtime?: { runId: string; stageId: string };
+  };
+  dependencies: readonly {
+    id: string;
+    evidenceId: string;
+    type: DomainEvidenceRelation['type'];
+    basis: 'observed';
+    reason: string;
+  }[];
+}
+
+/**
+ * Inject the real synchronous createObservation; no package import or substitute
+ * observation validator lives here. Returned edges must preserve our declarations.
+ */
+export interface ObservationRecordingPort {
+  createObservation(input: SurfaceObservationInput): {
+    event: DomainEvidenceEvent;
+    relations: readonly {
+      id: string; from: string; to: string; type: string;
+      basis: 'observed' | 'inferred'; reason: string;
+    }[];
+  };
+}
+
 export interface SurfaceRunRequest {
   readonly structure: StructureInput;
   readonly strategyId: string;

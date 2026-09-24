@@ -14,6 +14,7 @@ replace the existing surface kernel.
 | `createMolstarSurfaceStrategy()` | Use the existing `headlessEntry()` and `protSurface()` analysis with explicit optional sampling overrides. |
 | `createSurfaceMethodChart()` / `exportSurfaceEvidence()` | Share execution recording and evidence export across all strategies. |
 | `DependencyInspectionPort` | Let a host inject EvidenceFootprint dependency analysis without making that package a runtime requirement here. |
+| `ObservationRecordingPort` | Let a host inject EvidenceFootprint observation creation and generic validation while the application supplies scientific facts and dependencies. |
 
 ## Run a built-in strategy
 
@@ -108,46 +109,83 @@ events use a declared identity timestamp, not an asserted acquisition date.
 
 ## Inject EvidenceFootprint in the host
 
-The core depends on the public `footprintjs` recorder and a structural
-`DependencyInspectionPort<T>`. It imports neither the private EvidenceFootprint
+The core depends on the public `footprintjs` recorder and optional structural
+ports. It imports neither the private EvidenceFootprint
 package nor AgentFootprint, and it requires no LLM, agent, API key, or network
 request to run the committed example.
 
-Hosts with access to `evidencefootprint/dependencies` can wrap its
-`analyzeDependencies` function in this port:
+Hosts with access to EvidenceFootprint's `/observations` and `/dependencies`
+entry points inject the real library functions:
 
 ```ts
 import {
   createSurfaceAdapter,
   type DependencyInspectionPort,
+  type ObservationRecordingPort,
 } from './src/prot/domain/index.js';
 import { analyzeDependencies } from 'evidencefootprint/dependencies';
+import { createObservation, createObservationSemantics } from 'evidencefootprint/observations';
+import { createEvidenceDictionary } from 'evidencefootprint/semantics';
 
 // This host-only import needs access to the private EvidenceFootprint package.
 const dependencyInspection: DependencyInspectionPort = { analyzeDependencies };
+const observationRecording: ObservationRecordingPort = { createObservation };
 
-const adapter = createSurfaceAdapter({ dependencyInspection });
+const adapter = createSurfaceAdapter({ dependencyInspection, observationRecording });
 const result = await adapter.run({
   structure: { pdbText },
   strategyId: 'molstar-defaults',
 });
 const selectedIds = result.evidence.events
-  .filter((event) => event.measurement === 'relative_sasa')
+  .filter((event) => {
+    const observation = event.observation;
+    return event.kind === 'observation' && observation !== null &&
+      typeof observation === 'object' && !Array.isArray(observation) &&
+      observation.quantity === 'relative_sasa';
+  })
   .slice(0, 2)
   .map((event) => event.id);
 const report = await adapter.inspectDependencies(result.evidence, selectedIds);
+const dictionary = createEvidenceDictionary({ extensions: [createObservationSemantics()] });
 ```
+
+With `observationRecording`, the shared exporter delegates each residue's area
+and relative area to `createObservation()`. The library constructs and validates
+standard `kind: 'observation'` events and their declared relations. The application
+retains scientific validation: row alignment, nonnegative areas, normalization
+arithmetic and counts. Those rules are specific to surface analysis and do not
+belong in the evidence library.
+
+The measurement is at `event.observation.{quantity,value,unit,absenceReason}`.
+Top-level `residueKey` and `compId` remain domain annotations; values are not
+duplicated in legacy fields. Existing evidence IDs, source/reference records and
+dependency edges are preserved. Subjects include the exact structure digest and
+residue key, so the same chain/number in different structures cannot be conflated.
+Method metadata records the methodology, actual implementation version, selected
+strategy and effective sampling parameters. Preparation remains explicitly
+unknown (`null`); structure bytes alone do not identify a preparation protocol.
+The optional runtime reference names `surface-method` within the returned
+recording, scoped by the evidence capture.
+
+The port must be synchronous. Errors, asynchronous results, or rewrites of the
+declared measurements/provenance/dependency edges reject export without fallback.
+The application checks that its declarations survived the boundary; it contains
+no replacement for the library's observation schema validator. Use a library
+revision containing `/observations` (first added at `e4d0c68`); the older 0.9.0
+code alone does not establish availability of that entry point.
 
 Select a bounded set of observations for inspection (two in this example), within
 the host's installed EvidenceFootprint selection limit. The adapter forwards both
 arguments and the host's report unchanged. Committed tests verify that port
-contract with an injected inspector. A separate host integration check also
-passed against EvidenceFootprint 0.9.0: both strategy runs, their combined bundle,
-128 selected observations, shared structure/normalization ancestry, and strict
+contract with injected functions. A separate host integration check uses the real
+EvidenceFootprint library: both strategy runs, all observation schemas, exact
+scientific-result parity with the uninjected adapter, combined bundles with 128
+selected observations, shared structure/normalization ancestry, and strict
 TypeScript interface compatibility. That check stays outside this public
 repository, so its tests require no private package access.
 The adapter contains no substitute dependency-analysis engine. Without an
-injected port, calculation and evidence export still work;
+observation port, the original `kind: 'measurement'` export and its top-level
+fields remain unchanged. Without a dependency inspection port,
 `inspectDependencies()` rejects with `No DependencyInspectionPort was injected`.
 
 ## Committed example and checks
@@ -157,7 +195,7 @@ From the repository root, with the repository's dependencies installed:
 ```sh
 node --import tsx scripts/prot-domain-example.ts
 node --import tsx scripts/prot-domain-example.ts molstar-960
-npx vitest run tests/prot-domain-adapter.test.ts tests/prot-domain-strategies.test.ts tests/prot-domain-recording.test.ts tests/prot-surface.test.ts
+npx vitest run tests/prot-domain-adapter.test.ts tests/prot-domain-strategies.test.ts tests/prot-domain-recording.test.ts tests/prot-domain-observations.test.ts tests/prot-surface.test.ts
 npm run typecheck
 npm test
 npm run site:build

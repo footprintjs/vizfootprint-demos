@@ -1,6 +1,6 @@
 import { FlowChartExecutor } from 'footprintjs';
 import type {
-  DependencyInspectionPort, PreparedStructureInput, StrategyDescriptor, SurfaceAdapter,
+  DependencyInspectionPort, ObservationRecordingPort, PreparedStructureInput, StrategyDescriptor, SurfaceAdapter,
   SurfaceStrategy, SurfaceStrategyResult,
 } from './contracts.js';
 import { prepareStructureInput } from './structure-input.js';
@@ -63,6 +63,7 @@ export function validateSurfaceResult(input: PreparedStructureInput, result: Sur
 export function createSurfaceAdapter<T = unknown>(options: {
   readonly strategies?: readonly SurfaceStrategy[];
   readonly dependencyInspection?: DependencyInspectionPort<T>;
+  readonly observationRecording?: ObservationRecordingPort;
 } = {}): SurfaceAdapter<T> {
   const supplied = options.strategies ?? [createMolstarSurfaceStrategy(), createMolstarSurfaceStrategy({ id: 'molstar-960', sampling: { numberOfSpherePoints: 960 } })];
   if (supplied.length === 0) throw new Error('At least one surface strategy is required');
@@ -75,6 +76,7 @@ export function createSurfaceAdapter<T = unknown>(options: {
     registered.set(strategy.id, { descriptor, strategy: Object.freeze({ ...descriptor, execute: strategy.execute.bind(strategy) }) });
   }
   const inspection = options.dependencyInspection;
+  const observationRecording = options.observationRecording;
   return Object.freeze({
     strategies: Object.freeze([...registered.values()].map(({ descriptor }) => descriptor)),
     async run(request) {
@@ -90,7 +92,7 @@ export function createSurfaceAdapter<T = unknown>(options: {
       validateSurfaceResult(input, result);
       // Footprint runtime IDs are process-local; evidence can be combined across hosts.
       const captureId = globalThis.crypto.randomUUID();
-      const evidence = exportSurfaceEvidence(input, selected.descriptor, result, captureId, new Date().toISOString(), recording.runId);
+      const evidence = exportSurfaceEvidence(input, selected.descriptor, result, captureId, new Date().toISOString(), recording.runId, observationRecording);
       const { pdbText: _text, ...reference } = input;
       return {
         ...result, captureId, strategy: selected.descriptor, input: reference, evidence, recording,
