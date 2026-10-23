@@ -107,9 +107,9 @@ export const SHEET_VIEW = 'sheet';
 
 /** The dashboard's DECLARED words — the def's prose entry and the page's fallback read the same constant. */
 export const EXO_WORDS = {
-  title: 'The same fact, published twice',
+  title: 'One planet, several published values',
   caption:
-    "The NASA Exoplanet Archive publishes one accepted number per planet and every number any paper ever published for it. This dashboard puts the two beside each other — and says, per planet, how far apart they are and where the accepted one came from.",
+    "This saved NASA Exoplanet Archive slice puts published solutions beside archive composite parameters. Inspect their source references and numerical differences; different central values alone do not establish scientific disagreement.",
 } as const;
 
 // ── the tables an act mints, and the columns it writes ───────────────────────
@@ -198,7 +198,7 @@ export const EXO_ANALYSES: Readonly<Record<string, AnalysisSlot>> = {
 export const EXO_ACT_ORDER: readonly { readonly id: string; readonly table: string; readonly intent: string }[] = [
   { id: 'radiiPerPlanet', table: 'measurements', intent: 'cut one row per planet from the publications that MEASURED a radius (a bound is not a measurement): how many radii, how many papers, and the smallest and largest of them' },
   { id: 'radiusSpread', table: RADII_PER_PLANET, intent: 'derive the width of each planet\'s published radius range (largest minus smallest)' },
-  { id: 'radiusDisagrees', table: RADII_PER_PLANET, intent: 'derive whether a planet\'s publications disagree at all (that width above zero)' },
+  { id: 'radiusDisagrees', table: RADII_PER_PLANET, intent: 'derive whether reported radius central values differ (width above zero, not a significance test)' },
   { id: 'acceptedRadius', table: 'measurements', intent: 'bring the composite\'s accepted radius across the relation onto every published measurement' },
   { id: 'radiusDelta', table: 'measurements', intent: 'derive each publication\'s distance from the accepted radius — and nothing at all where the published radius is a bound' },
 ];

@@ -330,6 +330,50 @@ npm run exo:dev         # http://localhost:5294/exo/
 checkout; rebuild them (`cd ../vizfootprint && npm run build:ui && npm run
 build -w vizfootprint-studio`) after any library change.
 
+### Exoplanet evidence review: a 90-second walkthrough
+
+Open **[One planet, several published values](https://footprintjs.github.io/vizfootprint-demos/exo/)**.
+It opens TrES-2 b, using the saved 10 September 2026 archive slice; no account,
+model key or agent is required.
+
+1. **0–20 seconds — read the source.** Publication A is O'Donovan et al.
+   (2006), B is Holman et al. (2007). Open either source-paper link. The slice
+   contains 26 publication rows for this planet, of which 19 report a radius.
+2. **20–40 seconds — keep the uncertainty.** The cards and interval plot retain
+   each source's asymmetric reported errors. A numerical difference is not a
+   significance test. Missing values and bounds never become zero-error points.
+3. **40–60 seconds — inspect the composite.** Its radius points to Stassun et
+   al. (2017). Choose that paper in B to see the same source behind both values;
+   it is not independent corroboration. The composite's uncertainty columns
+   were not downloaded in this snapshot, so no composite interval is drawn.
+4. **60–90 seconds — rebuild and share.** Press **Replay this review**, then
+   **Copy review link** and open it in another browser/tab. Inspect the execution
+   record: five declared analyses and one planet-selection commit. Download
+   review evidence for the source rows, choices, fingerprints and actual log.
+
+The link restores this focused review's planet, parameter and two source-row
+IDs. It does not serialize the full desk's later gestures, branches or layout.
+Every load checks the two downloaded CSVs' SHA-256 digests against `FETCH.json`;
+an old recipe or changed CSV refuses instead of silently changing the result.
+Replay demonstrates reproduction, not the scientific truth of a source value.
+The optional mass view labels true masses, M·sin(i) and model-derived masses,
+and qualifies comparisons with different provenance types. The existing full
+exploration desk remains available below the review.
+
+Browser acceptance check (with a local Chromium installation):
+
+```
+npm run exo:dev
+# in another terminal, set VZF_CHROME to your Chromium executable if needed:
+node scripts/exo-review-check.mjs
+```
+
+`EXO_REVIEW_URL` can target a built or deployed page; `EXO_REVIEW_OUTPUT` names
+the screenshot/evidence directory. The check opens a fresh browser context,
+compares pre/post-replay source evidence, checks mass provenance and empty
+selection links, refuses stale recipes and altered CSVs, and checks mobile
+layout. This is an independent demonstration, not a NASA-affiliated service.
+
 ## Publish it — a static site, no server at all
 
 ```

@@ -296,7 +296,8 @@ describe('the three cells over the committed slice', () => {
     const disagreeing = data.derived.filter((r) => r['disagrees'] === true).length;
     expect(disagreeing).toBeGreaterThan(0);
     expect(caption).toContain(`${disagreeing.toLocaleString('en-US')} of the`);
-    expect(caption).toContain('disagree with themselves');
+    expect(caption).toContain('numerically different reported radius central values');
+    expect(caption).toContain('not a test of scientific disagreement');
   }, 120_000);
 
   it('the year bars carry the references, and the undated ones are said out loud', async () => {

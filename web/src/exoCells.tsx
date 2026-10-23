@@ -392,8 +392,8 @@ export function useExoCells(desk: DeskProjection, data: ExoDeskData): readonly D
                 `${count(derived.length)} planets have at least one PUBLISHED radius; each bar counts the planets with the same number of them`,
                 // SILENCE THREE, where it happens
                 missing <= 0 ? null : `the other ${count(missing)} planets are in NO bar: the act that cut this table reads only rows whose radius is a measurement (a bound is not one), so a planet no paper published a radius for has no row here at all`,
-                `${count(disagreeing)} of the ${count(derived.length)} disagree with themselves — two publications, two different radii${widest === null ? '' : `; the widest is ${widest.planet}, whose published radii span ${num(widest.spread)} Earth radii`}`,
-                'this table is not in the data: an aggregate act cut it at run time and two derive acts wrote its spread and its disagreement, all three on the log with their causes',
+                `${count(disagreeing)} of the ${count(derived.length)} have numerically different reported radius central values${widest === null ? '' : `; the widest range is ${widest.planet}, whose published radii span ${num(widest.spread)} Earth radii`}. This range alone is not a test of scientific disagreement`,
+                'this table is not in the data: an aggregate act cut it at run time and two derive acts wrote its spread and a nonzero-range flag, all three on the log with their causes',
                 // THE VOICE, and its one honest limit
                 'click a bar to select those planets — the act lands on the log with its cause. Click it again to clear it. Before the aggregate act has landed there is no table under this picture, and the library refuses the same click in a sentence that names the act which mints it',
                 // WHAT THE DEMO KNOWS AND THE LIBRARY CANNOT. This dashboard declares no edge out of
